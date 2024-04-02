@@ -3,10 +3,10 @@
 use colored::*;
 use std::process::Command;
 
-/// CPU architectures contained in the test samples
+/// CPU architectures contained in the test samples.
 pub const ARCHITECTURES: &[&str] = &[
     "aarch64", "arm", "mips64", "mips64el", "mips", "mipsel", "ppc64", "ppc64le", "ppc", "x64",
-    "x86",
+    "x86", "riscv64",
 ];
 /// Compilers contained in the test samples
 pub const COMPILERS: &[&str] = &["gcc", "clang"];
