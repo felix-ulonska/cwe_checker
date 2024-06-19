@@ -8,6 +8,7 @@ mod block_duplication_normalization;
 use block_duplication_normalization::*;
 pub mod propagate_control_flow;
 use propagate_control_flow::*;
+pub mod normalization_passes;
 
 /// The `Project` struct is the main data structure representing a binary.
 ///

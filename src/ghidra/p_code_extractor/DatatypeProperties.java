@@ -1,4 +1,3 @@
-import ghidra.program.model.listing.Program;
 import ghidra.program.model.data.DataOrganization;
 
 /**

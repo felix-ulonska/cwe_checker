@@ -8,7 +8,7 @@ import java.util.HashMap;
  */
 public class PcodeProject {
 
-    private ArrayList<Function> functions;
+    private Program program;
     private ArrayList<RegisterProperties> register_properties;
     private String cpu_arch;
     private HashMap<String, ExternFunction> external_functions;
@@ -27,7 +27,7 @@ public class PcodeProject {
 	    HashMap<String, CallingConvention> calling_conventions,
             DatatypeProperties datatype_properties,
 	    String image_base) {
-        this.functions = functions;
+        this.program = new Program(functions);
         this.register_properties = register_properties;
         this.cpu_arch = cpu_arch;
         this.external_functions = external_functions;
