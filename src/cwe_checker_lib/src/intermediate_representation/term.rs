@@ -8,7 +8,7 @@ mod builder_low_lvl;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct Tid {
     /// The unique ID of the term.
-    id: String,
+    pub id: String,
     /// The address where the term is located.
     pub address: String,
 }
@@ -33,6 +33,63 @@ impl Tid {
         Tid {
             id: val.to_string(),
             address: Self::UNKNOWN_ADDRESS.to_string(),
+        }
+    }
+
+    /// Generate a new term identifier for an instruction with `index` at
+    /// `address`.
+    pub fn new_instr<T: Display + ?Sized>(address: &T, index: u64) -> Self {
+        Tid::new_instr_with_suffix::<_, &str>(address, index, None)
+    }
+
+    /// Converts TID into a TID for an instruction at the same address.
+    pub fn into_instr(self) -> Self {
+        Self {
+            id: format!("instr_{}_0", self.address),
+            address: self.address,
+        }
+    }
+
+    pub fn new_instr_with_suffix<T, U>(address: &T, index: u64, suffix: Option<&U>) -> Self
+    where
+        T: Display + ?Sized,
+        U: Display + ?Sized,
+    {
+        match suffix {
+            Some(suffix) => Self {
+                id: format!("instr_{}_{}_{}", address, index, suffix),
+                address: address.to_string(),
+            },
+            None => Self {
+                id: format!("instr_{}_{}", address, index),
+                address: address.to_string(),
+            },
+        }
+    }
+
+    /// Generate a new term identifier for a block with `index` at `address`.
+    pub fn new_block<T: Display + ?Sized>(address: &T, index: u64) -> Self {
+        let id = match index {
+            0 => format!("blk_{}", address),
+            _ => format!("blk_{}_{}", address, index),
+        };
+
+        Self {
+            id,
+            address: address.to_string(),
+        }
+    }
+
+    /// Returns true iff this is a TID for a block.
+    pub fn is_block(&self) -> bool {
+        self.id.starts_with("blk_")
+    }
+
+    /// Returns the TID for a function at the given address.
+    pub fn new_function<T: Display + ?Sized>(address: &T) -> Self {
+        Self {
+            id: format!("FUN_{}", address),
+            address: address.to_string(),
         }
     }
 
@@ -62,9 +119,17 @@ impl Tid {
     }
 
     /// Returns a new ID for an artificial sink block with the given suffix.
-    pub fn artificial_sink_block(suffix: &str) -> Self {
+    pub fn artificial_sink_block<T: Display>(suffix: T) -> Self {
         Self {
             id: format!("{}{}", Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX, suffix),
+            address: Self::UNKNOWN_ADDRESS.to_string(),
+        }
+    }
+
+    /// Returns a new ID for the artificial sink block of the given funtion.
+    pub fn artificial_sink_block_for_fn(fn_tid: &Tid) -> Self {
+        Self {
+            id: format!("{}_{}", Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX, fn_tid),
             address: Self::UNKNOWN_ADDRESS.to_string(),
         }
     }
@@ -89,6 +154,11 @@ impl Tid {
     pub fn is_artificial_sink_sub(&self) -> bool {
         self.id == Self::ARTIFICIAL_SINK_SUB_ID && self.address == Self::UNKNOWN_ADDRESS
     }
+
+    /// Returns the address of this TID.
+    pub fn address(&self) -> &String {
+        &self.address
+    }
 }
 
 impl std::fmt::Display for Tid {
@@ -104,4 +174,21 @@ pub struct Term<T> {
     pub tid: Tid,
     /// The object
     pub term: T,
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    impl Tid {
+        /// Mock a TID with the given name and the address parsed from the name.
+        /// The name must have the form `prefix_address[_suffix]`, e.g. `instr_0x00001234_5`.
+        pub fn mock(tid: &str) -> Tid {
+            let components: Vec<_> = tid.split("_").collect();
+            Tid {
+                id: tid.to_string(),
+                address: components[1].to_string(),
+            }
+        }
+    }
 }
