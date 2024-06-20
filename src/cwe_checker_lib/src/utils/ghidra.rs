@@ -4,11 +4,7 @@ use crate::ghidra_pcode::PcodeProject;
 use crate::prelude::*;
 use crate::utils::binary::BareMetalConfig;
 use crate::utils::{get_ghidra_plugin_path, read_config_file};
-use crate::{
-    intermediate_representation::Project,
-    utils::debug,
-    utils::log::LogMessage,
-};
+use crate::{intermediate_representation::Project, utils::debug, utils::log::LogMessage};
 
 use directories::ProjectDirs;
 use nix::{sys::stat, unistd};
@@ -28,9 +24,13 @@ pub fn get_project_from_ghidra(
     debug_settings: &debug::Settings,
 ) -> Result<(Project, Vec<LogMessage>), Error> {
     let pcode_project = if let Some(saved_pcode_raw) = debug_settings.get_saved_pcode_raw() {
-        let file = std::fs::File::open(saved_pcode_raw)
+        let mut file = std::fs::File::open(saved_pcode_raw)
             .expect("Failed to open saved output of Pcode Extractor plugin.");
-        serde_json::from_reader(std::io::BufReader::new(file))?
+        let mut saved_pcode_raw = String::new();
+        file.read_to_string(&mut saved_pcode_raw)
+            .expect("Failed to read saved Pcode Extractor plugin output");
+        debug_settings.print(&saved_pcode_raw, debug::Stage::Pcode(debug::PcodeForm::Raw));
+        serde_json::from_str(&saved_pcode_raw)?
     } else {
         let tmp_folder = get_tmp_folder()?;
         // We add a timestamp suffix to file names
@@ -53,8 +53,12 @@ pub fn get_project_from_ghidra(
         )?;
         execute_ghidra(ghidra_command, &fifo_path, debug_settings)?
     };
+    debug_settings.print(
+        &pcode_project,
+        debug::Stage::Pcode(debug::PcodeForm::Parsed),
+    );
 
-    parse_pcode_project_to_ir_project(pcode_project, binary, &bare_metal_config_opt)
+    parse_pcode_project_to_ir_project(pcode_project, binary, &bare_metal_config_opt, debug_settings)
 }
 
 /// Normalize the given P-Code project
@@ -63,11 +67,12 @@ pub fn parse_pcode_project_to_ir_project(
     pcode_project: PcodeProject,
     _binary: &[u8],
     bare_metal_config_opt: &Option<BareMetalConfig>,
+    debug_settings: &debug::Settings,
 ) -> Result<(Project, Vec<LogMessage>), Error> {
     let _bare_metal_base_address_opt = bare_metal_config_opt
         .as_ref()
         .map(|config| config.parse_binary_base_address());
-    let project = pcode_project.into_ir_project();
+    let project = pcode_project.into_ir_project(debug_settings);
     let log_messages = vec![];
 
     Ok((project, log_messages))
@@ -122,10 +127,6 @@ fn execute_ghidra(
         .expect("Error while reading from FIFO.");
     debug_settings.print(&buf, debug::Stage::Pcode(debug::PcodeForm::Raw));
     let pcode_parsing_result = serde_json::from_str(&buf).expect("Failed to parse plugin output.");
-    debug_settings.print(
-        &pcode_parsing_result,
-        debug::Stage::Pcode(debug::PcodeForm::Parsed),
-    );
 
     ghidra_subprocess
         .join()

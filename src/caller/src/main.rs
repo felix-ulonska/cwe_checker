@@ -21,27 +21,81 @@ use std::path::PathBuf;
 #[derive(ValueEnum, Clone, Debug, Copy)]
 /// Selects which kind of debug output is displayed.
 pub enum CliDebugMode {
-    /// Result of the Pointer Inference computation.
-    Pi,
-    /// Unnormalized IR form of the program.
-    IrRaw,
-    /// Normalized IR form of the program.
-    IrNorm,
-    /// Optimized IR form of the program.
-    IrOpt,
     /// Output of the Ghidra plugin.
     PcodeRaw,
+    /// The output of the Ghidra plugin deserialized into Rust types.
+    PcodeParsed,
+    /// The very first IR representation of the program.
+    IrEarly,
+    /// After blocks within a function have been normal ordered.
+    IrFnBlksSorted,
+    /// After non-returning external functions have been marked.
+    IrNonRetExtFunctionsMarked,
+    /// After calls to stubs for external functions have been replaced with
+    /// calls to the external function.
+    IrExtCallsReplaced,
+    /// After existing, referenced blocks have blocks have been inlined into
+    /// functions.
+    IrInlined,
+    /// After the subregister substitution pass.
+    IrSubregistersSubstituted,
+    /// After all control flow transfers have a valid target.
+    IrCfPatched,
+    /// After empty functions have been removed.
+    IrEmptyFnRemoved,
+    /// The unoptimized IR.
+    IrRaw,
+    /// After unreachable basic blocks have been removed from functions.
+    IrIntraproceduralDeadBlocksElimed,
+    /// After trivial expressions have been replaced with their results.
+    IrTrivialExpressionsSubstituted,
+    /// After input expressions have been propagated along variable assignments.
+    IrInputExpressionsPropagated,
+    /// After assignments to dead variables have been removed.
+    IrDeadVariablesElimed,
+    /// After control flow across conditionals with the same condition has been
+    /// simplified.
+    IrControlFlowPropagated,
+    /// After stack pointer alignment via logical AND has been substituted with
+    /// a subtraction operation.
+    IrStackPointerAlignmentSubstituted,
+    /// The final IR.
+    IrOptimized,
+    /// Result of the Pointer Inference computation.
+    Pi,
 }
 
 impl From<&CliDebugMode> for debug::Stage {
     fn from(mode: &CliDebugMode) -> Self {
         use CliDebugMode::*;
         match mode {
-            Pi => debug::Stage::Pi,
-            IrRaw => debug::Stage::Ir(debug::IrForm::Raw),
-            IrNorm => debug::Stage::Ir(debug::IrForm::Normalized),
-            IrOpt => debug::Stage::Ir(debug::IrForm::Optimized),
             PcodeRaw => debug::Stage::Pcode(debug::PcodeForm::Raw),
+            PcodeParsed => debug::Stage::Pcode(debug::PcodeForm::Parsed),
+            IrEarly => debug::Stage::Ir(debug::IrForm::Early),
+            IrFnBlksSorted => debug::Stage::Ir(debug::IrForm::FnBlksSorted),
+            IrNonRetExtFunctionsMarked => debug::Stage::Ir(debug::IrForm::NonRetExtFunctionsMarked),
+            IrExtCallsReplaced => debug::Stage::Ir(debug::IrForm::ExtCallsReplaced),
+            IrInlined => debug::Stage::Ir(debug::IrForm::Inlined),
+            IrSubregistersSubstituted => debug::Stage::Ir(debug::IrForm::SubregistersSubstituted),
+            IrCfPatched => debug::Stage::Ir(debug::IrForm::CfPatched),
+            IrEmptyFnRemoved => debug::Stage::Ir(debug::IrForm::EmptyFnRemoved),
+            IrRaw => debug::Stage::Ir(debug::IrForm::Raw),
+            IrIntraproceduralDeadBlocksElimed => {
+                debug::Stage::Ir(debug::IrForm::IntraproceduralDeadBlocksElimed)
+            }
+            IrTrivialExpressionsSubstituted => {
+                debug::Stage::Ir(debug::IrForm::TrivialExpressionsSubstituted)
+            }
+            IrInputExpressionsPropagated => {
+                debug::Stage::Ir(debug::IrForm::InputExpressionsPropagated)
+            }
+            IrDeadVariablesElimed => debug::Stage::Ir(debug::IrForm::DeadVariablesElimed),
+            IrControlFlowPropagated => debug::Stage::Ir(debug::IrForm::ControlFlowPropagated),
+            IrStackPointerAlignmentSubstituted => {
+                debug::Stage::Ir(debug::IrForm::StackPointerAlignmentSubstituted)
+            }
+            IrOptimized => debug::Stage::Ir(debug::IrForm::Optimized),
+            Pi => debug::Stage::Pi,
         }
     }
 }

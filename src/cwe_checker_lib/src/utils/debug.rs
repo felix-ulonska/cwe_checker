@@ -23,8 +23,46 @@ pub enum Stage {
 /// Substages of the IR generation that can be debugged separately.
 #[non_exhaustive]
 pub enum IrForm {
+    /// The very first IR representation of the program.
+    Early,
+    /// Indirect calls with a single target have been replaced by direct calls
+    /// to this target.
+    SingleTargetIndirectCallsReplaced,
+    /// After blocks within a function have been normal ordered.
+    FnBlksSorted,
+    /// After non-returning external functions have been marked.
+    NonRetExtFunctionsMarked,
+    /// After calls to stubs for external functions have been replaced with
+    /// calls to the external function.
+    ExtCallsReplaced,
+    /// After existing, referenced blocks have blocks have been inlined into
+    /// functions.
+    Inlined,
+    /// After the subregister substitution pass.
+    SubregistersSubstituted,
+    /// After all control flow transfers have a valid target.
+    CfPatched,
+    /// After empty functions have been removed.
+    EmptyFnRemoved,
+    /// After nonexisting entry points have been removed.
+    EntryPointsExist,
+    /// The unoptimized IR.
     Raw,
-    Normalized,
+    /// After unreachable basic blocks have been removed from functions.
+    IntraproceduralDeadBlocksElimed,
+    /// After trivial expressions have been replaced with their results.
+    TrivialExpressionsSubstituted,
+    /// After input expressions have been propagated along variable assignments.
+    InputExpressionsPropagated,
+    /// After assignments to dead variables have been removed.
+    DeadVariablesElimed,
+    /// After control flow across conditionals with the same condition has been
+    /// simplified.
+    ControlFlowPropagated,
+    /// After stack pointer alignment via logical AND has been substituted with
+    /// a subtraction operation.
+    StackPointerAlignmentSubstituted,
+    /// The final IR.
     Optimized,
 }
 
@@ -32,7 +70,9 @@ pub enum IrForm {
 /// Substages of the Pcode transformation that can be debugged separately.
 #[non_exhaustive]
 pub enum PcodeForm {
+    /// The JSON string that comes from the Ghidra plugin.
     Raw,
+    Parsed,
     Processed,
 }
 
@@ -124,6 +164,13 @@ impl Settings {
         }
     }
 
+    pub fn dbg<T: std::fmt::Debug>(&self, obj: &T, stage: Stage) {
+        if self.should_debug(stage) {
+            println!("{:?}", obj);
+            self.maybe_terminate();
+        }
+    }
+
     /// Terminates the process according to the termination policy.
     fn maybe_terminate(&self) {
         match self.terminate {
@@ -136,6 +183,11 @@ impl Settings {
     /// Returns true if the logging level is at least verbose.
     pub fn verbose(&self) -> bool {
         matches!(self.verbose, Verbosity::Verbose)
+    }
+
+    /// Returns true if logging is disabled.
+    pub fn quiet(&self) -> bool {
+        matches!(self.verbose, Verbosity::Quiet)
     }
 }
 
