@@ -18,6 +18,20 @@ pub struct Sub {
     pub calling_convention: Option<String>,
 }
 
+impl Sub {
+    pub fn new<T, U>(name: &T, blocks: Vec<Term<Blk>>, calling_convention: Option<&U>) -> Self
+    where
+        T: ToString + ?Sized,
+        U: ToString + ?Sized,
+    {
+        Self {
+            name: name.to_string(),
+            blocks,
+            calling_convention: calling_convention.map(|inner| inner.to_string()),
+        }
+    }
+}
+
 impl Term<Sub> {
     /// Returns the ID suffix for this function.
     pub fn id_suffix(&self) -> String {
