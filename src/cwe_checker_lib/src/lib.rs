@@ -70,7 +70,6 @@ pub mod analysis;
 pub mod checkers;
 pub mod ghidra_pcode;
 pub mod intermediate_representation;
-pub mod pcode;
 pub mod pipeline;
 pub mod utils;
 
