@@ -24,6 +24,16 @@ pub struct Program {
 }
 
 impl Program {
+    /// Returns an iterator over all blocks in the program.
+    pub fn blocks(&self) -> impl Iterator<Item = &Term<Blk>> {
+       self.subs.values().flat_map(|func| func.term.blocks.iter())
+    }
+
+    /// Returns an iterator over all blocks in the program.
+    pub fn blocks_mut(&mut self) -> impl Iterator<Item = &mut Term<Blk>> {
+       self.subs.values_mut().flat_map(|func| func.term.blocks.iter_mut())
+    }
+
     /// Find a block term by its term identifier.
     /// WARNING: The function simply iterates through all blocks,
     /// i.e. it is very inefficient for large projects!
