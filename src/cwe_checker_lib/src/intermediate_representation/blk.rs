@@ -53,6 +53,26 @@ impl Blk {
             indirect_jmp_targets: vec![],
         }
     }
+
+    /// Returns an iterator over the jumps in this block.
+    pub fn jmps(&self) -> impl Iterator<Item = &Term<Jmp>> {
+        self.jmps.iter()
+    }
+
+    /// Returns an iterator over the jumps in this block.
+    pub fn jmps_mut(&mut self) -> impl Iterator<Item = &mut Term<Jmp>> {
+        self.jmps.iter_mut()
+    }
+
+    /// Returns an iterator over the defs in this block.
+    pub fn defs(&self) -> impl Iterator<Item = &Term<Def>> {
+        self.defs.iter()
+    }
+
+    /// Returns an iterator over the defs in this block.
+    pub fn defs_mut(&mut self) -> impl Iterator<Item = &mut Term<Def>> {
+        self.defs.iter_mut()
+    }
 }
 
 impl Term<Blk> {
