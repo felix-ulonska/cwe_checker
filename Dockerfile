@@ -3,7 +3,7 @@ FROM rust:1.76-bullseye AS builder
 WORKDIR /cwe_checker
 
 COPY . .
-RUN cargo build --locked --release
+RUN cargo build --locked
 
 FROM ghcr.io/fkie-cad/ghidra_headless_base:11.0.1 as runtime
 
@@ -19,7 +19,7 @@ RUN apt-get -y update \
 USER cwe
 
 # Install all necessary files from the builder stage
-COPY --from=builder /cwe_checker/target/release/cwe_checker /home/cwe/cwe_checker
+COPY --from=builder /cwe_checker/target/debug/cwe_checker /home/cwe/cwe_checker
 COPY --from=builder /cwe_checker/src/config.json /home/cwe/.config/cwe_checker/config.json
 COPY --from=builder /cwe_checker/src/lkm_config.json /home/cwe/.config/cwe_checker/lkm_config.json
 COPY --from=builder /cwe_checker/src/ghidra/p_code_extractor /home/cwe/.local/share/cwe_checker/ghidra/p_code_extractor
@@ -27,4 +27,5 @@ RUN echo "{ \"ghidra_path\": \"/opt/ghidra\" }" | sudo tee /home/cwe/.config/cwe
 
 WORKDIR /
 
+ENV RUST_BACKTRACE=1
 ENTRYPOINT ["/home/cwe/cwe_checker"]
