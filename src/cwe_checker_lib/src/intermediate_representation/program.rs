@@ -1,4 +1,4 @@
-use super::{Blk, ExternSymbol, Sub};
+use super::{Blk, ExternSymbol, Jmp, Sub};
 use crate::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -24,14 +24,63 @@ pub struct Program {
 }
 
 impl Program {
+    /// Returns an iterator over the functions in this program.
+    pub fn functions(&self) -> impl Iterator<Item = &Term<Sub>> {
+        self.subs.values().into_iter()
+    }
+
+    /// Returns an iterator over the functions in this program.
+    pub fn functions_mut(&mut self) -> impl Iterator<Item = &mut Term<Sub>> {
+        self.subs.values_mut().into_iter()
+    }
+
+    /// Returns an iterator over the returning functions in this program.
+    pub fn ret_functions(&self) -> impl Iterator<Item = &Term<Sub>> {
+        self.subs
+            .values()
+            .into_iter()
+            .filter(|f| !f.is_non_returning())
+    }
+
+    /// Returns an iterator over the returning functions in this program.
+    pub fn ret_functions_mut(&mut self) -> impl Iterator<Item = &mut Term<Sub>> {
+        self.subs
+            .values_mut()
+            .into_iter()
+            .filter(|f| !f.is_non_returning())
+    }
+
+    /// Returns the number of functions in this program.
+    pub fn num_functions(&self) -> u64 {
+        self.subs.len() as u64
+    }
+
     /// Returns an iterator over all blocks in the program.
     pub fn blocks(&self) -> impl Iterator<Item = &Term<Blk>> {
-       self.subs.values().flat_map(|func| func.term.blocks.iter())
+        self.subs.values().flat_map(|func| func.term.blocks.iter())
+    }
+
+    /// Returns an iterator over all blocks in the program together with the
+    /// TID of the funtion that contains them.
+    pub fn blocks_with_fn_tid(&self) -> impl Iterator<Item = (&Tid, &Term<Blk>)> {
+        self.subs
+            .values()
+            .flat_map(|func| std::iter::repeat(&func.tid).zip(func.term.blocks.iter()))
     }
 
     /// Returns an iterator over all blocks in the program.
     pub fn blocks_mut(&mut self) -> impl Iterator<Item = &mut Term<Blk>> {
-       self.subs.values_mut().flat_map(|func| func.term.blocks.iter_mut())
+        self.subs
+            .values_mut()
+            .flat_map(|func| func.term.blocks.iter_mut())
+    }
+
+    /// Returns an iterator over all blocks in the program together with the
+    /// TID of the funtion that contains them.
+    pub fn blocks_mut_with_fn_tid(&mut self) -> impl Iterator<Item = (&Tid, &mut Term<Blk>)> {
+        self.subs
+            .values_mut()
+            .flat_map(|func| std::iter::repeat(&func.tid).zip(func.term.blocks.iter_mut()))
     }
 
     /// Find a block term by its term identifier.
