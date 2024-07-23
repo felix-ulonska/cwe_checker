@@ -16,6 +16,8 @@ pub struct Sub {
     pub blocks: Vec<Term<Blk>>,
     /// The calling convention used to call if known
     pub calling_convention: Option<String>,
+    /// True iff the function does not return.
+    non_returning: bool,
 }
 
 impl Sub {
@@ -28,7 +30,18 @@ impl Sub {
             name: name.to_string(),
             blocks,
             calling_convention: calling_convention.map(|inner| inner.to_string()),
+            non_returning: false,
         }
+    }
+
+    /// Returns true iff the funtion does not return.
+    pub fn is_non_returning(&self) -> bool {
+        self.non_returning
+    }
+
+    /// Marks the function as non-returning.
+    pub fn mark_non_returning(&mut self) {
+        self.non_returning = true;
     }
 }
 
@@ -56,6 +69,7 @@ impl Term<Sub> {
                 name: "Artificial Sink Sub".to_string(),
                 blocks: vec![Term::<Blk>::artificial_sink("")],
                 calling_convention: None,
+                non_returning: true,
             },
         }
     }
