@@ -76,6 +76,23 @@ impl Blk {
 }
 
 impl Term<Blk> {
+    /// Return a clone of `self` where the given suffix is appended to the TIDs
+    /// of all contained terms (the block itself and all `Jmp`s and `Def`s).
+    ///
+    /// Note that all TIDs of jump targets (direct, indirect and return targets)
+    /// are left unchanged.
+    pub fn clone_with_tid_suffix(&self, suffix: &str) -> Self {
+        let mut cloned_block = self.clone();
+        cloned_block.tid = cloned_block.tid.with_id_suffix(suffix);
+        for def in cloned_block.term.defs.iter_mut() {
+            def.tid = def.tid.clone().with_id_suffix(suffix);
+        }
+        for jmp in cloned_block.term.jmps.iter_mut() {
+            jmp.tid = jmp.tid.clone().with_id_suffix(suffix);
+        }
+        cloned_block
+    }
+
     /// Remove indirect jump target addresses for which no corresponding target
     /// block exists.
     ///
