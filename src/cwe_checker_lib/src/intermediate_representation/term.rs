@@ -1,5 +1,8 @@
 use crate::prelude::*;
 
+use std::fmt::Display;
+use std::ops::{Deref, DerefMut};
+
 mod builder_high_lvl;
 mod builder_low_lvl;
 
@@ -174,6 +177,26 @@ pub struct Term<T> {
     pub tid: Tid,
     /// The object
     pub term: T,
+}
+
+impl<T> Deref for Term<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.term
+    }
+}
+
+impl<T> DerefMut for Term<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.term
+    }
+}
+
+impl<T> Term<T> {
+    pub fn new(tid: Tid, term: T) -> Self {
+        Self { tid, term }
+    }
 }
 
 #[cfg(test)]
