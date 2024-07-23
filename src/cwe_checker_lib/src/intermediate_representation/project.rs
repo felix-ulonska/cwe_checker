@@ -3,9 +3,6 @@ use crate::analysis;
 use crate::utils::log::LogMessage;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-/// Contains implementation of the block duplication normalization pass.
-mod block_duplication_normalization;
-use block_duplication_normalization::*;
 pub mod propagate_control_flow;
 use propagate_control_flow::*;
 pub mod normalization_passes;
@@ -377,7 +374,6 @@ impl Project {
         let mut logs = self.remove_duplicate_tids();
         self.add_artifical_sink();
         logs.append(self.remove_references_to_nonexisting_tids().as_mut());
-        make_block_to_sub_mapping_unique(self);
         logs.append(
             self.retarget_non_returning_calls_to_artificial_sink()
                 .as_mut(),
