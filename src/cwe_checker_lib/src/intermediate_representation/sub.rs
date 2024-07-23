@@ -34,6 +34,16 @@ impl Sub {
         }
     }
 
+    /// Returns an iterator over the blocks in this function.
+    pub fn blocks(&self) -> impl Iterator<Item = &Term<Blk>> {
+        self.blocks.iter()
+    }
+
+    /// Returns an iterator over the blocks in this function.
+    pub fn blocks_mut(&mut self) -> impl Iterator<Item = &mut Term<Blk>> {
+        self.blocks.iter_mut()
+    }
+
     /// Returns true iff the funtion does not return.
     pub fn is_non_returning(&self) -> bool {
         self.non_returning
