@@ -85,7 +85,42 @@ impl Blk {
     }
 }
 
+pub enum SinkType {
+    ArtificialSink,
+    ArtificialReturnTarget,
+    ReturnSite,
+    SelfLoop,
+}
+
 impl Term<Blk> {
+    pub fn get_sink_type(&self) -> Option<SinkType> {
+        match self.term.jmps.as_slice() {
+            _ if self.tid.is_artificial_sink_block() => Some(SinkType::ArtificialSink),
+            _ if self.tid.is_artificial_return_target() => Some(SinkType::ArtificialReturnTarget),
+            // Unconditional self-loops.
+            [Term {
+                term:
+                    Jmp::CBranch {
+                        target: cond_target,
+                        ..
+                    },
+                ..
+            }, Term {
+                term: Jmp::Branch(target),
+                ..
+            }] if target == cond_target && target == &self.tid => Some(SinkType::SelfLoop),
+            [Term {
+                term: Jmp::Branch(target),
+                ..
+            }] if target == &self.tid => Some(SinkType::SelfLoop),
+            [Term {
+                term: Jmp::Return(_),
+                ..
+            }] => Some(SinkType::ReturnSite),
+            _ => None,
+        }
+    }
+
     /// Return a clone of `self` where the given suffix is appended to the TIDs
     /// of all contained terms (the block itself and all `Jmp`s and `Def`s).
     ///
