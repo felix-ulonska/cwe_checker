@@ -83,6 +83,24 @@ impl Program {
             .flat_map(|func| std::iter::repeat(&func.tid).zip(func.term.blocks.iter_mut()))
     }
 
+    pub fn jmps(&self) -> impl Iterator<Item = &Term<Jmp>> {
+        self.blocks().flat_map(|b| b.jmps())
+    }
+
+    pub fn jmps_with_fn_tid(&self) -> impl Iterator<Item = (&Tid, &Term<Jmp>)> {
+        self.blocks_with_fn_tid()
+            .flat_map(|(fn_tid, b)| std::iter::repeat(fn_tid).zip(b.jmps()))
+    }
+
+    pub fn jmps_mut(&mut self) -> impl Iterator<Item = &mut Term<Jmp>> {
+        self.blocks_mut().flat_map(|b| b.jmps_mut())
+    }
+
+    pub fn jmps_mut_with_fn_tid(&mut self) -> impl Iterator<Item = (&Tid, &mut Term<Jmp>)> {
+        self.blocks_mut_with_fn_tid()
+            .flat_map(|(fn_tid, b)| std::iter::repeat(fn_tid).zip(b.jmps_mut()))
+    }
+
     /// Find a block term by its term identifier.
     /// WARNING: The function simply iterates through all blocks,
     /// i.e. it is very inefficient for large projects!
