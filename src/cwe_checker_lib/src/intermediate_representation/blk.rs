@@ -73,6 +73,16 @@ impl Blk {
     pub fn defs_mut(&mut self) -> impl Iterator<Item = &mut Term<Def>> {
         self.defs.iter_mut()
     }
+
+    pub fn get_call_targets(&self) -> Option<Vec<Tid>> {
+        match self.jmps.as_slice() {
+            [Term {
+                term: Jmp::Call { target, .. },
+                ..
+            }] => Some(vec![target.clone()]),
+            _ => None,
+        }
+    }
 }
 
 impl Term<Blk> {
