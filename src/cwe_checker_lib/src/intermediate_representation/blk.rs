@@ -172,10 +172,35 @@ impl Term<Blk> {
     }
 
     /// Returns a new artificial sink block with the given suffix attached to
-    /// its ID.
+    /// its TID.
+    ///
+    /// The given suffix is also attached to the ID of all instructions in the
+    /// block.
     pub fn artificial_sink(id_suffix: &str) -> Self {
+        let blk_tid = Tid::artificial_sink_block(id_suffix);
+
+        // Self-loop.
+        let mut jmps = Vec::with_capacity(1);
+        jmps.push(Term::<Jmp>::new(
+                    Tid::artificial_sink_instr(id_suffix),
+                    Jmp::Branch(blk_tid.clone()),
+                ));
+
         Self {
-            tid: Tid::artificial_sink_block(id_suffix),
+            tid: blk_tid,
+            term: Blk {
+                defs: Vec::with_capacity(0),
+                jmps,
+                indirect_jmp_targets: Vec::with_capacity(0),
+            },
+        }
+    }
+
+    /// Returns a new artificial return target block with the given suffix
+    /// attached to its ID.
+    pub fn artificial_return_target(id_suffix: &str) -> Self {
+        Self {
+            tid: Tid::artificial_return_target(id_suffix),
             term: Blk {
                 defs: Vec::with_capacity(0),
                 jmps: Vec::with_capacity(0),
