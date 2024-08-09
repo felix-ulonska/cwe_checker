@@ -96,6 +96,14 @@ impl Tid {
         }
     }
 
+    /// Returns the TID for an external function with the given name.
+    pub fn new_external_function<T: Display + ?Sized>(name: &T) -> Self {
+        Self {
+            id: format!("EXT_FUN_{}", name),
+            address: Self::UNKNOWN_ADDRESS.to_string(),
+        }
+    }
+
     /// Add a suffix to the ID string and return the new `Tid`
     pub fn with_id_suffix(self, suffix: &str) -> Self {
         Tid {
