@@ -56,6 +56,8 @@ impl Sub {
 }
 
 impl Term<Sub> {
+    const ARTIFICIAL_SINK_FN_NAME: &'static str = "Artificial Sink Function";
+
     /// Returns the ID suffix for this function.
     pub fn id_suffix(&self) -> String {
         format!("_{}", self.tid)
@@ -68,15 +70,15 @@ impl Term<Sub> {
         self.term
             .blocks
             .iter()
-            .any(|blk| blk.tid.is_artificial_sink_block(&id_suffix))
+            .any(|blk| blk.tid.is_artificial_sink_block_for(&id_suffix))
     }
 
-    /// Returns a new artificial sink sub.
+    /// Returns a new artificial sink function.
     pub fn artificial_sink() -> Self {
         Self {
-            tid: Tid::artificial_sink_sub(),
+            tid: Tid::artificial_sink_fn(),
             term: Sub {
-                name: "Artificial Sink Sub".to_string(),
+                name: Self::ARTIFICIAL_SINK_FN_NAME.to_string(),
                 blocks: vec![Term::<Blk>::artificial_sink("")],
                 calling_convention: None,
                 non_returning: true,
@@ -99,6 +101,18 @@ impl Term<Sub> {
 
             true
         }
+    }
+
+    /// Adds an artificial return target block to the function.
+    ///
+    /// The block is added unconditionally. Those blocks are used as the return
+    /// target for calls to nonret functions,
+    pub fn add_artifical_return_target(&mut self) {
+            let id_suffix = self.id_suffix();
+
+            self.term
+                .blocks
+                .push(Term::<Blk>::artificial_return_target(&id_suffix));
     }
 }
 

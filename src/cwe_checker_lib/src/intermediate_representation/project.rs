@@ -166,7 +166,7 @@ impl Project {
                         continue;
                     };
 
-                    if return_tid.is_artificial_sink_block(&sub_id_suffix) {
+                    if return_tid.is_artificial_sink_block_for(&sub_id_suffix) {
                         // The call is already returning to the function's
                         // artificial sink so there is nothing to do.
                         continue;
@@ -241,7 +241,7 @@ impl Project {
         self.program
             .term
             .subs
-            .insert(Tid::artificial_sink_sub(), Term::<Sub>::artificial_sink());
+            .insert(Tid::artificial_sink_fn(), Term::<Sub>::artificial_sink());
     }
 
     /// Returns the set of all valid jump targets.
