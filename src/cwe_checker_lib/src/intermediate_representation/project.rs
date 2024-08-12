@@ -1,11 +1,12 @@
 use super::*;
-use crate::analysis;
-use crate::utils::log::LogMessage;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-pub mod propagate_control_flow;
-use propagate_control_flow::*;
-pub mod normalization_passes;
+use crate::utils::debug;
+use crate::utils::log::LogMessage;
+
+use std::collections::{BTreeMap, BTreeSet};
+
+mod ir_passes;
+use ir_passes::*;
 
 /// The `Project` struct is the main data structure representing a binary.
 ///
@@ -76,260 +77,6 @@ impl Project {
 }
 
 impl Project {
-    /// For all expressions contained in the project,
-    /// replace trivially computable subexpressions like `a XOR a` with their result.
-    pub fn substitute_trivial_expressions(&mut self) {
-        for sub in self.program.term.subs.values_mut() {
-            for block in sub.term.blocks.iter_mut() {
-                for def in block.term.defs.iter_mut() {
-                    match &mut def.term {
-                        Def::Assign { value: expr, .. } | Def::Load { address: expr, .. } => {
-                            expr.substitute_trivial_operations()
-                        }
-                        Def::Store { address, value } => {
-                            address.substitute_trivial_operations();
-                            value.substitute_trivial_operations();
-                        }
-                    }
-                }
-                for jmp in block.term.jmps.iter_mut() {
-                    match &mut jmp.term {
-                        Jmp::Branch(_) | Jmp::Call { .. } | Jmp::CallOther { .. } => (),
-                        Jmp::BranchInd(expr)
-                        | Jmp::CBranch {
-                            condition: expr, ..
-                        }
-                        | Jmp::CallInd { target: expr, .. }
-                        | Jmp::Return(expr) => expr.substitute_trivial_operations(),
-                    }
-                }
-            }
-        }
-    }
-
-    /// Replaces the return-to TID of calls to non-returning functions with the
-    /// TID of the artificial sink block in the caller.
-    ///
-    /// We distinguish two kinds of non-returning functions:
-    ///
-    /// - extern symbols that are marked as non-returning, e.g.,`exit(..)`,
-    /// - functions without a return instruction.
-    ///
-    /// For calls to the latter functions, no [`CallReturn`] nodes and
-    /// corresponding edges will be generated in the CFG. This implies that no
-    /// interprocedural analysis will happen for those calls. Furthermore, the
-    /// missing incoming edge to the return node implies that the node may be
-    /// optimized away by the [control flow propagation pass]. The reference to
-    /// the return site is now "dangling" and may lead to panics when
-    /// constructing the CFG (Issue #461).
-    ///
-    /// Thus, we lose nothing if we retarget the return block, even if our
-    /// analysis is incorrect and the callee in fact returns to the originally
-    /// indicated site. Cases where we misclassify a callee include:
-    ///
-    /// - functions ending in an indirect tail jump,
-    /// - epilogs like `lrd pc, [sp], #0x04` that are essentially a ret but
-    ///   Ghidra sometimes thinks its an indirect jump,
-    /// - cases where the callee code that we get from Gidra is incomplete.
-    ///
-    /// This heuristic works better when the block-to-sub mapping is unique
-    /// since this pass may inline return site into callees that end in a tail
-    /// jump, i.e., call this after [`make_block_to_sub_mapping_unique`].
-    /// This pass preserves a unique block-to-sub mapping.
-    ///
-    /// [`CallReturn`]: crate::analysis::graph::Node::CallReturn
-    /// [control flow propagation pass]: mod@propagate_control_flow
-    #[must_use]
-    fn retarget_non_returning_calls_to_artificial_sink(&mut self) -> Vec<LogMessage> {
-        let (non_returning_subs, mut log_messages) = self.find_non_returning_subs();
-
-        // INVARIANT: A unique block-to-sub mapping is preserved.
-        for sub in self
-            .program
-            .term
-            .subs
-            .values_mut()
-            .filter(|sub| !sub.tid.is_artificial_sink_sub())
-        {
-            let sub_id_suffix = sub.id_suffix();
-            let mut one_or_more_call_retargeted = false;
-
-            for block in sub.term.blocks.iter_mut() {
-                for jmp in block.term.jmps.iter_mut() {
-                    let Jmp::Call {
-                        target,
-                        return_: Some(return_tid),
-                    } = &mut jmp.term
-                    else {
-                        continue;
-                    };
-
-                    if return_tid.is_artificial_sink_block_for(&sub_id_suffix) {
-                        // The call is already returning to the function's
-                        // artificial sink so there is nothing to do.
-                        continue;
-                    } else if let Some(extern_symbol) = self.program.term.extern_symbols.get(target)
-                    {
-                        if extern_symbol.no_return {
-                            // Reroute returns from calls to non-returning
-                            // library functions.
-                            *return_tid = Tid::artificial_sink_block(&sub_id_suffix);
-
-                            one_or_more_call_retargeted = true;
-                        }
-                    } else if non_returning_subs.contains(target) {
-                        // Reroute returns from calls to non-returning
-                        // functions within the program.
-                        log_messages.push(LogMessage::new_info(format!(
-                            "Call @ {} to {} does not return to {}.",
-                            jmp.tid, target, return_tid
-                        )));
-
-                        *return_tid = Tid::artificial_sink_block(&sub_id_suffix);
-
-                        one_or_more_call_retargeted = true;
-                    }
-                }
-            }
-
-            // Add artificial sink block if required.
-            if one_or_more_call_retargeted {
-                sub.add_artifical_sink();
-            }
-        }
-
-        log_messages
-    }
-
-    /// Returns the set of all subs without a return instruction.
-    fn find_non_returning_subs(&self) -> (HashSet<Tid>, Vec<LogMessage>) {
-        let mut log_messages = Vec::new();
-        let non_returning_subs = self
-            .program
-            .term
-            .subs
-            .values()
-            .filter_map(|sub| {
-                let sub_returns = sub.term.blocks.iter().any(|block| {
-                    block
-                        .term
-                        .jmps
-                        .iter()
-                        .any(|jmp| matches!(jmp.term, Jmp::Return(..)))
-                });
-
-                if sub_returns || sub.tid.is_artificial_sink_sub() {
-                    None
-                } else {
-                    log_messages.push(LogMessage::new_info(format!(
-                        "{} is non-returning.",
-                        sub.tid
-                    )));
-
-                    Some(sub.tid.clone())
-                }
-            })
-            .collect();
-
-        (non_returning_subs, log_messages)
-    }
-
-    /// Adds a function that serves as an artificial sink in the CFG.
-    fn add_artifical_sink(&mut self) {
-        self.program
-            .term
-            .subs
-            .insert(Tid::artificial_sink_fn(), Term::<Sub>::artificial_sink());
-    }
-
-    /// Remove blocks, defs and jumps with duplicate TIDs and return log messages on such cases.
-    /// Since such cases break the fundamental invariant that each TID is unique,
-    /// they result in errors if not removed.
-    ///
-    /// Note that each case has a bug as a root cause.
-    /// This code is only a workaround so that before the corresponding bug is fixed
-    /// the rest of the binary can still be analyzed.
-    #[must_use]
-    fn remove_duplicate_tids(&mut self) -> Vec<LogMessage> {
-        let mut known_tids = HashSet::new();
-        let mut errors = Vec::new();
-        known_tids.insert(self.program.tid.clone());
-        for sub in self.program.term.subs.values_mut() {
-            if !known_tids.insert(sub.tid.clone()) {
-                panic!("Duplicate of TID {} encountered.", sub.tid);
-            }
-            let mut filtered_blocks = Vec::new();
-            for block in &sub.term.blocks {
-                if known_tids.insert(block.tid.clone()) {
-                    filtered_blocks.push(block.clone());
-                } else {
-                    errors.push(LogMessage::new_error(&format!(
-                        "Removed duplicate of TID {}. This is a bug in the cwe_checker!",
-                        block.tid
-                    )));
-                }
-            }
-            sub.term.blocks = filtered_blocks;
-            for block in sub.term.blocks.iter_mut() {
-                let mut filtered_defs = Vec::new();
-                let mut filtered_jmps = Vec::new();
-                for def in &block.term.defs {
-                    if known_tids.insert(def.tid.clone()) {
-                        filtered_defs.push(def.clone());
-                    } else {
-                        errors.push(LogMessage::new_error(&format!(
-                            "Removed duplicate of TID {}. This is a Bug in the cwe_checker!",
-                            def.tid
-                        )));
-                    }
-                }
-                for jmp in &block.term.jmps {
-                    if known_tids.insert(jmp.tid.clone()) {
-                        filtered_jmps.push(jmp.clone());
-                    } else {
-                        errors.push(LogMessage::new_error(&format!(
-                            "Removed duplicate of TID {}. This is a Bug in the cwe_checker!",
-                            jmp.tid
-                        )));
-                    }
-                }
-                block.term.defs = filtered_defs;
-                block.term.jmps = filtered_jmps;
-            }
-        }
-
-        errors
-    }
-
-    /// Performs only the normalizations necessary to analyze the project.
-    ///
-    /// Runs only the normalization passes that bring the project to a form
-    /// in which it can be consumed by the later analyses. Currently those are:
-    ///
-    /// - Removal of duplicate TIDs. (This is a workaround for a bug in the
-    ///   P-Code-Extractor and should be removed once the bug is fixed.)
-    /// - Replacement of references to nonexisting TIDs with jumps to artificial
-    ///   sink targets in the CFG.
-    /// - Duplication of blocks so that if a block is contained in several
-    ///   functions, each function gets its own unique copy.
-    /// - Replacement of return addresses for calls to non-returning functions
-    ///   with artificial sink targets.
-    ///
-    /// After those passes all of the later analyses can be computed. However,
-    /// they are expected to run faster if you also run
-    /// [`Project::normalize_optimize`] beforehand.
-    #[must_use]
-    pub fn normalize_basic(&mut self) -> Vec<LogMessage> {
-        let mut logs = self.remove_duplicate_tids();
-        self.add_artifical_sink();
-        logs.append(
-            self.retarget_non_returning_calls_to_artificial_sink()
-                .as_mut(),
-        );
-
-        logs
-    }
-
     /// Performs only the optimizing normalization passes.
     ///
     /// [`Project::normalize_basic`] **must** be called before this method.
@@ -347,23 +94,62 @@ impl Project {
     /// - Substitute bitwise `AND` and `OR` operations with the stack pointer
     ///   in cases where the result is known due to known stack pointer alignment.
     #[must_use]
-    pub fn normalize_optimize(&mut self) -> Vec<LogMessage> {
-        analysis::expression_propagation::propagate_input_expression(self);
-        self.substitute_trivial_expressions();
-        analysis::dead_variable_elimination::remove_dead_var_assignments(self);
-        propagate_control_flow(self);
-        analysis::stack_alignment_substitution::substitute_and_on_stackpointer(self)
-            .unwrap_or_default()
-    }
+    pub fn optimize(&mut self, debug_settings: &debug::Settings) -> Vec<LogMessage> {
+        let mut logs = Vec::new();
 
-    /// Run all normalization passes over the project.
-    ///
-    /// Convenience wrapper that calls [`Project::normalize_basic`] and
-    /// [`Project::normalize_optimize`].
-    #[must_use]
-    pub fn normalize(&mut self) -> Vec<LogMessage> {
-        let mut logs = self.normalize_basic();
-        logs.append(self.normalize_optimize().as_mut());
+        run_ir_pass![
+            self.program.term,
+            (),
+            IntraproceduralDeadBlockElimPass,
+            logs,
+            debug_settings,
+        ];
+        run_ir_pass![
+            self.program.term,
+            (),
+            InputExpressionPropagationPass,
+            logs,
+            debug_settings,
+        ];
+        run_ir_pass![
+            self.program.term,
+            (),
+            TrivialExpressionSubstitutionPass,
+            logs,
+            debug_settings,
+        ];
+        run_ir_pass![
+            self.program.term,
+            self.register_set,
+            DeadVariableElimPass,
+            logs,
+            debug_settings,
+        ];
+        run_ir_pass![
+            self.program.term,
+            (),
+            ControlFlowPropagationPass,
+            logs,
+            debug_settings,
+        ];
+        run_ir_pass![
+            self.program.term,
+            self,
+            StackPointerAlignmentSubstitutionPass,
+            logs,
+            debug_settings,
+        ];
+
+        debug_assert_postconditions![self.program.term, (), IntraproceduralDeadBlockElimPass];
+        debug_assert_postconditions![self.program.term, (), InputExpressionPropagationPass];
+        debug_assert_postconditions![self.program.term, (), TrivialExpressionSubstitutionPass];
+        debug_assert_postconditions![self.program.term, self.register_set, DeadVariableElimPass];
+        debug_assert_postconditions![self.program.term, (), ControlFlowPropagationPass];
+        debug_assert_postconditions![
+            self.program.term,
+            self,
+            StackPointerAlignmentSubstitutionPass,
+        ];
 
         logs
     }

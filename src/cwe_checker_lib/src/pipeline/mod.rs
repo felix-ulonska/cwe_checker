@@ -31,12 +31,9 @@ pub fn disassemble_binary(
 
     // Normalize the project and gather log messages generated from it.
     debug_settings.print(&project.program.term, debug::Stage::Ir(debug::IrForm::Raw));
-    all_logs.append(&mut project.normalize_basic());
-    debug_settings.print(
-        &project.program.term,
-        debug::Stage::Ir(debug::IrForm::Normalized),
-    );
-    all_logs.append(&mut project.normalize_optimize());
+
+    all_logs.append(&mut project.optimize(debug_settings));
+
     debug_settings.print(
         &project.program.term,
         debug::Stage::Ir(debug::IrForm::Optimized),
