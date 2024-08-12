@@ -206,7 +206,7 @@ impl<'a> std::fmt::Display for Edge<'a> {
 
 /// A builder struct for building graphs
 struct GraphBuilder<'a> {
-    program: &'a Term<Program>,
+    program: &'a Program,
     extern_subs: HashSet<Tid>,
     graph: Graph<'a>,
     /// Denotes the NodeIndices of possible call targets
@@ -225,7 +225,7 @@ struct GraphBuilder<'a> {
 
 impl<'a> GraphBuilder<'a> {
     /// create a new builder with an emtpy graph
-    pub fn new(program: &'a Term<Program>, extern_subs: HashSet<Tid>) -> GraphBuilder<'a> {
+    pub fn new(program: &'a Program, extern_subs: HashSet<Tid>) -> GraphBuilder<'a> {
         GraphBuilder {
             program,
             extern_subs,
@@ -256,7 +256,7 @@ impl<'a> GraphBuilder<'a> {
     /// i.e. for blocks contained in more than one function the extra nodes have to be added separately later.
     /// The `sub` a block is associated with is the `sub` that the block is contained in in the `program` struct.
     fn add_program_blocks(&mut self) {
-        let subs = self.program.term.subs.values();
+        let subs = self.program.subs.values();
         for sub in subs {
             for block in sub.term.blocks.iter() {
                 self.add_block(block, sub);
@@ -266,7 +266,7 @@ impl<'a> GraphBuilder<'a> {
 
     /// add all subs to the call targets so that call instructions can be linked to the starting block of the corresponding sub.
     fn add_subs_to_call_targets(&mut self) {
-        for sub in self.program.term.subs.values() {
+        for sub in self.program.subs.values() {
             if !sub.term.blocks.is_empty() {
                 let start_block = &sub.term.blocks[0];
                 let target_index = self.jump_targets[&(start_block.tid.clone(), sub.tid.clone())];
@@ -301,7 +301,7 @@ impl<'a> GraphBuilder<'a> {
             self.graph
                 .add_edge(source, *target_node, Edge::Jump(jump, untaken_conditional));
         } else {
-            let target_block = self.program.term.find_block(target_tid).unwrap();
+            let target_block = self.program.find_block(target_tid).unwrap();
             let (target_node, _) = self.add_block(target_block, sub_term);
             self.graph
                 .add_edge(source, target_node, Edge::Jump(jump, untaken_conditional));
@@ -358,7 +358,7 @@ impl<'a> GraphBuilder<'a> {
                     {
                         Some(*return_to_node)
                     } else {
-                        let return_block = self.program.term.find_block(return_tid).unwrap();
+                        let return_block = self.program.find_block(return_tid).unwrap();
                         Some(self.add_block(return_block, sub_term).0)
                     }
                 } else {
@@ -412,7 +412,7 @@ impl<'a> GraphBuilder<'a> {
                     {
                         *return_to_node
                     } else {
-                        let return_block = self.program.term.find_block(return_tid).unwrap();
+                        let return_block = self.program.find_block(return_tid).unwrap();
                         self.add_block(return_block, sub_term).0
                     };
                     self.graph
@@ -526,13 +526,13 @@ impl<'a> GraphBuilder<'a> {
 }
 
 /// Build the interprocedural control flow graph for a program term.
-pub fn get_program_cfg(program: &Term<Program>) -> Graph {
+pub fn get_program_cfg(program: &Program) -> Graph {
     get_program_cfg_with_logs(program).0
 }
 
 /// Build the interprocedural control flow graph for a program term with log messages created by building.
-pub fn get_program_cfg_with_logs(program: &Term<Program>) -> (Graph, Vec<LogMessage>) {
-    let extern_subs = program.term.extern_symbols.keys().cloned().collect();
+pub fn get_program_cfg_with_logs(program: &Program) -> (Graph, Vec<LogMessage>) {
+    let extern_subs = program.extern_symbols.keys().cloned().collect();
     let mut builder = GraphBuilder::new(program, extern_subs);
     (builder.build(), builder.log_messages)
 }
