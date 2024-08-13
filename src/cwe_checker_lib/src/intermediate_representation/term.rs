@@ -39,6 +39,15 @@ impl Tid {
         }
     }
 
+    /// Returns the term identifier for the program that is based at the
+    /// given `address`.
+    pub fn new_program<T: Display + ?Sized>(address: &T) -> Self {
+        Self {
+            id: format!("program_{}", address),
+            address: address.to_string(),
+        }
+    }
+
     /// Generate a new term identifier for an instruction with `index` at
     /// `address`.
     pub fn new_instr<T: Display + ?Sized>(address: &T, index: u64) -> Self {
