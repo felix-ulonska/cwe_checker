@@ -124,7 +124,40 @@ impl Program {
                 }
             }
         }
+
         None
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[inline]
+    pub fn debug_assert_invariants(&self) {}
+
+    #[cfg(debug_assertions)]
+    pub fn debug_assert_invariants(&self) {
+        // Check that the mapping from function TIDs to function terms is
+        // consistent.
+        for (
+            fn_tid_key,
+            Term {
+                tid: fn_tid_value, ..
+            },
+        ) in self.subs.iter()
+        {
+            assert_eq!(
+                fn_tid_key, fn_tid_value,
+                "Inconsistent function mapping: {} -> {}.",
+                fn_tid_key, fn_tid_value
+            );
+        }
+
+        // Check that all entry points are defined within the binary.
+        for ep_tid in self.entry_points.iter() {
+            assert!(
+                self.subs.contains_key(ep_tid),
+                "Entry point at {} does not exist.",
+                ep_tid
+            );
+        }
     }
 }
 
