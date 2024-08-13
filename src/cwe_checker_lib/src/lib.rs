@@ -73,7 +73,7 @@ pub mod intermediate_representation;
 pub mod pipeline;
 pub mod utils;
 
-use utils::log::{CweWarning, LogMessage};
+use utils::log::{CweWarning, WithLogs};
 
 mod prelude {
     pub use apint::Width;
@@ -89,7 +89,7 @@ use prelude::*;
 
 /// The generic function signature for the main function of a CWE module
 pub type CweModuleFn =
-    fn(&AnalysisResults, &serde_json::Value) -> (Vec<LogMessage>, Vec<CweWarning>);
+    fn(&AnalysisResults, &serde_json::Value) -> WithLogs<Vec<CweWarning>>;
 
 /// A structure containing general information about a CWE analysis module,
 /// including the function to be called to run the analysis.

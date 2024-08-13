@@ -30,10 +30,9 @@
 //!
 //! - Missing substrings due to lost track of pointer targets
 //! - Non tracked function parameters cause incomplete strings that could miss possible dangerous inputs
+use super::prelude::*;
 
 use petgraph::visit::EdgeRef;
-
-use crate::CweModule;
 
 use crate::abstract_domain::BricksDomain;
 use crate::abstract_domain::TryToBitvec;
@@ -48,8 +47,6 @@ use crate::intermediate_representation::Jmp;
 use crate::intermediate_representation::RuntimeMemoryImage;
 use crate::intermediate_representation::Sub;
 use crate::prelude::*;
-use crate::utils::log::CweWarning;
-use crate::utils::log::LogMessage;
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -73,7 +70,7 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let (cwe_sender, cwe_receiver): (
         crossbeam_channel::Sender<CweWarning>,
@@ -141,7 +138,7 @@ pub fn check_cwe(
     let cwe_warnings = cwe_warnings.into_values().collect();
     let log_messages = log_receiver.try_iter().collect();
 
-    (log_messages, cwe_warnings)
+    WithLogs::new(cwe_warnings, log_messages)
 }
 
 /// Checks the system call parameter given by the Bricks Domain.

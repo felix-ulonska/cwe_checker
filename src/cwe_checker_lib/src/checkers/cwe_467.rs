@@ -19,14 +19,13 @@
 //!
 //! - If the incorrect size value is generated before the basic block that contains
 //! the call, the check will not be able to find it.
+use super::prelude::*;
 
 use crate::abstract_domain::TryToBitvec;
 use crate::analysis::pointer_inference::State;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils::{get_callsites, get_symbol_map};
-use crate::CweModule;
 use std::collections::BTreeSet;
 
 /// The module name and version
@@ -107,7 +106,7 @@ fn generate_cwe_warning(jmp: &Term<Jmp>, extern_symbol: &ExternSymbol) -> CweWar
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let mut cwe_warnings = Vec::new();
@@ -120,5 +119,6 @@ pub fn check_cwe(
             }
         }
     }
-    (Vec::new(), cwe_warnings)
+
+    WithLogs::wrap(cwe_warnings)
 }

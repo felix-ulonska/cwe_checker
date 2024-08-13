@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::utils::debug;
-use crate::utils::log::LogMessage;
+use crate::utils::log::WithLogs;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -76,7 +76,7 @@ impl Project {
     }
 }
 
-impl Project {
+impl WithLogs<Project> {
     /// Performs only the optimizing normalization passes.
     ///
     /// [`Project::normalize_basic`] **must** be called before this method.
@@ -93,8 +93,7 @@ impl Project {
     /// - Propagate the control flow along chains of conditionals with the same condition.
     /// - Substitute bitwise `AND` and `OR` operations with the stack pointer
     ///   in cases where the result is known due to known stack pointer alignment.
-    #[must_use]
-    pub fn optimize(&mut self, debug_settings: &debug::Settings) -> Vec<LogMessage> {
+    pub fn optimize(&mut self, debug_settings: &debug::Settings) {
         let mut logs = Vec::new();
 
         run_ir_pass![
@@ -151,7 +150,7 @@ impl Project {
             StackPointerAlignmentSubstitutionPass,
         ];
 
-        logs
+        self.add_logs(logs)
     }
 }
 

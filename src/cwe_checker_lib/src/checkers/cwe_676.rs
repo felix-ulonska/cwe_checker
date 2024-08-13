@@ -18,15 +18,14 @@ False Negatives
 
 * None known
 */
+use super::prelude::*;
+
 use crate::prelude::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::{
     intermediate_representation::{ExternSymbol, Program, Sub, Term, Tid},
-    utils::{
-        log::{CweWarning, LogMessage},
-        symbol_utils::get_calls_to_symbols,
-    },
+    utils::symbol_utils::get_calls_to_symbols,
 };
 use serde::{Deserialize, Serialize};
 
@@ -108,7 +107,7 @@ pub fn resolve_symbols<'a>(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let prog: &Term<Program> = &project.program;
@@ -117,5 +116,5 @@ pub fn check_cwe(
     let dangerous_symbols = resolve_symbols(external_symbols, &config.symbols);
     let dangerous_calls = get_calls(subfunctions, &dangerous_symbols);
 
-    (vec![], generate_cwe_warnings(dangerous_calls))
+    WithLogs::wrap(generate_cwe_warnings(dangerous_calls))
 }

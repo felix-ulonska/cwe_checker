@@ -14,6 +14,7 @@
 //!
 //! Both the sources of predictable seeds and the seeding functions can be configured using the `sources`
 //! and `seeding_functions` respectively.
+use super::prelude::*;
 
 use crate::analysis::forward_interprocedural_fixpoint::create_computation;
 use crate::analysis::graph::{Edge, Graph, HasCfg};
@@ -25,10 +26,7 @@ use crate::analysis::taint::{state::State as TaState, TaintAnalysis};
 use crate::analysis::vsa_results::{HasVsaResult, VsaResult};
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::{
-    log::{CweWarning, LogMessage},
-    symbol_utils,
-};
+use crate::utils::symbol_utils;
 use crate::CweModule;
 
 use petgraph::visit::EdgeRef;
@@ -64,7 +62,7 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone())
         .expect("Invalid configuration inside config.json for CWE337.");
@@ -72,7 +70,7 @@ pub fn check_cwe(
     let source_map = symbol_utils::get_symbol_map(project, &config.sources[..]);
     let sink_map = symbol_utils::get_symbol_map(project, &config.seeding_functions[..]);
     if source_map.is_empty() || sink_map.is_empty() {
-        return (Vec::new(), Vec::new());
+        return WithLogs::wrap(Vec::new());
     }
 
     let pi_result = analysis_results.pointer_inference.unwrap();
@@ -122,7 +120,7 @@ pub fn check_cwe(
     }
     let cwe_warnings = cwe_warnings.into_values().collect();
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }
 
 /// The Context struct for the taint analysis.

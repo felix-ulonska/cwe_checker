@@ -21,13 +21,12 @@
 //!
 //! - If the check-call and the use-call happen in different functions it will not
 //!   be found by the check.
+use super::prelude::*;
 
 use crate::analysis::graph::{Edge, Node};
 use crate::intermediate_representation::Jmp;
 use crate::prelude::*;
 use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
-use crate::utils::log::{CweWarning, LogMessage};
-use crate::CweModule;
 use petgraph::visit::EdgeRef;
 use std::collections::HashMap;
 
@@ -70,7 +69,7 @@ fn generate_cwe_warning(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let project = analysis_results.project;
     let graph = analysis_results.control_flow_graph;
@@ -119,5 +118,5 @@ pub fn check_cwe(
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }

@@ -15,15 +15,14 @@ False Negatives:
 
 * There are other ways to expose I/O control without access control.
 */
+use super::prelude::*;
+
 use crate::prelude::*;
 use std::collections::HashMap;
 
 use crate::{
     intermediate_representation::{Program, Sub, Term, Tid},
-    utils::{
-        log::{CweWarning, LogMessage},
-        symbol_utils::{find_symbol, get_calls_to_symbols},
-    },
+    utils::symbol_utils::{find_symbol, get_calls_to_symbols},
 };
 
 const VERSION: &str = "0.1";
@@ -69,7 +68,7 @@ pub fn generate_cwe_warning(calls: &[(&str, &Tid, &str)]) -> Vec<CweWarning> {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let prog: &Term<Program> = &project.program;
     let mut warnings: Vec<CweWarning> = Vec::new();
@@ -81,5 +80,5 @@ pub fn check_cwe(
             .for_each(|sub| warnings.append(&mut handle_sub(sub, symbol)));
     }
 
-    (vec![], warnings)
+    WithLogs::wrap(warnings)
 }

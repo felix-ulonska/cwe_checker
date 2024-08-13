@@ -1,10 +1,12 @@
 //! Utility functions for executing Ghidra and extracting P-Code from the output.
 
 use crate::ghidra_pcode::PcodeProject;
+use crate::intermediate_representation::{Project, RuntimeMemoryImage};
 use crate::prelude::*;
 use crate::utils::binary::BareMetalConfig;
+use crate::utils::debug;
+use crate::utils::log::{LogMessage, WithLogs};
 use crate::utils::{get_ghidra_plugin_path, read_config_file};
-use crate::{intermediate_representation::Project, utils::debug, utils::log::LogMessage};
 
 use directories::ProjectDirs;
 use nix::{sys::stat, unistd};
@@ -22,7 +24,7 @@ pub fn get_project_from_ghidra(
     binary: &[u8],
     bare_metal_config_opt: Option<BareMetalConfig>,
     debug_settings: &debug::Settings,
-) -> Result<(Project, Vec<LogMessage>), Error> {
+) -> Result<WithLogs<Project>, Error> {
     let pcode_project = if let Some(saved_pcode_raw) = debug_settings.get_saved_pcode_raw() {
         let mut file = std::fs::File::open(saved_pcode_raw)
             .expect("Failed to open saved output of Pcode Extractor plugin.");
@@ -58,24 +60,52 @@ pub fn get_project_from_ghidra(
         debug::Stage::Pcode(debug::PcodeForm::Parsed),
     );
 
-    parse_pcode_project_to_ir_project(pcode_project, binary, &bare_metal_config_opt, debug_settings)
+    parse_pcode_project_to_ir_project(
+        pcode_project,
+        binary,
+        &bare_metal_config_opt,
+        debug_settings,
+    )
 }
 
 /// Normalize the given P-Code project
 /// and then parse it into a project struct of the internally used intermediate representation.
 pub fn parse_pcode_project_to_ir_project(
     pcode_project: PcodeProject,
-    _binary: &[u8],
+    binary: &[u8],
     bare_metal_config_opt: &Option<BareMetalConfig>,
     debug_settings: &debug::Settings,
-) -> Result<(Project, Vec<LogMessage>), Error> {
-    let _bare_metal_base_address_opt = bare_metal_config_opt
+) -> Result<WithLogs<Project>, Error> {
+    let bare_metal_base_address_opt = bare_metal_config_opt
         .as_ref()
         .map(|config| config.parse_binary_base_address());
-    let project = pcode_project.into_ir_project(debug_settings);
-    let log_messages = vec![];
 
-    Ok((project, log_messages))
+    let project: WithLogs<Project> = match RuntimeMemoryImage::get_base_address(binary) {
+        Ok(binary_base_address) => {
+            pcode_project.into_ir_project(binary_base_address, debug_settings)
+        }
+        Err(_err) => {
+            if let Some(binary_base_address) = bare_metal_base_address_opt {
+                let mut project =
+                    pcode_project.into_ir_project(binary_base_address, debug_settings);
+
+                project.program.term.address_base_offset = 0;
+
+                project
+            } else {
+                let mut project = pcode_project.into_ir_project(0, debug_settings);
+                project.add_log_msg(LogMessage::new_info("Could not determine binary base address. Using base address of Ghidra output as fallback."));
+
+                // For PE files setting the address_base_offset to zero is a hack, which worked for the tested PE files.
+                // But this hack will probably not work in general!
+                project.program.term.address_base_offset = 0;
+
+                project
+            }
+        }
+    };
+
+    Ok(project)
 }
 
 /// Execute Ghidra with the P-Code plugin and return the parsed P-Code project.

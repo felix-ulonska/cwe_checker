@@ -29,3 +29,8 @@ pub mod cwe_676;
 pub mod cwe_78;
 pub mod cwe_782;
 pub mod cwe_789;
+
+pub mod prelude {
+    pub use crate::utils::log::{LogMessage, CweWarning, WithLogs};
+    pub use crate::CweModule;
+}

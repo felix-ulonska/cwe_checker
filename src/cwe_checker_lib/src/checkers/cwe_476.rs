@@ -36,6 +36,7 @@
 //!   specifically for the return value being NULL or something else
 //! - For functions with more than one return value we do not distinguish between
 //!   the return values.
+use super::prelude::*;
 
 use crate::analysis::forward_interprocedural_fixpoint::create_computation;
 use crate::analysis::forward_interprocedural_fixpoint::Context as _;
@@ -44,11 +45,7 @@ use crate::analysis::interprocedural_fixpoint_generic::NodeValue;
 use crate::analysis::taint::state::State as TaState;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::{
-    log::{CweWarning, LogMessage},
-    symbol_utils,
-};
-use crate::CweModule;
+use crate::utils::symbol_utils;
 use petgraph::visit::EdgeRef;
 use std::collections::BTreeMap;
 
@@ -81,7 +78,7 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let pi_result = analysis_results.pointer_inference.unwrap();
 
@@ -126,5 +123,5 @@ pub fn check_cwe(
     }
     let cwe_warnings = cwe_warnings.into_values().collect();
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }

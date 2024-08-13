@@ -24,12 +24,12 @@
 //!
 //! We do not check whether the parameters to chdir, chroot and the priviledge dropping functions
 //! are suitable to create a safe chroot jail.
+use super::prelude::*;
 
 use crate::analysis::graph::Node;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
 use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils::find_symbol;
 use crate::CweModule;
 
@@ -115,7 +115,7 @@ fn generate_cwe_warning(sub: &Term<Sub>, callsite: &Tid) -> CweWarning {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let graph = analysis_results.control_flow_graph;
 
@@ -134,7 +134,7 @@ pub fn check_cwe(
 
     let chroot_tid = match find_symbol(&project.program, "chroot") {
         Some((tid, _)) => tid.clone(),
-        None => return (Vec::new(), Vec::new()), // chroot is never called by the program
+        None => return WithLogs::wrap(Vec::new()), // chroot is never called by the program
     };
 
     let mut cwe_warnings = Vec::new();
@@ -175,5 +175,5 @@ pub fn check_cwe(
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }

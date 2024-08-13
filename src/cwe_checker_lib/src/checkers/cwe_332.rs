@@ -19,9 +19,9 @@
 //! ## False Negatives
 //!
 //! - It is not checked whether the seeding function gets called before the random number generator function.
+use super::prelude::*;
 
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils::find_symbol;
 use crate::CweModule;
 
@@ -56,7 +56,7 @@ fn generate_cwe_warning(secure_initializer_func: &str, rand_func: &str) -> CweWa
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let mut cwe_warnings = Vec::new();
@@ -68,5 +68,6 @@ pub fn check_cwe(
             cwe_warnings.push(generate_cwe_warning(secure_initializer_func, rand_func));
         }
     }
-    (Vec::new(), cwe_warnings)
+
+    WithLogs::wrap(cwe_warnings)
 }

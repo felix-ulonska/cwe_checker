@@ -60,13 +60,13 @@
 //! The list of checked external functions can be configured via the
 //! `config.json`. By selecting the `strict_mode` additional functions can be
 //! included, however, those are more likely to produce false positives.
+use super::prelude::*;
 
 use crate::analysis::graph::{Edge, NodeIndex};
 use crate::analysis::pointer_inference::PointerInference;
 use crate::intermediate_representation::{ExternSymbol, Jmp, Project, Term};
 use crate::pipeline::AnalysisResults;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils;
 use crate::CweModule;
 
@@ -219,7 +219,7 @@ impl<'a, 'b: 'a> CweAnalysis<'a, 'b> {
     }
 
     /// Runs the CWE252 analysis and returns the generated warnings.
-    fn run(mut self) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    fn run(mut self) -> WithLogs<Vec<CweWarning>> {
         while let Some((isolated_returns, ta_comp_ctx)) = self.next_call_ctx() {
             let mut ta_comp = ta_comp_ctx.into_computation();
 
@@ -228,8 +228,7 @@ impl<'a, 'b: 'a> CweAnalysis<'a, 'b> {
             isolated_returns.analyze(&ta_comp);
         }
 
-        (
-            Vec::new(),
+        WithLogs::wrap(
             self.cwe_collector
                 .try_iter()
                 // FIXME: It would be nice to preerve all reasons during
@@ -277,7 +276,7 @@ fn generate_cwe_warning(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let config: Config =
         serde_json::from_value(cwe_params.clone()).expect("CWE252: invalid configuration");
 

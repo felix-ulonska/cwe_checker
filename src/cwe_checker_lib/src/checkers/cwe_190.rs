@@ -27,6 +27,7 @@
 //! - All integer overflows not in a basic block right before a call to a function
 //! from the CWE190 symbol list.
 //! - All integer overflows caused by addition or subtraction.
+use super::prelude::*;
 
 use crate::abstract_domain::AbstractDomain;
 use crate::abstract_domain::DataDomain;
@@ -36,7 +37,6 @@ use crate::analysis::pointer_inference::*;
 use crate::analysis::vsa_results::*;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils::{get_callsites, get_symbol_map};
 use crate::CweModule;
 
@@ -143,7 +143,7 @@ fn contains_only_non_top_absolute_value(data_domain: &DataDomain<IntervalDomain>
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let pointer_inference_results = analysis_results.pointer_inference.unwrap();
 
@@ -175,5 +175,5 @@ pub fn check_cwe(
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }

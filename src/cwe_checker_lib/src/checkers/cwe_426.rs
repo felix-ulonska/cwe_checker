@@ -30,12 +30,11 @@
 //! functions, the calls will not be flagged as a CWE-hit.
 //! - This check only finds potential privilege escalation bugs, but other types of
 //! bugs can also be triggered by untrusted search paths.
+use super::prelude::*;
 
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils::{find_symbol, get_calls_to_symbols};
-use crate::CweModule;
 use std::collections::HashMap;
 
 /// The module name and version
@@ -73,7 +72,7 @@ fn generate_cwe_warning(sub: &Term<Sub>) -> CweWarning {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let mut cwe_warnings = Vec::new();
@@ -96,5 +95,6 @@ pub fn check_cwe(
             }
         }
     }
-    (Vec::new(), cwe_warnings)
+
+    WithLogs::wrap(cwe_warnings)
 }

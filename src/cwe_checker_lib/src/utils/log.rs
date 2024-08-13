@@ -1,6 +1,8 @@
 //! Structs and functions for generating log messages and CWE warnings.
 
 use crate::prelude::*;
+
+use std::ops::{Deref, DerefMut};
 use std::{collections::BTreeMap, thread::JoinHandle};
 
 /// A CWE warning message.
@@ -76,6 +78,76 @@ impl std::fmt::Display for CweWarning {
             "[{}] ({}) {}",
             self.name, self.version, self.description
         )
+    }
+}
+
+/// An object together with the logs that were generated during the construction
+/// of the object,
+///
+/// The logs are append only.
+#[derive(Clone)]
+pub struct WithLogs<T> {
+    object: T,
+    logs: Vec<LogMessage>,
+}
+
+impl<T> Deref for WithLogs<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.object
+    }
+}
+
+impl<T> DerefMut for WithLogs<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.object
+    }
+}
+
+impl<T> AsRef<T> for WithLogs<T>
+where
+    <WithLogs<T> as Deref>::Target: AsRef<T>,
+{
+    fn as_ref(&self) -> &T {
+        self.deref().as_ref()
+    }
+}
+
+impl<T> WithLogs<T> {
+    pub fn new(object: T, logs: Vec<LogMessage>) -> Self {
+        Self { object, logs }
+    }
+
+    pub fn wrap(object: T) -> Self {
+        Self {
+            object,
+            logs: Vec::with_capacity(0),
+        }
+    }
+
+    pub fn into_object(self) -> T {
+        self.object
+    }
+
+    pub fn into_logs(self) -> Vec<LogMessage> {
+        self.logs
+    }
+
+    pub fn into_object_logs(self) -> (T, Vec<LogMessage>) {
+        (self.object, self.logs)
+    }
+
+    pub fn logs(&self) -> &Vec<LogMessage> {
+        &self.logs
+    }
+
+    pub fn add_log_msg(&mut self, msg: LogMessage) {
+        self.logs.push(msg)
+    }
+
+    pub fn add_logs(&mut self, mut logs: Vec<LogMessage>) {
+        self.logs.append(&mut logs)
     }
 }
 
@@ -171,8 +243,8 @@ impl std::fmt::Display for LogMessage {
 ///
 /// If `emit_json` is set, the CWE-warnings will be converted to json for the output.
 pub fn print_all_messages(
-    logs: Vec<LogMessage>,
-    cwes: Vec<CweWarning>,
+    logs: Vec<&LogMessage>,
+    cwes: Vec<&CweWarning>,
     out_path: Option<&str>,
     emit_json: bool,
 ) {

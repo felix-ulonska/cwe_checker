@@ -5,7 +5,7 @@ use crate::analysis::pointer_inference::PointerInference;
 use crate::analysis::string_abstraction::StringAbstraction;
 use crate::intermediate_representation::Project;
 use crate::prelude::*;
-use crate::utils::log::LogMessage;
+use crate::utils::log::WithLogs;
 use std::collections::BTreeMap;
 
 /// A struct containing pointers to all known analysis results
@@ -46,7 +46,7 @@ impl<'a> AnalysisResults<'a> {
     /// Compute the function signatures for internal functions.
     pub fn compute_function_signatures(
         &self,
-    ) -> (BTreeMap<Tid, FunctionSignature>, Vec<LogMessage>) {
+    ) -> WithLogs<BTreeMap<Tid, FunctionSignature>> {
         crate::analysis::function_signature::compute_function_signatures(
             self.project,
             self.control_flow_graph,

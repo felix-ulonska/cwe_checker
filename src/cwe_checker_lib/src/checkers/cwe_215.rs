@@ -17,6 +17,7 @@
 //! ## False Negatives
 //!
 //! None known.
+use super::prelude::*;
 
 use crate::prelude::*;
 use crate::utils::log::{CweWarning, LogMessage};
@@ -36,10 +37,10 @@ pub static CWE_MODULE: CweModule = CweModule {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let binary = analysis_results.binary;
 
-    match goblin::Object::parse(binary) {
+    let (logs, cwe_warnings) = match goblin::Object::parse(binary) {
         Ok(goblin::Object::Elf(elf_binary)) => {
             for section_header in elf_binary.section_headers {
                 if let Some(section_name) = elf_binary.shdr_strtab.get_at(section_header.sh_name) {
@@ -49,7 +50,7 @@ pub fn check_cwe(
                             CWE_MODULE.version,
                             "(Information Exposure Through Debug Information) The binary contains debug symbols."
                         );
-                        return (Vec::new(), vec![cwe_warning]);
+                        return WithLogs::wrap(vec![cwe_warning]);
                     }
                 }
             }
@@ -67,5 +68,7 @@ pub fn check_cwe(
                 .source(CWE_MODULE.name);
             (vec![err_log], Vec::new())
         }
-    }
+    };
+
+    WithLogs::new(cwe_warnings, logs)
 }

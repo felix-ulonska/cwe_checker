@@ -54,12 +54,10 @@
 //! - Pointers to recursively defined data structures like linked lists are heuristically identified and ignored.
 //! This reduces false positives generated when such structures are recursively freed in a loop,
 //! but also prevents detection of bugs involving such pointers.
+use super::prelude::*;
 
 use crate::abstract_domain::AbstractIdentifier;
 use crate::prelude::*;
-use crate::utils::log::CweWarning;
-use crate::utils::log::LogMessage;
-use crate::CweModule;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 
@@ -95,7 +93,7 @@ use state::State;
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     config_json: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let config: Config = serde_json::from_value(config_json.clone()).unwrap();
     let deallocation_symbols = config.deallocation_symbols.iter().cloned().collect();
     let (cwe_warning_sender, cwe_warning_receiver) = crossbeam_channel::unbounded();
@@ -136,7 +134,7 @@ pub fn check_cwe(
         logs.insert(log_msg);
     }
 
-    (logs.into_iter().collect(), cwes.into_iter().collect())
+    WithLogs::new(cwes.into_iter().collect(), logs.into_iter().collect())
 }
 
 /// A struct for collecting CWE warnings together with context information

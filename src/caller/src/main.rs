@@ -11,7 +11,7 @@ use cwe_checker_lib::analysis::graph;
 use cwe_checker_lib::pipeline::{disassemble_binary, AnalysisResults};
 use cwe_checker_lib::utils::binary::BareMetalConfig;
 use cwe_checker_lib::utils::debug;
-use cwe_checker_lib::utils::log::{print_all_messages, LogLevel};
+use cwe_checker_lib::utils::log::{print_all_messages, CweWarning, LogLevel, LogMessage};
 use cwe_checker_lib::utils::read_config_file;
 
 use std::collections::{BTreeSet, HashSet};
@@ -229,7 +229,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     let binary_file_path = PathBuf::from(args.binary.clone().unwrap());
 
-    let (binary, project, mut all_logs) =
+    let (binary, project) =
         disassemble_binary(&binary_file_path, bare_metal_config_opt, &debug_settings)?;
 
     // Filter the modules to be executed.
@@ -254,8 +254,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     };
 
     // Generate the control flow graph of the program
-    let (control_flow_graph, mut logs_graph) = graph::get_program_cfg_with_logs(&project.program);
-    all_logs.append(&mut logs_graph);
+    let control_flow_graph = graph::get_program_cfg_with_logs(&project.program);
 
     let analysis_results = AnalysisResults::new(&binary, &control_flow_graph, &project);
 
@@ -275,13 +274,14 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     // Compute function signatures if required
     let function_signatures = if pi_analysis_needed {
-        let (function_signatures, mut logs) = analysis_results.compute_function_signatures();
-        all_logs.append(&mut logs);
+        let function_signatures = analysis_results.compute_function_signatures();
+
         Some(function_signatures)
     } else {
         None
     };
-    let analysis_results = analysis_results.with_function_signatures(function_signatures.as_ref());
+    let analysis_results =
+        analysis_results.with_function_signatures(function_signatures.as_deref());
     // Compute pointer inference if required
     let pi_analysis_results = if pi_analysis_needed {
         Some(analysis_results.compute_pointer_inference(&config["Memory"], args.statistics))
@@ -316,26 +316,44 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     }
 
     // Execute the modules and collect their logs and CWE-warnings.
-    let mut all_cwes = Vec::new();
+    let mut all_cwe_warnings = Vec::new();
     for module in modules {
-        let (mut logs, mut cwes) = (module.run)(&analysis_results, &config[&module.name]);
-        all_logs.append(&mut logs);
-        all_cwes.append(&mut cwes);
+        let cwe_warnings = (module.run)(&analysis_results, &config[&module.name]);
+
+        all_cwe_warnings.push(cwe_warnings);
     }
-    all_cwes.sort();
 
     // Print the results of the modules.
-    if args.quiet {
-        all_logs = Vec::new(); // Suppress all log messages since the `--quiet` flag is set.
+    let all_logs: Vec<&LogMessage> = if args.quiet {
+        Vec::new() // Suppress all log messages since the `--quiet` flag is set.
     } else {
+        let mut all_logs = Vec::new();
+
+        // Aggregate the logs of all objects that come with logs.
+        all_logs.extend(project.logs().iter());
+        all_logs.extend(control_flow_graph.logs().iter());
+        if let Some(function_signatures) = &function_signatures {
+            all_logs.extend(function_signatures.logs().iter());
+        }
+        for cwe_warnings in all_cwe_warnings.iter() {
+            all_logs.extend(cwe_warnings.logs().iter());
+        }
+
         if args.statistics {
-            cwe_checker_lib::utils::log::add_debug_log_statistics(&mut all_logs);
+            // TODO: Fix the `--statistics` flag.
+            //cwe_checker_lib::utils::log::add_debug_log_statistics(&mut all_logs);
+            todo!()
         }
         if !args.verbose {
             all_logs.retain(|log_msg| log_msg.level != LogLevel::Debug);
         }
-    }
+
+        all_logs
+    };
+    let all_cwes: Vec<&CweWarning> = all_cwe_warnings.iter().flat_map(|x| x.iter()).collect();
+
     print_all_messages(all_logs, all_cwes, args.out.as_deref(), args.json);
+
     Ok(())
 }
 

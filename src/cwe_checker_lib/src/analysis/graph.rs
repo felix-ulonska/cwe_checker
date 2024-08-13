@@ -44,7 +44,8 @@
 
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::{debug::ToJsonCompact, log::LogMessage};
+use crate::utils::debug::ToJsonCompact;
+use crate::utils::log::{LogMessage, WithLogs};
 use std::collections::{HashMap, HashSet};
 
 pub use petgraph::graph::NodeIndex;
@@ -541,14 +542,15 @@ impl<'a> GraphBuilder<'a> {
 
 /// Build the interprocedural control flow graph for a program term.
 pub fn get_program_cfg(program: &Program) -> Graph {
-    get_program_cfg_with_logs(program).0
+    get_program_cfg_with_logs(program).into_object()
 }
 
 /// Build the interprocedural control flow graph for a program term with log messages created by building.
-pub fn get_program_cfg_with_logs(program: &Program) -> (Graph, Vec<LogMessage>) {
+pub fn get_program_cfg_with_logs(program: &Program) -> WithLogs<Graph> {
     let extern_subs = program.extern_symbols.keys().cloned().collect();
     let mut builder = GraphBuilder::new(program, extern_subs);
-    (builder.build(), builder.log_messages)
+
+    WithLogs::new(builder.build(), builder.log_messages)
 }
 
 /// Returns a map from function TIDs to the node index of the `BlkStart` node of the first block in the function.

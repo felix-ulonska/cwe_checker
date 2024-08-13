@@ -20,6 +20,7 @@
 //!
 //! - At most one warning for stack memory allocation is created for each Function. This means multiple weaknesses
 //! are not detected individually.
+use super::prelude::*;
 
 use crate::abstract_domain::DataDomain;
 use crate::abstract_domain::IntervalDomain;
@@ -29,11 +30,8 @@ use crate::analysis::pointer_inference::PointerInference;
 use crate::analysis::vsa_results::*;
 use crate::intermediate_representation::*;
 use crate::pipeline::AnalysisResults;
-use crate::utils::log::CweWarning;
-use crate::utils::log::LogMessage;
 use crate::utils::symbol_utils::get_callsites;
 use crate::utils::symbol_utils::get_symbol_map;
-use crate::CweModule;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -131,7 +129,7 @@ fn generate_cwe_warning(allocation: &Tid, is_stack_allocation: bool) -> CweWarni
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let mut cwe_warnings = Vec::new();
@@ -175,5 +173,5 @@ pub fn check_cwe(
     }
     cwe_warnings.dedup();
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }

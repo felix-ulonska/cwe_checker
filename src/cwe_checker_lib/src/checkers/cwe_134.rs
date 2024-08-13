@@ -19,6 +19,7 @@
 //!
 //! - The input was externally provided on purpose and originates from a trusted source.
 //! - A pointer target could be lost but the format string was not externally provided.
+use super::prelude::*;
 
 use std::collections::HashMap;
 
@@ -34,7 +35,6 @@ use crate::intermediate_representation::Jmp;
 use crate::intermediate_representation::RuntimeMemoryImage;
 use crate::prelude::*;
 use crate::utils::log::CweWarning;
-use crate::utils::log::LogMessage;
 use crate::CweModule;
 
 /// The module name and version
@@ -72,7 +72,7 @@ pub enum StringLocation {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let format_string_symbols =
@@ -105,7 +105,7 @@ pub fn check_cwe(
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }
 
 /// Returns a StringLocation based on the kind of memory

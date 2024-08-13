@@ -57,10 +57,11 @@
 // A future implementation needs a better way to determine object sizes interprocedurally,
 // probably depending on several fixpoint computations to circumvent the state explosion problems
 // that the old implementation is vulnerable to.
+use super::prelude::*;
 
 use crate::analysis::pointer_inference::Data;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage, LogThread};
+use crate::utils::log::LogThread;
 use crate::CweModule;
 
 mod context;
@@ -84,7 +85,7 @@ pub static CWE_MODULE: CweModule = CweModule {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _config: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let log_thread = LogThread::spawn(LogThread::collect_and_deduplicate);
 
     let context = Context::new(analysis_results, log_thread.get_msg_sender());
@@ -107,5 +108,6 @@ pub fn check_cwe(
     fixpoint_computation.compute_with_max_steps(100);
 
     let (logs, cwe_warnings) = log_thread.collect();
-    (logs, cwe_warnings)
+
+    WithLogs::new(cwe_warnings, logs)
 }

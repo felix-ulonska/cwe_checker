@@ -7,7 +7,7 @@ pub use results::AnalysisResults;
 use crate::intermediate_representation::{Project, RuntimeMemoryImage};
 use crate::prelude::*;
 use crate::utils::debug;
-use crate::utils::log::LogMessage;
+use crate::utils::log::WithLogs;
 use crate::utils::{binary::BareMetalConfig, ghidra::get_project_from_ghidra};
 use std::path::Path;
 
@@ -19,10 +19,10 @@ pub fn disassemble_binary(
     binary_file_path: &Path,
     bare_metal_config_opt: Option<BareMetalConfig>,
     debug_settings: &debug::Settings,
-) -> Result<(Vec<u8>, Project, Vec<LogMessage>), Error> {
+) -> Result<(Vec<u8>, WithLogs<Project>), Error> {
     let binary: Vec<u8> =
         std::fs::read(binary_file_path).context("Could not read from binary file path {}")?;
-    let (mut project, mut all_logs) = get_project_from_ghidra(
+    let mut project = get_project_from_ghidra(
         binary_file_path,
         &binary[..],
         bare_metal_config_opt.clone(),
@@ -32,7 +32,7 @@ pub fn disassemble_binary(
     // Normalize the project and gather log messages generated from it.
     debug_settings.print(&project.program.term, debug::Stage::Ir(debug::IrForm::Raw));
 
-    all_logs.append(&mut project.optimize(debug_settings));
+    project.optimize(debug_settings);
 
     debug_settings.print(
         &project.program.term,
@@ -53,5 +53,5 @@ pub fn disassemble_binary(
     }
     project.runtime_memory_image = runtime_memory_image;
 
-    Ok((binary, project, all_logs))
+    Ok((binary, project))
 }

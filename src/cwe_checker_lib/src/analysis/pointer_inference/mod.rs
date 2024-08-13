@@ -81,7 +81,7 @@ pub struct PointerInference<'a> {
     /// A sender channel that can be used to collect logs in the corresponding log thread.
     log_collector: crossbeam_channel::Sender<LogThreadMsg>,
     /// The log messages and CWE warnings that have been generated during the pointer inference analysis.
-    pub collected_logs: (Vec<LogMessage>, Vec<CweWarning>),
+    pub collected_logs: WithLogs<Vec<CweWarning>>,
     /// Maps the TIDs of assignment, load or store [`Def`] instructions to the computed value data.
     /// The map will be filled after the fixpoint computation finished.
     values_at_defs: HashMap<Tid, Data>,
@@ -139,7 +139,7 @@ impl<'a> PointerInference<'a> {
         PointerInference {
             computation: fixpoint_computation,
             log_collector: log_sender,
-            collected_logs: (Vec::new(), Vec::new()),
+            collected_logs: WithLogs::wrap(Vec::new()),
             values_at_defs: HashMap::new(),
             addresses_at_defs: HashMap::new(),
             states_at_tids: HashMap::new(),
@@ -423,8 +423,9 @@ impl<'a> PointerInference<'a> {
 pub fn extract_pi_analysis_results(
     analysis_results: &AnalysisResults,
     _analysis_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+) -> WithLogs<Vec<CweWarning>> {
     let pi_anaylsis = analysis_results.pointer_inference.unwrap();
+
     pi_anaylsis.collected_logs.clone()
 }
 
@@ -455,7 +456,8 @@ pub fn run<'a>(
     }
 
     // save the logs and CWE warnings
-    computation.collected_logs = logging_thread.collect();
+    let (logs, cwe_warnings) = logging_thread.collect();
+    computation.collected_logs = WithLogs::new(cwe_warnings, logs);
     computation
 }
 
