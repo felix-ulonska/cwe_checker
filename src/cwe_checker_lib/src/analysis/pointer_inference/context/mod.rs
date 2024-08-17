@@ -297,13 +297,13 @@ impl<'a> Context<'a> {
         let warning = CweWarning {
             name: "CWE476".to_string(),
             version: VERSION.to_string(),
-            addresses: vec![tid.address.clone()],
+            addresses: vec![tid.address().to_string()],
             tids: vec![format!("{tid}")],
             symbols: Vec::new(),
             other: Vec::new(),
             description: format!(
                 "(NULL Pointer Dereference) Memory access at {} may result in a NULL dereference",
-                tid.address
+                tid.address()
             ),
         };
         let _ = self.log_collector.send(LogThreadMsg::Cwe(warning));

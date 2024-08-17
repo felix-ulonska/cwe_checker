@@ -34,11 +34,11 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                         super::super::CWE_MODULE.version,
                         format!(
                             "(Out-of-bounds Read) Memory read at {} may be out of bounds",
-                            &def.tid.address
+                            def.tid.address()
                         ),
                     );
                     cwe_warning.tids = vec![format!("{}", def.tid)];
-                    cwe_warning.addresses = vec![def.tid.address.to_string()];
+                    cwe_warning.addresses = vec![def.tid.address().to_string()];
                     cwe_warning.other = vec![warnings];
                     self.log_collector.send(cwe_warning.into()).unwrap();
                 }
@@ -55,11 +55,11 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                         super::super::CWE_MODULE.version,
                         format!(
                             "(Out-of-bounds Write) Memory write at {} may be out of bounds.",
-                            &def.tid.address
+                            def.tid.address()
                         ),
                     );
                     cwe_warning.tids = vec![format!("{}", def.tid)];
-                    cwe_warning.addresses = vec![def.tid.address.to_string()];
+                    cwe_warning.addresses = vec![def.tid.address().to_string()];
                     cwe_warning.other = vec![warnings];
                     self.log_collector.send(cwe_warning.into()).unwrap();
                 }

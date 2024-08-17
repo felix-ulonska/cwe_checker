@@ -426,7 +426,7 @@ impl LogThread {
             match log_thread_msg {
                 LogThreadMsg::Log(log_message) => {
                     if let Some(ref tid) = log_message.location {
-                        logs_with_address.insert(tid.address.clone(), log_message);
+                        logs_with_address.insert(tid.address().to_string(), log_message);
                     } else {
                         general_logs.push(log_message);
                     }

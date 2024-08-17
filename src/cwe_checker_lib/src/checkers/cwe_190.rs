@@ -96,10 +96,10 @@ fn generate_cwe_warning(callsite: &Tid, called_symbol: &ExternSymbol) -> CweWarn
         CWE_MODULE.version,
         format!(
             "(Integer Overflow or Wraparound) Potential overflow due to multiplication before call to {} at {}",
-            called_symbol.name, callsite.address
+            called_symbol.name, callsite.address()
         ))
         .tids(vec![format!("{callsite}")])
-        .addresses(vec![callsite.address.clone()])
+        .addresses(vec![callsite.address().to_string()])
         .symbols(vec![called_symbol.name.clone()])
 }
 

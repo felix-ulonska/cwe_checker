@@ -88,7 +88,7 @@ fn generate_cwe_warning(sub: &Term<Sub>, jmp: &Term<Jmp>, permission_const: u64)
     CweWarning::new(CWE_MODULE.name, CWE_MODULE.version,
         format!("(Use of umask() with chmod-style Argument) Function {} calls umask with argument {:#o}", sub.term.name, permission_const))
         .tids(vec![format!("{}", jmp.tid)])
-        .addresses(vec![jmp.tid.address.clone()])
+        .addresses(vec![jmp.tid.address().to_string()])
         .other(vec![vec![
             "umask_arg".to_string(),
             format!("{permission_const:#o}"),

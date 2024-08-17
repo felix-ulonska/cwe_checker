@@ -203,7 +203,7 @@ impl State {
             size: generic_pointer_size,
             is_temp: false,
         };
-        let address = Bitvector::from_u64(u64::from_str_radix(&callee_tid.address, 16)?)
+        let address = Bitvector::from_u64(callee_tid.address().try_into()?)
             .into_resize_unsigned(generic_pointer_size);
         self.set_register(&link_register, address.into());
         Ok(())

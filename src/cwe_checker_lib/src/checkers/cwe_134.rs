@@ -156,20 +156,20 @@ fn generate_cwe_warning(
         StringLocation::GlobalWriteable => {
             format!(
             "(Externally Controlled Format String) Potential externally controlled format string in global memory for call to {} at {}",
-            called_symbol.name, callsite.address
+            called_symbol.name, callsite.address()
         )
         }
         StringLocation::NonGlobal => {
             format!(
             "(Externally Controlled Format String) Potential externally controlled format string for call to {} at {}",
-            called_symbol.name, callsite.address
+            called_symbol.name, callsite.address()
         )
         }
         _ => panic!("Invalid String Location."),
     };
     CweWarning::new(CWE_MODULE.name, CWE_MODULE.version, description)
         .tids(vec![format!("{callsite}")])
-        .addresses(vec![callsite.address.clone()])
+        .addresses(vec![callsite.address().to_string()])
         .symbols(vec![called_symbol.name.clone()])
 }
 

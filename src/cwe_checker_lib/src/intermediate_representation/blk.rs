@@ -157,7 +157,7 @@ impl Term<Blk> {
                     Some(target.clone())
                 } else {
                     let error_msg =
-                        format!("Indirect jump target at {} does not exist", target.address);
+                        format!("Indirect jump target at {} does not exist", target.address());
                     logs.push(LogMessage::new_error(error_msg).location(self.tid.clone()));
                     None
                 }

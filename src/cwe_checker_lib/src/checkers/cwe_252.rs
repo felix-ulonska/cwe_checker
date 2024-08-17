@@ -254,12 +254,12 @@ fn generate_cwe_warning(
         CWE_MODULE.version,
         format!(
             "(Unchecked Return Value) There is no check of the return value of {} ({}).",
-            taint_source.tid.address, taint_source_name
+            taint_source.tid.address(), taint_source_name
         ),
     )
     .addresses(vec![
-        taint_source.tid.address.clone(),
-        warning_location.address.clone(),
+        taint_source.tid.address().to_string(),
+        warning_location.address().to_string(),
     ])
     .tids(vec![
         format!("{}", taint_source.tid),

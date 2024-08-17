@@ -63,7 +63,7 @@ pub fn generate_cwe_warnings<'a>(
 ) -> Vec<CweWarning> {
     let mut cwe_warnings: Vec<CweWarning> = Vec::new();
     for (sub_name, jmp_tid, target_name) in dangerous_calls.iter() {
-        let address: &String = &jmp_tid.address;
+        let address = jmp_tid.address();
         let description: String = format!(
             "(Use of Potentially Dangerous Function) {sub_name} ({address}) -> {target_name}"
         );
@@ -72,7 +72,7 @@ pub fn generate_cwe_warnings<'a>(
             String::from(CWE_MODULE.version),
             description,
         )
-        .addresses(vec![address.clone()])
+        .addresses(vec![address.to_string()])
         .tids(vec![format!("{jmp_tid}")])
         .symbols(vec![String::from(*sub_name)])
         .other(vec![vec![

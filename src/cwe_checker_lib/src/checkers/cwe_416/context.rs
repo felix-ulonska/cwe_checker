@@ -127,7 +127,7 @@ impl<'a> Context<'a> {
                 format!(
                     "(Use After Free) Call to {} at {} may access dangling pointers through its parameters",
                     callee_sub_name,
-                    call_tid.address
+                    call_tid.address()
                 ),
                 call_tid,
                 warning_causes,
@@ -157,7 +157,7 @@ impl<'a> Context<'a> {
                         "CWE415",
                         format!(
                             "(Double Free) Object may have been freed before at {}",
-                            call_tid.address
+                            call_tid.address()
                         ),
                         call_tid,
                         warning_causes,
@@ -180,7 +180,7 @@ impl<'a> Context<'a> {
         let cwe_warning = CweWarning {
             name: name.to_string(),
             version: CWE_MODULE.version.to_string(),
-            addresses: vec![location.address.clone()],
+            addresses: vec![location.address().to_string()],
             tids: vec![format!("{location}")],
             symbols: Vec::new(),
             other: Vec::new(),
@@ -219,7 +219,7 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                     "CWE416",
                     format!(
                         "(Use After Free) Access through a dangling pointer at {}",
-                        def.tid.address
+                        def.tid.address()
                     ),
                     &def.tid,
                     warning_causes,
@@ -332,7 +332,7 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                             format!(
                                 "(Use After Free) Call to {} at {} may access dangling pointers through its parameters",
                                 extern_symbol_name,
-                                call.tid.address
+                                call.tid.address()
                                 ),
                             &call.tid,
                             warning_causes,
@@ -350,7 +350,7 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                 "CWE416",
                 format!(
                     "(Use After Free) Call at {} may access dangling pointers through its parameters",
-                    call.tid.address
+                    call.tid.address()
                     ),
                 &call.tid,
                 warning_causes,

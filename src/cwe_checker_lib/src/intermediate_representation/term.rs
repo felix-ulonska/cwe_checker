@@ -1,121 +1,196 @@
+//! Unique term identifiers.
+
 use crate::prelude::*;
 
-use std::fmt::Display;
+use std::convert::{From, TryFrom};
+use std::fmt::{self, Display};
 use std::ops::{Deref, DerefMut};
+
+use anyhow;
 
 mod builder_high_lvl;
 mod builder_low_lvl;
 
-/// A term identifier consisting of an ID string (which is required to be unique)
-/// and an address to indicate where the term is located.
+/// A unique term identifier.
+///
+/// A `Tid` consists of an ID string (which is required to be unique)
+/// and an address to indicate where the term is located in memory.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct Tid {
     /// The unique ID of the term.
-    pub id: String,
+    id: String,
     /// The address where the term is located.
-    pub address: String,
+    address: TidAddress,
+}
+
+/// The memory address of a term.
+///
+/// Multiple terms may be at the same address. Some terms may be at an unknown
+/// address.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
+pub struct TidAddress(Option<u64>);
+
+impl Display for TidAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(a) => write!(f, "{}", a),
+            None => write!(f, "{}", Tid::UNKNOWN_ADDRESS),
+        }
+    }
+}
+
+impl<T: AsRef<str>> From<T> for TidAddress {
+    fn from(a: T) -> Self {
+        Self(u64::from_str_radix(a.as_ref(), 16).ok())
+    }
+}
+
+impl TryFrom<TidAddress> for u64 {
+    type Error = anyhow::Error;
+
+    fn try_from(a: TidAddress) -> Result<u64, Self::Error> {
+        a.0.ok_or(anyhow::anyhow!("Term is at unknown address."))
+    }
+}
+
+impl TidAddress {
+    /// Returns a new `TidAddress`.
+    pub fn new(a: Option<u64>) -> Self {
+        Self(a)
+    }
+
+    /// Returns true iff the address is unknown.
+    pub fn is_unknown(&self) -> bool {
+        self.0.is_none()
+    }
 }
 
 impl Tid {
-    /// Prefix for IDs of artificial sinks in the control flow graph.
+    /// Prefix for TIDs of artificial sinks in the control flow graph.
     ///
     /// Dummy blocks with such TIDs are added if our recovered control flow is
-    /// incomplete.
-    const ARTIFICIAL_SINK_BLOCK_ID_PREFIX: &'static str = "Artificial Sink Block";
-    const ARTIFICIAL_SINK_BLOCK_INSTR_ID_PREFIX: &'static str = "Artificial Instruction";
-    /// Prefix for IDs of artificial return targets in the control flow graph.
+    /// incomplete, e.g., branches to nonexistent targets.
+    const ARTIFICIAL_SINK_BLOCK_ID_PREFIX: &'static str = "artificial_sink_block";
+    /// Prefix for TIDs of artificial instructions.
+    const ARTIFICIAL_INSTRUCTION_ID_PREFIX: &'static str = "artificial_instruction";
+    /// Prefix for TIDs of artificial return targets in the control flow graph.
     ///
     /// Dummy blocks with such TIDs are added as return targets for calls to
     /// non-returning functions.
-    const ARTIFICIAL_RETURN_TARGET_ID_PREFIX: &'static str = "Artificial Return Target";
-    /// The ID of the artificial sink sub.
+    const ARTIFICIAL_RETURN_TARGET_ID_PREFIX: &'static str = "artificial_return_target";
+    /// The TID of the artificial sink sub.
     ///
-    /// This is used as the target for calls to non-existing functions.
-    const ARTIFICIAL_SINK_SUB_ID: &'static str = "Artificial Sink Sub";
-    /// Address for use in IDs of terms that do not have an address.
+    /// This is used as the target for calls to non-existing or empty functions.
+    const ARTIFICIAL_SINK_FN_ID: &'static str = "artificial_sink_sub";
+    /// Address for use in TIDs of terms that do not have an address, e.g.,
+    /// artificial blocks.
     const UNKNOWN_ADDRESS: &'static str = "UNKNOWN";
-
-    /// Generate a new term identifier with the given ID string
-    /// and with unknown address.
-    pub fn new<T: ToString>(val: T) -> Tid {
-        Tid {
-            id: val.to_string(),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
-        }
-    }
+    const PROGRAM_ID_PREFIX: &'static str = "prog";
+    const FUNCTION_ID_PREFIX: &'static str = "fun";
+    const EXT_FUNCTION_ID_PREFIX: &'static str = "ext_fun";
+    const BLOCK_ID_PREFIX: &'static str = "blk";
+    const INSTRUCTION_ID_PREFIX: &'static str = "instr";
 
     /// Returns the term identifier for the program that is based at the
     /// given `address`.
-    pub fn new_program<T: Display + ?Sized>(address: &T) -> Self {
+    pub fn new_program<T: Into<TidAddress> + Display + ?Sized>(address: T) -> Self {
         Self {
-            id: format!("program_{}", address),
-            address: address.to_string(),
+            id: format!("{}_{}", Self::PROGRAM_ID_PREFIX, address),
+            address: address.into(),
         }
     }
 
-    /// Generate a new term identifier for an instruction with `index` at
+    /// Returns the TID for the function at the given address.
+    pub fn new_function<T: Into<TidAddress> + Display + ?Sized>(address: T) -> Self {
+        Self {
+            id: format!("{}_{}", Self::FUNCTION_ID_PREFIX, address),
+            address: address.into(),
+        }
+    }
+
+    /// Returns the TID for the external function with the given name.
+    pub fn new_external_function<T: Display + ?Sized>(name: &T) -> Self {
+        Self {
+            id: format!("{}_{}", Self::EXT_FUNCTION_ID_PREFIX, name),
+            address: Self::UNKNOWN_ADDRESS.into(),
+        }
+    }
+
+    /// Generate a new term identifier for the block with `index` at `address`.
+    pub fn new_block<T: Into<TidAddress> + Display + ?Sized>(address: T, index: u64) -> Self {
+        let id = match index {
+            0 => format!("{}_{}", Self::BLOCK_ID_PREFIX, address),
+            _ => format!("{}_{}_{}", Self::BLOCK_ID_PREFIX, address, index),
+        };
+
+        Self {
+            id,
+            address: address.into(),
+        }
+    }
+
+    /// Generate a new term identifier for the instruction with `index` at
     /// `address`.
-    pub fn new_instr<T: Display + ?Sized>(address: &T, index: u64) -> Self {
+    pub fn new_instr<T: Into<TidAddress> + Display + ?Sized>(address: T, index: u64) -> Self {
         Tid::new_instr_with_suffix::<_, &str>(address, index, None)
     }
 
     /// Converts TID into a TID for an instruction at the same address.
     pub fn into_instr(self) -> Self {
         Self {
-            id: format!("instr_{}_0", self.address),
+            id: format!("{}_{}_0", Self::INSTRUCTION_ID_PREFIX, self.address),
             address: self.address,
         }
     }
 
-    pub fn new_instr_with_suffix<T, U>(address: &T, index: u64, suffix: Option<&U>) -> Self
+    /// Generate a new term identifier for the instruction with `index` at
+    /// `address`.
+    pub fn new_instr_with_suffix<T, U>(address: T, index: u64, suffix: Option<&U>) -> Self
     where
-        T: Display + ?Sized,
+        T: Display + Into<TidAddress> + ?Sized,
         U: Display + ?Sized,
     {
         match suffix {
             Some(suffix) => Self {
-                id: format!("instr_{}_{}_{}", address, index, suffix),
-                address: address.to_string(),
+                id: format!(
+                    "{}_{}_{}_{}",
+                    Self::INSTRUCTION_ID_PREFIX,
+                    address,
+                    index,
+                    suffix
+                ),
+                address: address.into(),
             },
             None => Self {
-                id: format!("instr_{}_{}", address, index),
-                address: address.to_string(),
+                id: format!("{}_{}_{}", Self::INSTRUCTION_ID_PREFIX, address, index),
+                address: address.into(),
             },
         }
     }
 
-    /// Generate a new term identifier for a block with `index` at `address`.
-    pub fn new_block<T: Display + ?Sized>(address: &T, index: u64) -> Self {
-        let id = match index {
-            0 => format!("blk_{}", address),
-            _ => format!("blk_{}_{}", address, index),
-        };
+    /// Returns true iff this is a TID for a program.
+    pub fn is_program(&self) -> bool {
+        self.id.starts_with(Self::PROGRAM_ID_PREFIX)
+    }
 
-        Self {
-            id,
-            address: address.to_string(),
-        }
+    /// Returns true iff this is a TID for a function.
+    pub fn is_function(&self) -> bool {
+        self.id.starts_with(Self::FUNCTION_ID_PREFIX)
+    }
+
+    /// Returns true iff this is a TID for an external function.
+    pub fn is_external_function(&self) -> bool {
+        self.id.starts_with(Self::EXT_FUNCTION_ID_PREFIX)
     }
 
     /// Returns true iff this is a TID for a block.
     pub fn is_block(&self) -> bool {
-        self.id.starts_with("blk_")
+        self.id.starts_with(Self::BLOCK_ID_PREFIX)
     }
 
-    /// Returns the TID for a function at the given address.
-    pub fn new_function<T: Display + ?Sized>(address: &T) -> Self {
-        Self {
-            id: format!("FUN_{}", address),
-            address: address.to_string(),
-        }
-    }
-
-    /// Returns the TID for an external function with the given name.
-    pub fn new_external_function<T: Display + ?Sized>(name: &T) -> Self {
-        Self {
-            id: format!("EXT_FUN_{}", name),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
-        }
+    /// Returns true iff this is a TID for a block.
+    pub fn is_instruction(&self) -> bool {
+        self.id.starts_with(Self::INSTRUCTION_ID_PREFIX)
     }
 
     /// Add a suffix to the ID string and return the new `Tid`
@@ -131,24 +206,11 @@ impl Tid {
         self.id.ends_with(suffix)
     }
 
-    /// Generate the ID of a block starting at the given address.
-    ///
-    /// Note that the block may not actually exist.
-    /// For cases where one assembly instruction generates more than one block,
-    /// the returned block ID is the one that would be executed first if a jump to the given address happened.
-    pub fn blk_id_at_address(address: &str) -> Tid {
-        Tid {
-            id: format!("blk_{address}"),
-            address: address.to_string(),
-        }
-    }
-
-    /// Returns a new ID for an artificial sink instruction with the given
-    /// suffix.
-    pub fn artificial_sink_instr<T: Display>(suffix: T) -> Self {
+    /// Returns the ID of the artificial sink function.
+    pub fn artificial_sink_fn() -> Self {
         Self {
-            id: format!("{}{}", Self::ARTIFICIAL_SINK_BLOCK_INSTR_ID_PREFIX, suffix),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
+            id: Self::ARTIFICIAL_SINK_FN_ID.to_string(),
+            address: Self::UNKNOWN_ADDRESS.into(),
         }
     }
 
@@ -156,7 +218,7 @@ impl Tid {
     pub fn artificial_sink_block<T: Display>(suffix: T) -> Self {
         Self {
             id: format!("{}{}", Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX, suffix),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
+            address: Self::UNKNOWN_ADDRESS.into(),
         }
     }
 
@@ -164,15 +226,15 @@ impl Tid {
     pub fn artificial_sink_block_for_fn(fn_tid: &Tid) -> Self {
         Self {
             id: format!("{}_{}", Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX, fn_tid),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
+            address: Self::UNKNOWN_ADDRESS.into(),
         }
     }
 
-    /// Returns a new ID for the artificial sink block of the given funtion.
+    /// Returns a new ID for the artificial sink block with the given suffix.
     pub fn artificial_return_target<T: Display>(suffix: T) -> Self {
         Self {
             id: format!("{}{}", Self::ARTIFICIAL_RETURN_TARGET_ID_PREFIX, suffix),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
+            address: Self::UNKNOWN_ADDRESS.into(),
         }
     }
 
@@ -180,22 +242,27 @@ impl Tid {
     pub fn artificial_return_target_for_fn(fn_tid: &Tid) -> Self {
         Self {
             id: format!("{}_{}", Self::ARTIFICIAL_RETURN_TARGET_ID_PREFIX, fn_tid),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
+            address: Self::UNKNOWN_ADDRESS.into(),
         }
     }
 
-    /// Returns the ID of the artificial sink function.
-    pub fn artificial_sink_fn() -> Self {
+    /// Returns a new ID for an artificial instruction with the given suffix.
+    pub fn artificial_instr_with_suffix<T: Display>(suffix: T) -> Self {
         Self {
-            id: Self::ARTIFICIAL_SINK_SUB_ID.to_string(),
-            address: Self::UNKNOWN_ADDRESS.to_string(),
+            id: format!("{}{}", Self::ARTIFICIAL_INSTRUCTION_ID_PREFIX, suffix),
+            address: Self::UNKNOWN_ADDRESS.into(),
         }
+    }
+
+    /// Returns true iff the ID is for the artificial sink sub.
+    pub fn is_artificial_sink_fn(&self) -> bool {
+        self.id == Self::ARTIFICIAL_SINK_FN_ID && self.address.is_unknown()
     }
 
     /// Returns true iff the ID is for an artificial sink block.
     pub fn is_artificial_sink_block(&self) -> bool {
         self.id.starts_with(Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX)
-            && self.address == Self::UNKNOWN_ADDRESS
+            && self.address.is_unknown()
     }
 
     /// Returns true iff the ID is for the artificial sink block with the given
@@ -203,21 +270,19 @@ impl Tid {
     pub fn is_artificial_sink_block_for(&self, suffix: &str) -> bool {
         self.id.starts_with(Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX)
             && self.has_id_suffix(suffix)
-            && self.address == Self::UNKNOWN_ADDRESS
+            && self.address.is_unknown()
     }
 
-    /// Returns true iff the ID is for the artificial sink sub.
-    pub fn is_artificial_sink_sub(&self) -> bool {
-        self.id == Self::ARTIFICIAL_SINK_SUB_ID && self.address == Self::UNKNOWN_ADDRESS
-    }
-
-    pub fn is_artificial_return_target(&self) -> bool {
-        todo!()
+    /// Returns true iff the ID is for an artificial return target block.
+    pub fn is_artificial_return_target_block(&self) -> bool {
+        self.id
+            .starts_with(Self::ARTIFICIAL_RETURN_TARGET_ID_PREFIX)
+            && self.address.is_unknown()
     }
 
     /// Returns the address of this TID.
-    pub fn address(&self) -> &String {
-        &self.address
+    pub fn address(&self) -> TidAddress {
+        self.address
     }
 }
 

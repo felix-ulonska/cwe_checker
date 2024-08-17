@@ -173,17 +173,17 @@ impl<'a> Context<'a> {
                 let description = match target_fn_name {
                     Some(target_name) => format!(
                         "(Buffer Overflow) Call to {} at {} may access out-of-bounds memory.",
-                        target_name, &call_tid.address
+                        target_name, call_tid.address()
                     ),
                     None => format!(
                         "(Buffer Overflow) Call at {} may access out-of-bounds memory.",
-                        &call_tid.address
+                        call_tid.address()
                     ),
                 };
                 let mut cwe_warning =
                     CweWarning::new("CWE119", super::CWE_MODULE.version, description);
                 cwe_warning.tids = vec![format!("{call_tid}")];
-                cwe_warning.addresses = vec![call_tid.address.to_string()];
+                cwe_warning.addresses = vec![call_tid.address().to_string()];
                 cwe_warning.other = vec![warnings];
                 self.log_collector.send(cwe_warning.into()).unwrap();
             }

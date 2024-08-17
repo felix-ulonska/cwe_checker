@@ -220,11 +220,11 @@ impl<'a> Context<'a> {
             CWE_MODULE.version,
             format!(
                 "RNG seed function {} at {} is seeded with predictable seed source.",
-                sink_symbol.name, sink_call.tid.address,
+                sink_symbol.name, sink_call.tid.address(),
             ),
         )
         .tids(vec![format!("{}", sink_call.tid)])
-        .addresses(vec![sink_call.tid.address.clone()])
+        .addresses(vec![sink_call.tid.address().to_string()])
         .symbols(vec![sink_symbol.name.clone()]);
         let _ = self.cwe_collector.send(cwe_warning);
     }

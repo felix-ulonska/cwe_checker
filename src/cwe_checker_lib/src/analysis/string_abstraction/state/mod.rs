@@ -303,7 +303,7 @@ impl<T: AbstractDomain + DomainInsertion + HasTop + Eq + From<String>> State<T> 
     ) -> Option<DataDomain<IntervalDomain>> {
         if let Ok(address) = constant.try_to_u64() {
             if !block_first_def_set.iter().any(|(def_tid, _)| {
-                u64::from_str_radix(def_tid.address.as_str(), 16).unwrap() == address
+                u64::try_from(def_tid.address()).unwrap() == address
             }) && runtime_memory_image.is_global_memory_address(&constant)
                 && runtime_memory_image
                     .read_string_until_null_terminator(&constant)

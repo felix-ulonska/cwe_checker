@@ -115,11 +115,11 @@ fn generate_cwe_warning(allocation: &Tid, is_stack_allocation: bool) -> CweWarni
                 true => " stack ",
                 false => " heap ",
             },
-            allocation.address
+            allocation.address()
         ),
     )
     .tids(vec![format!("{allocation}")])
-    .addresses(vec![allocation.address.clone()])
+    .addresses(vec![allocation.address().to_string()])
     .symbols(vec![])
 }
 

@@ -58,10 +58,10 @@ fn generate_cwe_warning(
         CWE_MODULE.version,
         format!(
             "(Time-of-check Time-of-use Race Condition) '{}' is reachable from '{}' at {} ({}). This could lead to a TOCTOU.",
-            sink, source, sink_callsite.address, sub_name
+            sink, source, sink_callsite.address(), sub_name
         ))
         .tids(vec![format!("{source_callsite}"), format!("{sink_callsite}")])
-        .addresses(vec![source_callsite.address, sink_callsite.address])
+        .addresses(vec![source_callsite.address().to_string(), sink_callsite.address().to_string()])
         .symbols(vec![source.into(), sink.into()])
 }
 

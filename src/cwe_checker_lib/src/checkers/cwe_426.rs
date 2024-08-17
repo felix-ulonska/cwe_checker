@@ -58,11 +58,11 @@ fn generate_cwe_warning(sub: &Term<Sub>) -> CweWarning {
         CWE_MODULE.version,
         format!(
             "(Untrusted Search Path) sub {} at {} may be vulnerable to PATH manipulation.",
-            sub.term.name, sub.tid.address
+            sub.term.name, sub.tid.address()
         ),
     )
     .tids(vec![format!("{}", sub.tid)])
-    .addresses(vec![sub.tid.address.clone()])
+    .addresses(vec![sub.tid.address().to_string()])
     .symbols(vec![sub.term.name.clone()])
 }
 

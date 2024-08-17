@@ -195,7 +195,7 @@ pub fn check_system_call_parameter(
         } else {
             let _ = log_collector.send(LogMessage::new_debug(format!(
                 "No Parameter tracked for system call at {}",
-                jmp_tid.address
+                jmp_tid.address()
             )));
         }
     }
@@ -236,14 +236,14 @@ pub fn check_if_string_domain_indicates_vulnerability(
 pub fn generate_cwe_warning(sub_name: &str, jmp_tid: &Tid, symbol_name: &str) -> CweWarning {
     let description: String = format!(
         "(OS Command Injection) Input for call to {} may not be properly sanitized in function {} ({})",
-        symbol_name, sub_name, jmp_tid.address,
+        symbol_name, sub_name, jmp_tid.address(),
     );
     CweWarning::new(
         String::from(CWE_MODULE.name),
         String::from(CWE_MODULE.version),
         description,
     )
-    .addresses(vec![jmp_tid.address.clone()])
+    .addresses(vec![jmp_tid.address().to_string()])
     .tids(vec![format!("{jmp_tid}")])
     .symbols(vec![String::from(sub_name)])
     .other(vec![vec![

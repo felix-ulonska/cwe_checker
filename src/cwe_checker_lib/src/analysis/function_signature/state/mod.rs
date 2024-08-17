@@ -97,7 +97,7 @@ impl State {
             size: generic_pointer_size,
             is_temp: false,
         };
-        let address = Bitvector::from_u64(u64::from_str_radix(&fn_tid.address, 16)?)
+        let address = Bitvector::from_u64(fn_tid.address().try_into()?)
             .into_resize_unsigned(generic_pointer_size);
         // Note that we do not replace the absolute value by a relative value representing a global memory pointer.
         // Else we would risk every global variable to get assigned the same abstract ID.

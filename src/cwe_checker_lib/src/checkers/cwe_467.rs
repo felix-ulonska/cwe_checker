@@ -91,11 +91,11 @@ fn generate_cwe_warning(jmp: &Term<Jmp>, extern_symbol: &ExternSymbol) -> CweWar
         CWE_MODULE.version,
         format!(
             "(Use of sizeof on a Pointer Type) sizeof on pointer at {} ({}).",
-            jmp.tid.address, extern_symbol.name
+            jmp.tid.address(), extern_symbol.name
         ),
     )
     .tids(vec![format!("{}", jmp.tid)])
-    .addresses(vec![jmp.tid.address.clone()])
+    .addresses(vec![jmp.tid.address().to_string()])
 }
 
 /// Execute the CWE check.
