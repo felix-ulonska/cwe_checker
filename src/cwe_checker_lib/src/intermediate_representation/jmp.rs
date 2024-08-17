@@ -71,13 +71,13 @@ impl fmt::Display for Jmp {
                 f,
                 "call {} ret {}",
                 target,
-                return_.as_ref().unwrap_or(&Tid::new("?"))
+                return_.as_ref().unwrap()
             ),
             Jmp::CallInd { target, return_ } => write!(
                 f,
                 "call {} ret {}",
                 target,
-                return_.as_ref().unwrap_or(&Tid::new("?"))
+                return_.as_ref().unwrap()
             ),
             Jmp::Return(expr) => write!(f, "ret {expr}"),
             Jmp::CallOther {
@@ -87,7 +87,7 @@ impl fmt::Display for Jmp {
                 f,
                 "call {} ret {}",
                 description,
-                return_.as_ref().unwrap_or(&Tid::new("?"))
+                return_.as_ref().unwrap()
             ),
         }
     }
