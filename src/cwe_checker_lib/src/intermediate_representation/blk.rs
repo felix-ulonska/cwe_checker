@@ -96,7 +96,7 @@ impl Term<Blk> {
     pub fn get_sink_type(&self) -> Option<SinkType> {
         match self.term.jmps.as_slice() {
             _ if self.tid.is_artificial_sink_block() => Some(SinkType::ArtificialSink),
-            _ if self.tid.is_artificial_return_target() => Some(SinkType::ArtificialReturnTarget),
+            _ if self.tid.is_artificial_return_target_block() => Some(SinkType::ArtificialReturnTarget),
             // Unconditional self-loops.
             [Term {
                 term:
@@ -182,7 +182,7 @@ impl Term<Blk> {
         // Self-loop.
         let mut jmps = Vec::with_capacity(1);
         jmps.push(Term::<Jmp>::new(
-                    Tid::artificial_sink_instr(id_suffix),
+                    Tid::artificial_instr_with_suffix(format!("_{}", blk_tid)),
                     Jmp::Branch(blk_tid.clone()),
                 ));
 
@@ -199,11 +199,20 @@ impl Term<Blk> {
     /// Returns a new artificial return target block with the given suffix
     /// attached to its ID.
     pub fn artificial_return_target(id_suffix: &str) -> Self {
+        let blk_tid = Tid::artificial_return_target(id_suffix);
+
+        // Self-loop.
+        let mut jmps = Vec::with_capacity(1);
+        jmps.push(Term::<Jmp>::new(
+                    Tid::artificial_instr_with_suffix(format!("_{}", blk_tid)),
+                    Jmp::Branch(blk_tid.clone()),
+                ));
+
         Self {
-            tid: Tid::artificial_return_target(id_suffix),
+            tid: blk_tid,
             term: Blk {
                 defs: Vec::with_capacity(0),
-                jmps: Vec::with_capacity(0),
+                jmps,
                 indirect_jmp_targets: Vec::with_capacity(0),
             },
         }
