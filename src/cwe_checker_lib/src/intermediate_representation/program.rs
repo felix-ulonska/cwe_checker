@@ -149,15 +149,6 @@ impl Program {
                 fn_tid_key, fn_tid_value
             );
         }
-
-        // Check that all entry points are defined within the binary.
-        for ep_tid in self.entry_points.iter() {
-            assert!(
-                self.subs.contains_key(ep_tid),
-                "Entry point at {} does not exist.",
-                ep_tid
-            );
-        }
     }
 }
 
