@@ -56,7 +56,7 @@ impl Sub {
 }
 
 impl Term<Sub> {
-    const ARTIFICIAL_SINK_FN_NAME: &'static str = "Artificial Sink Function";
+    const ARTIFICIAL_SINK_FN_NAME: &'static str = "artificial_sink_function";
 
     /// Returns the ID suffix for this function.
     pub fn id_suffix(&self) -> String {
