@@ -157,7 +157,7 @@ impl fmt::Display for Program {
         for Term { tid, term: sub } in self.subs.values() {
             writeln!(
                 f,
-                "SUB [{}] name:{} entry:{} non_returning:{}",
+                "FN [{}] name:{} entry:{} non_returning:{}",
                 tid,
                 sub.name,
                 if self.entry_points.contains(tid) {
