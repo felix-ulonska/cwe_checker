@@ -1,24 +1,27 @@
 //! This module implements a check for CWE-332: Insufficient Entropy in PRNG.
 //!
-//! This can happen, for instance, if the PRNG is not seeded. A classical example
-//! would be calling rand without srand. This could lead to predictable random
-//! numbers and could, for example, weaken crypto functionality.
+//! This can happen, for instance, if the PRNG is not seeded. A classical
+//! example would be calling rand without srand. This could lead to predictable
+//! random numbers and could, for example, weaken crypto functionality.
 //!
-//! See <https://cwe.mitre.org/data/definitions/332.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/332.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! For pairs of a secure seeding function and a corresponding random number generator function
-//! (e.g. the pair `(srand, rand)`, configurable in `config.json`)
-//! we check whether the program calls the random number generator without calling the seeding function.
+//! For pairs of a secure seeding function and a corresponding random number
+//! generator function (e.g. the pair `(srand, rand)`, configurable in
+//! `config.json`) we check whether the program calls the random number
+//! generator without calling the seeding function.
 //!
 //! ## False Positives
 //!
-//! None known
+//! None known.
 //!
 //! ## False Negatives
 //!
-//! - It is not checked whether the seeding function gets called before the random number generator function.
+//! It is not checked whether the seeding function gets called before the
+//! random number generator function.
 use super::prelude::*;
 
 use crate::prelude::*;

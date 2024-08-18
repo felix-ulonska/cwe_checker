@@ -1,9 +1,10 @@
 //! This module implements a check for CWE-190: Integer overflow or wraparound.
 //!
-//! An integer overflow can lead to undefined behavior and is especially dangerous
-//! in conjunction with memory management functions.
+//! An integer overflow can lead to undefined behavior and is especially
+//! dangerous in conjunction with memory management functions.
 //!
-//! See <https://cwe.mitre.org/data/definitions/190.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/190.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
@@ -17,15 +18,16 @@
 //!
 //! ## False Positives
 //!
-//! - There is no check whether the result of the multiplication is actually used
-//!   as input to the function call. However, this does not seem to generate a lot
-//!   of false positives in practice.
-//! - Values that are not absolute e.g. user controlled or depend on other values.
+//! - There is no check whether the result of the multiplication is actually
+//!   used as input to the function call. However, this does not seem to
+//!   generate a lot of false positives in practice.
+//! - Values that are not absolute e.g. user controlled or depend on other
+//!   values.
 //!
 //! ## False Negatives
 //!
-//! - All integer overflows not in a basic block right before a call to a function
-//! from the CWE190 symbol list.
+//! - All integer overflows not in a basic block right before a call to a
+//!   function from the CWE190 symbol list.
 //! - All integer overflows caused by addition or subtraction.
 use super::prelude::*;
 

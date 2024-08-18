@@ -35,8 +35,16 @@ impl IrPass for StackPointerAlignmentSubstitutionPass {
     }
 
     fn run(&mut self, program: &mut Self::Input) -> Vec<LogMessage> {
-        legacy::substitute_and_on_stackpointer(program, &self.stack_pointer_register, &self.cpu_architecture)
+        legacy::substitute_and_on_stackpointer(
+            program,
+            &self.stack_pointer_register,
+            &self.cpu_architecture,
+        )
     }
 
-    fn assert_postconditions(_construction_input: &Self::ConstructionInput, _program: &Self::Input) {}
+    fn assert_postconditions(
+        _construction_input: &Self::ConstructionInput,
+        _program: &Self::Input,
+    ) {
+    }
 }

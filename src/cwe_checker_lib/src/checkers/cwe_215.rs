@@ -1,14 +1,16 @@
-//! This module implements a check for CWE-215: Information Exposure Through Debug Information.
+//! This module implements a check for CWE-215: Information Exposure Through
+//! Debug Information.
 //!
-//! Sensitive debugging information can be leveraged to get a better understanding
-//! of a binary in less time.
+//! Sensitive debugging information can be leveraged to get a better
+//! understanding of a binary in less time.
 //!
-//! See <https://cwe.mitre.org/data/definitions/215.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/215.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! For ELF binaries we check whether they contain sections containing debug information.
-//! Other binary formats are currently not supported by this check.
+//! For ELF binaries we check whether they contain sections containing debug
+//! information. Other binary formats are currently not supported by this check.
 //!
 //! ## False Positives
 //!

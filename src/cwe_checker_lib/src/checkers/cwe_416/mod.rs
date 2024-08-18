@@ -1,59 +1,75 @@
-//! This module implements a check for CWE-415: Double Free and CWE-416: Use After Free.
+//! This module implements a check for CWE-415: Double Free and CWE-416: Use
+//! After Free.
 //!
-//! If a program tries to reference memory objects or other resources after they have been freed
-//! it can lead to crashes, unexpected behaviour or even arbitrary code execution.
-//! The same is true if the program tries to free the same resource more than once
-//! as this can lead to another unrelated resource being freed instead.
+//! If a program tries to reference memory objects or other resources after they
+//! have been freed it can lead to crashes, unexpected behaviour or even
+//! arbitrary code execution. The same is true if the program tries to free the
+//! same resource more than once as this can lead to another unrelated resource
+//! being freed instead.
 //!
-//! See <https://cwe.mitre.org/data/definitions/415.html> and <https://cwe.mitre.org/data/definitions/416.html> for detailed descriptions.
+//! See <https://cwe.mitre.org/data/definitions/415.html> and
+//! <https://cwe.mitre.org/data/definitions/416.html> for detailed descriptions.
 //!
 //! ## How the check works
 //!
-//! Using an interprocedural, bottom-up dataflow analysis
-//! based on the results of the [Pointer Inference analysis](`crate::analysis::pointer_inference`)
+//! Using an interprocedural, bottom-up dataflow analysis based on the results
+//! of the [Pointer Inference analysis](`crate::analysis::pointer_inference`)
 //! the check keeps track of memory objects that have already been freed.
-//! If a pointer to an already freed object is used to access memory or provided as a parameter to another function
-//! then a CWE warning is generated.
-//! To prevent duplicate CWE warnings with the same root cause
-//! the check also keeps track of objects for which a CWE warning was already generated.
+//! If a pointer to an already freed object is used to access memory or provided
+//! as a parameter to another function then a CWE warning is generated.
+//! To prevent duplicate CWE warnings with the same root cause the check also
+//! keeps track of objects for which a CWE warning was already generated.
 //!
 //! ### Symbols configurable in config.json
 //!
-//! - The `deallocation_symbols` are the names of extern functions that deallocate memory.
-//! The check always assumes that the first parameter of such a function is the memory object to be freed.
-//! The check also assumes that memory is always freed by such a call,
-//! which can lead to false positive warnings for functions like `realloc`, where the memory object may not be freed by the call.
-//! - The `always_include_full_path_to_free_site` flag controls the amount of context information printed in the CWE warnings.
-//! If set to `true`, then the warning contains the full path in the callgraph from the root function to an actual `free`-site.
-//! If set to `false`, then the path may be shortened:
-//! A call to some function `func` may be reported as the `free`-site
-//! if the actual `free`-operation is contained in `func` or some callee of `func`.
+//! - The `deallocation_symbols` are the names of extern functions that
+//!   deallocate memory. The check always assumes that the first parameter of
+//!   such a function is the memory object to be freed. The check also assumes
+//!   that memory is always freed by such a call, which can lead to false
+//!   positive warnings for functions like `realloc`, where the memory object
+//!   may not be freed by the call.
+//! - The `always_include_full_path_to_free_site` flag controls the amount of
+//!   context information printed in the CWE warnings. If set to `true`, then
+//!   the warning contains the full path in the callgraph from the root function
+//!   to an actual `free`-site. If set to `false`, then the path may be
+//!   shortened: A call to some function `func` may be reported as the
+//!   `free`-site if the actual `free`-operation is contained in `func` or some
+//!   callee of `func`.
 //!
 //! ## False Positives
 //!
-//! - Since the analysis is not path-sensitive, infeasible paths may lead to false positives.
-//! - Any analysis imprecision of the pointer inference analysis
-//! that leads to assuming that a pointer can target more memory objects that it actually can target
-//! may lead to false positive CWE warnings in this check.
-//! - For extern functions that may or may not release memory,
-//! the check will produce false positives if the original pointer is used after calling the function.
-//! For example, `realloc` may return NULL, in which case it will not free memory and the original pointer remains valid.
-//! But the check will flag any access to the original pointer as a potential CWE, regardless of the return value of `realloc`.
+//! - Since the analysis is not path-sensitive, infeasible paths may lead to
+//!   false positives.
+//! - Any analysis imprecision of the pointer inference analysis that leads to
+//!   assuming that a pointer can target more memory objects that it actually
+//!   can target may lead to false positive CWE warnings in this check.
+//! - For extern functions that may or may not release memory, the check will
+//!   produce false positives if the original pointer is used after calling the
+//!   function. For example, `realloc` may return NULL, in which case it will
+//!   not free memory and the original pointer remains valid. But the check will
+//!   flag any access to the original pointer as a potential CWE, regardless of
+//!   the return value of `realloc`.
 //!
 //! ## False Negatives
 //!
-//! - Arrays of memory objects are not tracked by this analysis as we currently cannot distinguish different array elements in the analysis.
-//! Subsequently, CWEs corresponding to arrays of memory objects are not detected.
-//! - Memory objects not tracked by the Pointer Inference analysis or pointer targets missed by the Pointer Inference
-//! may lead to missed CWEs in this check.
-//! - Pointers freed by other operations than calls to the deallocation symbols contained in the config.json will be missed by the analysis.
-//! - Pointers freed and flagged in the same call are not marked as freed in the caller.
-//! This reduces false positives and duplicates, but may also result in some false negatives.
-//! - Objects freed in the same call where they are created are not marked as freed in the caller.
-//! This reduces false positives, but may also result in some false negatives.
-//! - Pointers to recursively defined data structures like linked lists are heuristically identified and ignored.
-//! This reduces false positives generated when such structures are recursively freed in a loop,
-//! but also prevents detection of bugs involving such pointers.
+//! - Arrays of memory objects are not tracked by this analysis as we currently
+//!   cannot distinguish different array elements in the analysis. Subsequently,
+//!   CWEs corresponding to arrays of memory objects are not detected.
+//! - Memory objects not tracked by the Pointer Inference analysis or pointer
+//!   targets missed by the Pointer Inference may lead to missed CWEs in this
+//!   check.
+//! - Pointers freed by other operations than calls to the deallocation symbols
+//!   contained in the config.json will be missed by the analysis.
+//! - Pointers freed and flagged in the same call are not marked as freed in the
+//!   caller. This reduces false positives and duplicates, but may also result
+//!   in some false negatives.
+//! - Objects freed in the same call where they are created are not marked as
+//!   freed in the caller. This reduces false positives, but may also result in
+//!   some false negatives.
+//! - Pointers to recursively defined data structures like linked lists are
+//!   heuristically identified and ignored. This reduces false positives
+//!   generated when such structures are recursively freed in a loop,
+//!   but also prevents detection of bugs involving such pointers.
 use super::prelude::*;
 
 use crate::abstract_domain::AbstractIdentifier;

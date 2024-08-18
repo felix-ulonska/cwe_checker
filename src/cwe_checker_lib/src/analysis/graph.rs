@@ -1,47 +1,59 @@
 //! Generate control flow graphs out of a program term.
 //!
 //! The generated graphs follow some basic principles:
-//! * **Nodes** denote specific (abstract) points in time during program execution,
-//! i.e. information does not change on a node.
-//! So a basic block itself is not a node,
-//! but the points in time before and after execution of the basic block can be nodes.
-//! * **Edges** denote either transitions between the points in time of their start and end nodes during program execution
-//! or they denote (artificial) information flow between nodes. See the `CRCallStub` edges of interprocedural control flow graphs
-//! for an example of an edge that is only meant for information flow and not actual control flow.
+//! * **Nodes** denote specific (abstract) points in time during program
+//!   execution, i.e. information does not change on a node. So a basic block
+//!   itself is not a node, but the points in time before and after execution of
+//!   the basic block can be nodes.
+//! * **Edges** denote either transitions between the points in time of their
+//!   start and end nodes during program execution or they denote (artificial)
+//!   information flow between nodes. See the `CRCallStub` edges of
+//!   interprocedural control flow graphs for an example of an edge that is only
+//!   meant for information flow and not actual control flow.
 //!
 //! # General assumptions
 //!
-//! The graph construction algorithm assumes
-//! that each basic block of the program term ends with zero, one or two jump instructions.
-//! In the case of two jump instructions the first one is a conditional jump
-//! and the second one is an unconditional jump.
-//! Conditional calls are not supported.
-//! Missing jump instructions are supported to indicate incomplete information about the control flow,
-//! i.e. points where the control flow reconstruction failed.
-//! These points are converted to dead ends in the control flow graphs.
+//! The graph construction algorithm assumes that each basic block of the
+//! program term ends with zero, one or two jump instructions. In the case of
+//! two jump instructions the first one is a conditional jump and the second one
+//! is an unconditional jump. Conditional calls are not supported.
+//! Missing jump instructions are supported to indicate incomplete information
+//! about the control flow, i.e. points where the control flow reconstruction
+//! failed. These points are converted to dead ends in the control flow graphs.
 //!
 //! # Interprocedural control flow graph
 //!
-//! The function [`get_program_cfg`](fn.get_program_cfg.html) builds an interprocedural control flow graph out of a program term as follows:
-//! * Each basic block ([`image`](../../../../../doc/images/node_edge.png)) is converted into two nodes, *BlkStart* and *BlkEnd*,
-//! and a *block* edge from *BlkStart* to *BlkEnd*.
-//! * Jumps and calls inside the program are converted to *Jump* or *Call* edges from the *BlkEnd* node of their source
-//! to the *BlkStart* node of their target (which is the first block of the target function in case of calls).
-//! * Calls to library functions ([`image`](../../../../../doc/images/extern_calls.png)) outside the program are converted to *ExternCallStub* edges
-//! from the *BlkEnd* node of the callsite to the *BlkStart* node of the basic block the call returns to
-//! (if the call returns at all).
-//! * Right now indirect calls are handled as if they were extern calls, i.e. an *ExternCallStub* edge is added.
-//! This behaviour will change in the future, when better indirect call handling is implemented.
-//! * For each in-program call ([`image`](../../../../../doc/images/internal_function_call.png)) and corresponding return jump two nodes and four edges are generated:
+//! The function [`get_program_cfg`](fn.get_program_cfg.html) builds an
+//! interprocedural control flow graph out of a program term as follows:
+//! * Each basic block ([`image`](../../../../../doc/images/node_edge.png)) is
+//!   converted into two nodes, *BlkStart* and *BlkEnd*, and a *block* edge
+//!   from *BlkStart* to *BlkEnd*.
+//! * Jumps and calls inside the program are converted to *Jump* or *Call* edges
+//!   from the *BlkEnd* node of their source to the *BlkStart* node of their
+//!   target (which is the first block of the target function in case of calls).
+//! * Calls to library functions
+//!   ([`image`](../../../../../doc/images/extern_calls.png)) outside the
+//!   program are converted to *ExternCallStub* edges from the *BlkEnd* node of
+//!   the callsite to the *BlkStart* node of the basic block the call returns to
+//!   (if the call returns at all).
+//! * Right now indirect calls are handled as if they were extern calls, i.e. an
+//!   *ExternCallStub* edge is added. This behaviour will change in the future,
+//!   when better indirect call handling is implemented.
+//! * For each in-program call
+//!   ([`image`](../../../../../doc/images/internal_function_call.png)) and
+//!   corresponding return jump two nodes and four edges are generated:
 //!   * An artificial node *CallReturn* and node *CallSource*
-//!   * A *CRCallStub* edge from the *BlkEnd* node of the callsite to *CallReturn*
-//!   * A *CRReturnStub* edge from the *BlkEnd* node of the returning from block to *CallReturn*
-//!   * A *ReturnCombine* edge from *CallReturn* to the *BlkStart* node of the returned to block.
+//!   * A *CRCallStub* edge from the *BlkEnd* node of the callsite to
+//!     *CallReturn*
+//!   * A *CRReturnStub* edge from the *BlkEnd* node of the returning from block
+//!     to *CallReturn*
+//!   * A *ReturnCombine* edge from *CallReturn* to the *BlkStart* node of the
+//!     returned to block.
 //!   * A *CallCombine* edge from the *BlkEnd* node to the *CallSource* node.
 //!
-//! The artificial *CallReturn* nodes enable enriching the information flowing through a return edge
-//! with information recovered from the corresponding callsite during a fixpoint computation.
-
+//! The artificial *CallReturn* nodes enable enriching the information flowing
+//! through a return edge with information recovered from the corresponding
+//! callsite during a fixpoint computation.
 use crate::intermediate_representation::*;
 use crate::prelude::*;
 use crate::utils::debug::ToJsonCompact;
@@ -54,7 +66,7 @@ use petgraph::{
     visit::{EdgeRef, IntoNodeReferences},
 };
 
-mod  intraprocedural_cfg;
+mod intraprocedural_cfg;
 
 /// The graph type of an interprocedural control flow graph
 pub type Graph<'a> = DiGraph<Node<'a>, Edge<'a>>;

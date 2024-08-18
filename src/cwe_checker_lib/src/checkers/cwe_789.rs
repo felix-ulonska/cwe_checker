@@ -1,25 +1,28 @@
-//! This module implements a check for CWE-789: Memory Allocation with Excessive Size Value.
+//! This module implements a check for CWE-789: Memory Allocation with Excessive
+//! Size Value.
 //!
-//! Stack memory allocation and function calls like malloc are covered in this module.
-//! Excessive allocation of memory might destabilize programs on machines with limited resources.
+//! Stack memory allocation and function calls like malloc are covered in this
+//! module. Excessive allocation of memory might destabilize programs on
+//! machines with limited resources.
 //!
-//! See <https://cwe.mitre.org/data/definitions/789.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/789.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! Every instruction is checked if it assigns a new value to the stack pointer. If
-//! this is the case, the value range of the assignment is checked and if it
-//! exceeds the defined `stack_threshold` defined in config.json, a warning is generated.
-//! For calls like malloc, the provided argument is checked, if its value exceeds
-//! the defined `heap_threshold`. The covered function calls are defined in config.json.
-//! The defined thresholds are provided in bytes.
+//! Every instruction is checked if it assigns a new value to the stack pointer.
+//! If this is the case, the value range of the assignment is checked and if it
+//! exceeds the defined `stack_threshold` defined in config.json, a warning is
+//! generated. For calls like malloc, the provided argument is checked, if its
+//! value exceeds the defined `heap_threshold`. The covered function calls are
+//! defined in config.json. The defined thresholds are provided in bytes.
 //!
 //! ## False Positives
 //!
 //! ## False Negatives
 //!
-//! - At most one warning for stack memory allocation is created for each Function. This means multiple weaknesses
-//! are not detected individually.
+//! - At most one warning for stack memory allocation is created for each
+//!   Function. This means multiple weaknesses are not detected individually.
 use super::prelude::*;
 
 use crate::abstract_domain::DataDomain;

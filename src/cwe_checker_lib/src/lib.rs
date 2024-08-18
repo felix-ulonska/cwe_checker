@@ -88,8 +88,7 @@ mod prelude {
 use prelude::*;
 
 /// The generic function signature for the main function of a CWE module
-pub type CweModuleFn =
-    fn(&AnalysisResults, &serde_json::Value) -> WithLogs<Vec<CweWarning>>;
+pub type CweModuleFn = fn(&AnalysisResults, &serde_json::Value) -> WithLogs<Vec<CweWarning>>;
 
 /// A structure containing general information about a CWE analysis module,
 /// including the function to be called to run the analysis.

@@ -2,19 +2,23 @@ use super::{Blk, Datatype, Expression, Jmp, Project, Variable};
 use crate::prelude::*;
 use std::fmt;
 
-/// A `Sub` or subroutine represents a function with a given name and a list of basic blocks belonging to it.
+/// A `Sub` or subroutine represents a function with a given name and a list of
+/// basic blocks belonging to it.
 ///
-/// Subroutines are *single-entry*,
-/// i.e. calling a subroutine will execute the first block in the list of basic blocks.
-/// A subroutine may have multiple exits, which are identified by `Jmp::Return` instructions.
+/// Subroutines are *single-entry*, i.e. calling a subroutine will execute the
+/// first block in the list of basic blocks.
+///
+/// A subroutine may have multiple exits, which are identified by `Jmp::Return`
+/// instructions.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Sub {
     /// The name of the subroutine
     pub name: String,
     /// The basic blocks belonging to the subroutine.
+    ///
     /// The first block is also the entry point of the subroutine.
     pub blocks: Vec<Term<Blk>>,
-    /// The calling convention used to call if known
+    /// The calling convention used to call, if known.
     pub calling_convention: Option<String>,
     /// True iff the function does not return.
     non_returning: bool,
@@ -45,6 +49,7 @@ impl fmt::Display for Term<Sub> {
 }
 
 impl Sub {
+    /// Creates a new function.
     pub fn new<T, U>(name: &T, blocks: Vec<Term<Blk>>, calling_convention: Option<&U>) -> Self
     where
         T: ToString + ?Sized,
@@ -166,11 +171,11 @@ impl Term<Sub> {
     /// The block is added unconditionally. Those blocks are used as the return
     /// target for calls to nonret functions,
     pub fn add_artifical_return_target(&mut self) {
-            let id_suffix = self.id_suffix();
+        let id_suffix = self.id_suffix();
 
-            self.term
-                .blocks
-                .push(Term::<Blk>::artificial_return_target(&id_suffix));
+        self.term
+            .blocks
+            .push(Term::<Blk>::artificial_return_target(&id_suffix));
     }
 }
 
@@ -186,7 +191,8 @@ pub enum Arg {
     },
     /// The argument is passed on the stack.
     Stack {
-        /// The expression that computes the address of the argument on the stack.
+        /// The expression that computes the address of the argument on the
+        /// stack.
         address: Expression,
         /// The size in bytes of the argument.
         size: ByteSize,
@@ -212,9 +218,11 @@ impl Arg {
         }
     }
 
-    /// If the argument is a stack argument,
-    /// return its offset relative to the current stack register value.
-    /// Return an error for register arguments or if the offset could not be computed.
+    /// If the argument is a stack argument, return its offset relative to the
+    /// current stack register value.
+    ///
+    /// Return an error for register arguments or if the offset could not be
+    /// computed.
     pub fn eval_stack_offset(&self) -> Result<Bitvector, Error> {
         let expression = match self {
             Arg::Register { .. } => return Err(anyhow!("The argument is not a stack argument.")),
@@ -223,9 +231,8 @@ impl Arg {
         Self::eval_stack_offset_expression(expression)
     }
 
-    /// If the given expression computes a constant offset to the given stack register,
-    /// then return the offset.
-    /// Else return an error.
+    /// If the given expression computes a constant offset to the given stack
+    /// register, then return the offset. Else return an error.
     fn eval_stack_offset_expression(expression: &Expression) -> Result<Bitvector, Error> {
         match expression {
             Expression::Var(var) => Ok(Bitvector::zero(var.size.into())),
@@ -252,7 +259,8 @@ impl Arg {
     }
 }
 
-/// An extern symbol represents a funtion that is dynamically linked from another binary.
+/// An extern symbol represents a funtion that is dynamically linked from
+/// another binary.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ExternSymbol {
     /// The term ID of the extern symbol.
@@ -269,15 +277,17 @@ pub struct ExternSymbol {
     /// Return values of an extern symbol.
     /// May be empty if there is no return value or the return values are unknown.
     pub return_values: Vec<Arg>,
-    /// If set to `true`, the function is assumed to never return to its caller when called.
+    /// If set to `true`, the function is assumed to never return to its caller
+    /// when called.
     pub no_return: bool,
-    /// If the function has a variable number of parameters, this flag is set to `true`.
+    /// If the function has a variable number of parameters, this flag is set to
+    /// `true`.
     pub has_var_args: bool,
 }
 
 impl ExternSymbol {
-    /// If the extern symbol has exactly one return value that is passed in a register,
-    /// return the register.
+    /// If the extern symbol has exactly one return value that is passed in a
+    /// register, return the register.
     pub fn get_unique_return_register(&self) -> Result<&Variable, Error> {
         if self.return_values.len() == 1 {
             match self.return_values[0] {
@@ -327,20 +337,27 @@ pub struct CallingConvention {
     /// Possible integer parameter registers.
     pub integer_parameter_register: Vec<Variable>,
     /// Possible float parameter registers.
-    /// Given as expressions, since they are usually sub-register of larger floating point registers.
+    ///
+    /// Given as expressions, since they are usually sub-register of larger
+    /// floating point registers.
     pub float_parameter_register: Vec<Expression>,
     /// A list of possible return register for non-float values.
     pub integer_return_register: Vec<Variable>,
     /// A list of possible return register for float values.
-    /// Given as expressions, since they are usually sub-register of larger floating point registers.
+    ///
+    /// Given as expressions, since they are usually sub-register of larger
+    /// floating point registers.
     pub float_return_register: Vec<Expression>,
     /// A list of callee-saved register,
-    /// i.e. the values of these registers should be the same after the call as they were before the call.
+    ///
+    /// i.e. the values of these registers should be the same after the call as
+    /// they were before the call.
     pub callee_saved_register: Vec<Variable>,
 }
 
 impl CallingConvention {
     /// Return a list of all parameter registers of the calling convention.
+    ///
     /// For parameters, where only a part of a register is the actual parameter,
     /// the parameter register is approximated by the (larger) base register.
     pub fn get_all_parameter_register(&self) -> Vec<&Variable> {
@@ -352,6 +369,7 @@ impl CallingConvention {
     }
 
     /// Return a list of all return registers of the calling convention.
+    ///
     /// For return register, where only a part of a register is the actual return register,
     /// the return register is approximated by the (larger) base register.
     pub fn get_all_return_register(&self) -> Vec<&Variable> {

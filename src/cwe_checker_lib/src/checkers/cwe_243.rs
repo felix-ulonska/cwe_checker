@@ -1,20 +1,21 @@
-//! This module implements a check for CWE-243: Creation of chroot Jail Without Changing Working Directory.
+//! This module implements a check for CWE-243: Creation of chroot Jail Without
+//! Changing Working Directory.
 //!
-//! Creating a chroot Jail without changing the working directory afterwards does
-//! not prevent access to files outside of the jail.
+//! Creating a chroot Jail without changing the working directory afterwards
+//! does not prevent access to files outside of the jail.
 //!
-//! See <https://cwe.mitre.org/data/definitions/243.html> for detailed a description.
+//! See <https://cwe.mitre.org/data/definitions/243.html> for detailed a
+//! description.
 //!
 //! ## How the check works
 //!
-//! According to <http://www.unixwiz.net/techtips/chroot-practices.html>, there are
-//! several ways to achieve the safe creation of a chroot jail.
-//! One can either call chdir after chroot
-//! or, if chdir is called before chroot, drop priviledges after the chroot call.
-//! The functions used to drop priviledges are configurable in config.json.
-//! We check whether each function that calls
-//! chroot is using one of these safe call sequences to create the chroot jail.
-//! If not, a warning is emitted.
+//! According to <http://www.unixwiz.net/techtips/chroot-practices.html>, there
+//! are several ways to achieve the safe creation of a chroot jail.
+//! One can either call chdir after chroot or, if chdir is called before chroot,
+//! drop priviledges after the chroot call. The functions used to drop
+//! priviledges are configurable in config.json. We check whether each function
+//! that calls chroot is using one of these safe call sequences to create the
+//! chroot jail. If not, a warning is emitted.
 //!
 //! ## False Positives
 //!
@@ -22,8 +23,8 @@
 //!
 //! ## False Negatives
 //!
-//! We do not check whether the parameters to chdir, chroot and the priviledge dropping functions
-//! are suitable to create a safe chroot jail.
+//! We do not check whether the parameters to chdir, chroot and the priviledge
+//! dropping functions are suitable to create a safe chroot jail.
 use super::prelude::*;
 
 use crate::analysis::graph::Node;
@@ -109,9 +110,10 @@ fn generate_cwe_warning(sub: &Term<Sub>, callsite: &Tid) -> CweWarning {
 /// For each call to `chroot` we check
 /// - that it is either followed by a call to `chdir` in the same function
 /// - or that the same function contains calls to `chdir`
-/// and a call to a function that can be used to drop priviledges.
+///   and a call to a function that can be used to drop priviledges.
 ///
-/// If both are false, we assume that the chroot-jail is insecure and report a CWE hit.
+/// If both are false, we assume that the chroot-jail is insecure and report a
+/// CWE hit.
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,

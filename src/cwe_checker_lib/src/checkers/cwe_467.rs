@@ -1,24 +1,27 @@
-//! This module implements a check for CWE-467: Use of sizeof() on a Pointer Type.
+//! This module implements a check for CWE-467: Use of sizeof() on a Pointer
+//! Type.
 //!
 //! Functions like malloc and memmove take a size parameter of some data size as
-//! input. If accidentially the size of a pointer to the data instead of the size of
-//! the data itself gets passed to the function, this can have severe consequences.
+//! input. If accidentially the size of a pointer to the data instead of the
+//! size of the data itself gets passed to the function, this can have severe
+//! consequences.
 //!
 //! See <https://cwe.mitre.org/data/definitions/467.html> for a detailed description.
 //!
 //! ## How the check works
 //!
-//! We check whether a parameter in a call to a function listed in the symbols for CWE467 (configurable in in config.json)
-//! is an immediate value that equals the size of a pointer (e.g. 4 bytes on x86).
+//! We check whether a parameter in a call to a function listed in the symbols
+//! for CWE467 (configurable in in config.json) is an immediate value that
+//! equals the size of a pointer (e.g. 4 bytes on x86).
 //!
 //! ## False Positives
 //!
-//! - The size value might be correct and not a bug.
+//! The size value might be correct and not a bug.
 //!
 //! ## False Negatives
 //!
-//! - If the incorrect size value is generated before the basic block that contains
-//! the call, the check will not be able to find it.
+//! If the incorrect size value is generated before the basic block that
+//! contains the call, the check will not be able to find it.
 use super::prelude::*;
 
 use crate::abstract_domain::TryToBitvec;
@@ -91,7 +94,8 @@ fn generate_cwe_warning(jmp: &Term<Jmp>, extern_symbol: &ExternSymbol) -> CweWar
         CWE_MODULE.version,
         format!(
             "(Use of sizeof on a Pointer Type) sizeof on pointer at {} ({}).",
-            jmp.tid.address(), extern_symbol.name
+            jmp.tid.address(),
+            extern_symbol.name
         ),
     )
     .tids(vec![format!("{}", jmp.tid)])

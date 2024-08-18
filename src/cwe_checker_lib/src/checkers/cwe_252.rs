@@ -254,7 +254,8 @@ fn generate_cwe_warning(
         CWE_MODULE.version,
         format!(
             "(Unchecked Return Value) There is no check of the return value of {} ({}).",
-            taint_source.tid.address(), taint_source_name
+            taint_source.tid.address(),
+            taint_source_name
         ),
     )
     .addresses(vec![

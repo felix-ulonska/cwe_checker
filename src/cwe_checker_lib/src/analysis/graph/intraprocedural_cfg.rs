@@ -1,3 +1,7 @@
+#![allow(unreachable_code)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use crate::intermediate_representation::{Blk, Jmp, Program, Sub as Function, Term, Tid};
 
 use crate::analysis::graph::{Edge, Graph as Cfg, Node, NodeIndex};

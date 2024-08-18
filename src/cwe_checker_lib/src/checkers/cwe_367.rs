@@ -1,26 +1,28 @@
-//! This module implements a check for CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition.
+//! This module implements a check for CWE-367: Time-of-check Time-of-use
+//! (TOCTOU) Race Condition.
 //!
-//! Time-of-check Time-of-use race conditions happen when a property of a resource
-//! (e.g. access rights of a file) get checked before the resource is accessed, leaving
-//! a short time window for an attacker to change the entity and thus invalidating
-//! the check before the access.
+//! Time-of-check Time-of-use race conditions happen when a property of a
+//! resource (e.g. access rights of a file) get checked before the resource is
+//! accessed, leaving a short time window for an attacker to change the entity
+//! and thus invalidating the check before the access.
 //!
-//! See <https://cwe.mitre.org/data/definitions/367.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/367.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! For pairs of (check-call, use-call), configurable in config.json, we check whether
-//! a function may call the check-call before the use-call.
+//! For pairs of (check-call, use-call), configurable in config.json, we check
+//! whether a function may call the check-call before the use-call.
 //!
 //! ## False Positives
 //!
-//! - The check-call and the use-call may access different, unrelated resources
+//! The check-call and the use-call may access different, unrelated resources
 //! (e. g. different files).
 //!
 //! ## False Negatives
 //!
-//! - If the check-call and the use-call happen in different functions it will not
-//!   be found by the check.
+//! If the check-call and the use-call happen in different functions it will
+//! not be found by the checked.
 use super::prelude::*;
 
 use crate::analysis::graph::{Edge, Node};
@@ -30,7 +32,7 @@ use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
 use petgraph::visit::EdgeRef;
 use std::collections::HashMap;
 
-/// The module name and version
+/// The module name and version.
 pub static CWE_MODULE: CweModule = CweModule {
     name: "CWE367",
     version: "0.1",

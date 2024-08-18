@@ -1,5 +1,7 @@
-//! This module contains stubs for frequently used LibC-symbols
-//! as well as helper functions for handling the effects of calls to these functions.
+//! Stubs for frequently used LibC-symbols.
+//!
+//! This module contains stubs for frequently used LibC-symbols as well as
+//! helper functions for handling the effects of calls to these functions.
 
 use super::State;
 use crate::abstract_domain::AbstractDomain;
@@ -13,10 +15,12 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-/// Returns a map that maps the names of known extern functions to the access patterns for their parameters.
+/// Returns a map that maps the names of known extern functions to the access
+/// patterns for their parameters.
 ///
 /// The access patterns are ordered in the same order as the parameters
-/// (i.e. the first access pattern corresponds to the first parameter and so on).
+/// (i.e. the first access pattern corresponds to the first parameter and so
+/// on).
 pub fn generate_param_access_stubs() -> BTreeMap<&'static str, Vec<AccessPattern>> {
     let read = || AccessPattern::new().with_read_flag();
     let deref = || {
@@ -125,12 +129,15 @@ pub fn generate_param_access_stubs() -> BTreeMap<&'static str, Vec<AccessPattern
     ])
 }
 
-/// Return a map that maps names of stubbed variadic symbols to a tuple consisting of:
-/// - the index of the format string parameter of the symbol
-/// - the access pattern that the called symbols uses to access its variadic parameters.
-/// Note that the access pattern may vary between variadic parameters,
-/// e.g. some parameters may only be read and not derefenced by a call to `printf`.
-/// But we still approximate all accesses by the the maximal possible access to these parameters.
+/// Return a map that maps names of stubbed variadic symbols to a tuple
+/// consisting of:
+///
+/// - The index of the format string parameter of the symbol.
+/// - The access pattern that the called symbols uses to access its variadic
+///   parameters. Note that the access pattern may vary between variadic
+///   parameters, e.g. some parameters may only be read and not derefenced by a
+///   call to `printf`. But we still approximate all accesses by the the maximal
+///   possible access to these parameters.
 pub fn get_stubbed_variadic_symbols() -> BTreeMap<&'static str, (usize, AccessPattern)> {
     let deref = || {
         AccessPattern::new()
@@ -152,13 +159,16 @@ pub fn get_stubbed_variadic_symbols() -> BTreeMap<&'static str, (usize, AccessPa
     ])
 }
 
-/// Compute the return value of a call to a known extern symbol from the given state.
+/// Compute the return value of a call to a known extern symbol from the given
+/// state.
 ///
-/// Note that this function needs to be called before non-callee-saved registers are cleared from the state,
-/// since the return value is usually computed out of the parameter values.
+/// Note that this function needs to be called before non-callee-saved registers
+/// are cleared from the state, since the return value is usually computed out
+/// of the parameter values.
 ///
-/// This function should only be called for symbols contained in the list returned by [generate_param_access_stubs],
-/// since it assumes untracked return values (e.g. integers or void) for all not explicitly handled symbols.
+/// This function should only be called for symbols contained in the list
+/// returned by [generate_param_access_stubs], since it assumes untracked return
+/// values (e.g. integers or void) for all not explicitly handled symbols.
 pub fn compute_return_value_for_stubbed_function(
     project: &Project,
     state: &mut State,
@@ -187,8 +197,8 @@ pub fn compute_return_value_for_stubbed_function(
     }
 }
 
-/// Helper functions for computing return values for extern symbol calls.
 pub mod return_value_stubs {
+    //! Helper functions for computing return values for extern symbol calls.
     use crate::{abstract_domain::AbstractIdentifier, intermediate_representation::Arg};
 
     use super::*;

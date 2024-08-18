@@ -44,9 +44,7 @@ impl<'a> AnalysisResults<'a> {
     }
 
     /// Compute the function signatures for internal functions.
-    pub fn compute_function_signatures(
-        &self,
-    ) -> WithLogs<BTreeMap<Tid, FunctionSignature>> {
+    pub fn compute_function_signatures(&self) -> WithLogs<BTreeMap<Tid, FunctionSignature>> {
         crate::analysis::function_signature::compute_function_signatures(
             self.project,
             self.control_flow_graph,

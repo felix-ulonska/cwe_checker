@@ -302,9 +302,10 @@ impl<T: AbstractDomain + DomainInsertion + HasTop + Eq + From<String>> State<T> 
         constant: Bitvector,
     ) -> Option<DataDomain<IntervalDomain>> {
         if let Ok(address) = constant.try_to_u64() {
-            if !block_first_def_set.iter().any(|(def_tid, _)| {
-                u64::try_from(def_tid.address()).unwrap() == address
-            }) && runtime_memory_image.is_global_memory_address(&constant)
+            if !block_first_def_set
+                .iter()
+                .any(|(def_tid, _)| u64::try_from(def_tid.address()).unwrap() == address)
+                && runtime_memory_image.is_global_memory_address(&constant)
                 && runtime_memory_image
                     .read_string_until_null_terminator(&constant)
                     .is_ok()

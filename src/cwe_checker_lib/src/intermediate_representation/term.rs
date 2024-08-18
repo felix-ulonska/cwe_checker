@@ -269,8 +269,7 @@ impl Tid {
 
     /// Returns true iff the ID is for an artificial sink block.
     pub fn is_artificial_sink_block(&self) -> bool {
-        self.id.starts_with(Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX)
-            && self.address.is_unknown()
+        self.id.starts_with(Self::ARTIFICIAL_SINK_BLOCK_ID_PREFIX) && self.address.is_unknown()
     }
 
     /// Returns true iff the ID is for the artificial sink block with the given
@@ -300,12 +299,13 @@ impl std::fmt::Display for Tid {
     }
 }
 
-/// A term is an object inside a binary with an address and an unique ID (both contained in the `tid`).
+/// A term is an object inside a binary with an address and an unique ID
+/// (both contained in the [`Tid`]).
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Term<T> {
-    /// The term identifier, which also contains the address of the term
+    /// The term identifier, which also contains the address of the term.
     pub tid: Tid,
-    /// The object
+    /// The object.
     pub term: T,
 }
 
@@ -323,7 +323,20 @@ impl<T> DerefMut for Term<T> {
     }
 }
 
+impl<T> AsRef<T> for Term<T> {
+    fn as_ref(&self) -> &T {
+        self.deref()
+    }
+}
+
+impl<T> AsMut<T> for Term<T> {
+    fn as_mut(&mut self) -> &mut T {
+        self.deref_mut()
+    }
+}
+
 impl<T> Term<T> {
+    /// Returns a new `Term`.
     pub fn new(tid: Tid, term: T) -> Self {
         Self { tid, term }
     }

@@ -2,27 +2,34 @@ use super::*;
 use crate::utils::log::LogMessage;
 use std::{collections::HashSet, fmt};
 
-/// A basic block is a sequence of `Def` instructions followed by up to two `Jmp` instructions.
+/// A basic block is a sequence of `Def` instructions followed by up to two
+/// `Jmp` instructions.
 ///
-/// The `Def` instructions represent side-effectful operations that are executed in order when the block is entered.
-/// `Def` instructions do not affect the control flow of a program.
+/// The `Def` instructions represent side-effectful operations that are executed
+/// in order when the block is entered. `Def` instructions do not affect the
+/// control flow of a program.
 ///
 /// The `Jmp` instructions represent control flow affecting operations.
 /// There can only be zero, one or two `Jmp`s:
-/// - Zero `Jmp`s indicate that the next execution to be executed could not be discerned.
-/// This should only happen on disassembler errors or on dead ends in the control flow graph that were deliberately inserted by the user.
+///
+/// - Zero `Jmp`s indicate that the next execution to be executed could not be
+///   discerned. This should only happen on disassembler errors or on dead ends
+///   in the control flow graph that were deliberately inserted by the user.
 /// - If there is exactly one `Jmp`, it is required to be an unconditional jump.
-/// - For two jumps, the first one has to be a conditional jump,
-/// where the second unconditional jump is only taken if the condition of the first jump evaluates to false.
+/// - For two jumps, the first one has to be a conditional jump, where the
+///   second unconditional jump is only taken if the condition of the first
+///   jump evaluates to false.
 ///
 /// If one of the `Jmp` instructions is an indirect jump,
-/// then the `indirect_jmp_targets` is a list of possible jump target addresses for that jump.
-/// The list may not be complete and the entries are not guaranteed to be correct.
+/// then the `indirect_jmp_targets` is a list of possible jump target addresses
+/// for that jump. The list may not be complete and the entries are not
+/// guaranteed to be correct.
 ///
-/// Basic blocks are *single entry, single exit*, i.e. a basic block is only entered at the beginning
-/// and is only exited by the jump instructions at the end of the block.
-/// If a new control flow edge is discovered that would jump to the middle of a basic block,
-/// the block structure needs to be updated accordingly.
+/// Basic blocks are *single entry, single exit*, i.e. a basic block is only
+/// entered at the beginning and is only exited by the jump instructions at the
+/// end of the block. If a new control flow edge is discovered that would jump
+/// to the middle of a basic block, the block structure needs to be updated
+/// accordingly.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Blk {
     /// The `Def` instructions of the basic block in order of execution.
@@ -74,6 +81,7 @@ impl Blk {
         self.defs.iter_mut()
     }
 
+    /// Returns the target of all direct calls in this block.
     pub fn get_call_targets(&self) -> Option<Vec<Tid>> {
         match self.jmps.as_slice() {
             [Term {
@@ -101,18 +109,26 @@ impl Blk {
     }
 }
 
+/// The different kinds of sinks in a CFG.
 pub enum SinkType {
+    /// Target of broken control flow transfers.
     ArtificialSink,
+    /// Return target of calls to noreturn functions.
     ArtificialReturnTarget,
+    /// A function return site.
     ReturnSite,
+    /// An endless loop.
     SelfLoop,
 }
 
 impl Term<Blk> {
+    /// Returns the [`SinkType`] of this block, if it is a sink.
     pub fn get_sink_type(&self) -> Option<SinkType> {
         match self.term.jmps.as_slice() {
             _ if self.tid.is_artificial_sink_block() => Some(SinkType::ArtificialSink),
-            _ if self.tid.is_artificial_return_target_block() => Some(SinkType::ArtificialReturnTarget),
+            _ if self.tid.is_artificial_return_target_block() => {
+                Some(SinkType::ArtificialReturnTarget)
+            }
             // Unconditional self-loops.
             [Term {
                 term:
@@ -172,8 +188,10 @@ impl Term<Blk> {
                 if all_jump_targets.contains(target) {
                     Some(target.clone())
                 } else {
-                    let error_msg =
-                        format!("Indirect jump target at {} does not exist", target.address());
+                    let error_msg = format!(
+                        "Indirect jump target at {} does not exist",
+                        target.address()
+                    );
                     logs.push(LogMessage::new_error(error_msg).location(self.tid.clone()));
                     None
                 }
@@ -198,9 +216,9 @@ impl Term<Blk> {
         // Self-loop.
         let mut jmps = Vec::with_capacity(1);
         jmps.push(Term::<Jmp>::new(
-                    Tid::artificial_instr_with_suffix(format!("_{}", blk_tid)),
-                    Jmp::Branch(blk_tid.clone()),
-                ));
+            Tid::artificial_instr_with_suffix(format!("_{}", blk_tid)),
+            Jmp::Branch(blk_tid.clone()),
+        ));
 
         Self {
             tid: blk_tid,
@@ -220,9 +238,9 @@ impl Term<Blk> {
         // Self-loop.
         let mut jmps = Vec::with_capacity(1);
         jmps.push(Term::<Jmp>::new(
-                    Tid::artificial_instr_with_suffix(format!("_{}", blk_tid)),
-                    Jmp::Branch(blk_tid.clone()),
-                ));
+            Tid::artificial_instr_with_suffix(format!("_{}", blk_tid)),
+            Jmp::Branch(blk_tid.clone()),
+        ));
 
         Self {
             tid: blk_tid,

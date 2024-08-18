@@ -45,7 +45,7 @@ use crate::analysis::graph::*;
 use crate::analysis::interprocedural_fixpoint_generic::NodeValue;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::log::{WithLogs, LogMessage};
+use crate::utils::log::{LogMessage, WithLogs};
 use std::collections::BTreeMap;
 
 mod context;

@@ -173,7 +173,8 @@ impl<'a> Context<'a> {
                 let description = match target_fn_name {
                     Some(target_name) => format!(
                         "(Buffer Overflow) Call to {} at {} may access out-of-bounds memory.",
-                        target_name, call_tid.address()
+                        target_name,
+                        call_tid.address()
                     ),
                     None => format!(
                         "(Buffer Overflow) Call at {} may access out-of-bounds memory.",

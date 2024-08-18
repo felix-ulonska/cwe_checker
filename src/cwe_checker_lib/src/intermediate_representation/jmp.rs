@@ -83,28 +83,17 @@ impl fmt::Display for Jmp {
             Jmp::Branch(tid) => write!(f, "Jump to {tid}"),
             Jmp::BranchInd(expr) => write!(f, "Jump to {expr}"),
             Jmp::CBranch { target, condition } => write!(f, "If {condition} jump to {target}"),
-            Jmp::Call { target, return_ } => write!(
-                f,
-                "call {} ret {}",
-                target,
-                return_.as_ref().unwrap()
-            ),
-            Jmp::CallInd { target, return_ } => write!(
-                f,
-                "call {} ret {}",
-                target,
-                return_.as_ref().unwrap()
-            ),
+            Jmp::Call { target, return_ } => {
+                write!(f, "call {} ret {}", target, return_.as_ref().unwrap())
+            }
+            Jmp::CallInd { target, return_ } => {
+                write!(f, "call {} ret {}", target, return_.as_ref().unwrap())
+            }
             Jmp::Return(expr) => write!(f, "ret {expr}"),
             Jmp::CallOther {
                 description,
                 return_,
-            } => write!(
-                f,
-                "call {} ret {}",
-                description,
-                return_.as_ref().unwrap()
-            ),
+            } => write!(f, "call {} ret {}", description, return_.as_ref().unwrap()),
         }
     }
 }

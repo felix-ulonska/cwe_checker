@@ -8,19 +8,21 @@ use std::fmt;
 /// The `Program` structure represents a disassembled binary.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Program {
-    /// The known functions contained in the binary
+    /// The known functions contained in the binary.
     pub subs: BTreeMap<Tid, Term<Sub>>,
     /// Extern symbols linked to the binary by the linker.
     pub extern_symbols: BTreeMap<Tid, ExternSymbol>,
     /// Entry points into to binary,
-    /// i.e. the term identifiers of functions that may be called from outside of the binary.
+    /// i.e. the term identifiers of functions that may be called from outside
+    /// of the binary.
     pub entry_points: BTreeSet<Tid>,
-    /// An offset that has been added to all addresses in the program compared to the addresses
-    /// as specified in the binary file.
+    /// An offset that has been added to all addresses in the program compared
+    /// to the addresses as specified in the binary file.
     ///
-    /// In certain cases, e.g. if the binary specifies a segment to be loaded at address 0,
-    /// the Ghidra backend may shift the whole binary image by a constant value in memory.
-    /// Thus addresses as specified by the binary and addresses as reported by Ghidra may differ by a constant offset,
+    /// In certain cases, e.g. if the binary specifies a segment to be loaded at
+    /// address 0, the Ghidra backend may shift the whole binary image by a
+    /// constant value in memory. Thus addresses as specified by the binary and
+    /// addresses as reported by Ghidra may differ by a constant offset,
     /// which is stored in this value.
     pub address_base_offset: u64,
 }
@@ -28,28 +30,22 @@ pub struct Program {
 impl Program {
     /// Returns an iterator over the functions in this program.
     pub fn functions(&self) -> impl Iterator<Item = &Term<Sub>> {
-        self.subs.values().into_iter()
+        self.subs.values()
     }
 
     /// Returns an iterator over the functions in this program.
     pub fn functions_mut(&mut self) -> impl Iterator<Item = &mut Term<Sub>> {
-        self.subs.values_mut().into_iter()
+        self.subs.values_mut()
     }
 
     /// Returns an iterator over the returning functions in this program.
     pub fn ret_functions(&self) -> impl Iterator<Item = &Term<Sub>> {
-        self.subs
-            .values()
-            .into_iter()
-            .filter(|f| !f.is_non_returning())
+        self.subs.values().filter(|f| !f.is_non_returning())
     }
 
     /// Returns an iterator over the returning functions in this program.
     pub fn ret_functions_mut(&mut self) -> impl Iterator<Item = &mut Term<Sub>> {
-        self.subs
-            .values_mut()
-            .into_iter()
-            .filter(|f| !f.is_non_returning())
+        self.subs.values_mut().filter(|f| !f.is_non_returning())
     }
 
     /// Returns the number of functions in this program.
@@ -85,19 +81,25 @@ impl Program {
             .flat_map(|func| std::iter::repeat(&func.tid).zip(func.term.blocks.iter_mut()))
     }
 
+    /// Returns an iterator over all jumps in the program.
     pub fn jmps(&self) -> impl Iterator<Item = &Term<Jmp>> {
         self.blocks().flat_map(|b| b.jmps())
     }
 
+    /// Returns an iterator over all jumps in the program together with the
+    /// TID of the funtion that contains them.
     pub fn jmps_with_fn_tid(&self) -> impl Iterator<Item = (&Tid, &Term<Jmp>)> {
         self.blocks_with_fn_tid()
             .flat_map(|(fn_tid, b)| std::iter::repeat(fn_tid).zip(b.jmps()))
     }
 
+    /// Returns an iterator over all jumps in the program.
     pub fn jmps_mut(&mut self) -> impl Iterator<Item = &mut Term<Jmp>> {
         self.blocks_mut().flat_map(|b| b.jmps_mut())
     }
 
+    /// Returns an iterator over all jumps in the program together with the
+    /// TID of the funtion that contains them.
     pub fn jmps_mut_with_fn_tid(&mut self) -> impl Iterator<Item = (&Tid, &mut Term<Jmp>)> {
         self.blocks_mut_with_fn_tid()
             .flat_map(|(fn_tid, b)| std::iter::repeat(fn_tid).zip(b.jmps_mut()))
@@ -154,7 +156,9 @@ impl Program {
             .find(|block| block.tid == *tid)
     }
 
-    /// Find the sub containing a specific jump instruction (including call instructions).
+    /// Find the sub containing a specific jump instruction (including call
+    /// instructions).
+    ///
     /// WARNING: The function simply iterates though all blocks,
     /// i.e. it is very inefficient for large projects!
     pub fn find_sub_containing_jump(&self, jmp_tid: &Tid) -> Option<Tid> {
@@ -171,11 +175,7 @@ impl Program {
         None
     }
 
-    #[cfg(not(debug_assertions))]
-    #[inline]
-    pub fn debug_assert_invariants(&self) {}
-
-    #[cfg(debug_assertions)]
+    /// Asserts some invariants that are not covered elsewhere.
     pub fn debug_assert_invariants(&self) {
         // Check that the mapping from function TIDs to function terms is
         // consistent.
@@ -186,7 +186,7 @@ impl Program {
             },
         ) in self.subs.iter()
         {
-            assert_eq!(
+            debug_assert_eq!(
                 fn_tid_key, fn_tid_value,
                 "Inconsistent function mapping: {} -> {}.",
                 fn_tid_key, fn_tid_value

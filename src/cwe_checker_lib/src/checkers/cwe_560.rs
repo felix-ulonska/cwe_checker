@@ -1,26 +1,31 @@
-//! This module implements a check for CWE-560: Use of umask() with chmod-style Argument.
+//! This module implements a check for CWE-560: Use of umask() with chmod-style
+//! argument.
 //!
-//! The program uses the system call umask(2) with arguments for chmod(2). For instance,
-//! instead of a reasonable value like 0022 a value like 0666 is passed. This may result in wrong
-//! read and/or write access to files and directories, which could be utilized to bypass
-//! protection mechanisms.
+//! The program uses the system call umask(2) with arguments for chmod(2). For
+//! instance, instead of a reasonable value like 0022 a value like 0666 is
+//! passed. This may result in wrong read and/or write access to files and
+//! directories, which could be utilized to bypass protection mechanisms.
 //!
-//! See <https://cwe.mitre.org/data/definitions/560.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/560.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! This check looks for umask calls and checks if they have a reasonable value, i.e. smaller than
-//! a certain value, currently set to 0o777 and greater than a reasonable value for umask, currently set to 0o177.
+//! This check looks for umask calls and checks if they have a reasonable value,
+//! i.e. smaller than a certain value, currently set to 0o777 and greater than a
+//! reasonable value for umask, currently set to 0o177.
 //!
 //! ## False Positives
 //!
-//! - A value deemed unreasonable by the check could theoretically be intended by the programmer.
-//! But these cases should be very rare in real programs, so be sure to double check them!
+//! A value deemed unreasonable by the check could theoretically be intended
+//! by the programmer. But these cases should be very rare in real programs,
+//! so be sure to double check them!
 //!
 //! ## False Negatives
 //!
-//! - If the input to umask is not defined in the basic block before the call, the check will not see it.
-//! However, a log message will be generated whenever the check is unable to determine the parameter value of umask.
+//! If the input to umask is not defined in the basic block before the call,
+//! the check will not see it. However, a log message will be generated
+//! whenever the check is unable to determine the parameter value of umask.
 use super::prelude::*;
 
 use crate::abstract_domain::TryToBitvec;

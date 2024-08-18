@@ -57,7 +57,8 @@ impl<'a, 'b> ExternCallHandler<'a, 'b> {
         if !warnings.is_empty() {
             let description = format!(
                 "(Buffer Overflow) Call to {} at {} may access out-of-bounds memory.",
-                self.fn_symbol.name, self.jump.tid.address()
+                self.fn_symbol.name,
+                self.jump.tid.address()
             );
             let mut cwe_warning = CweWarning::new("CWE119", super::CWE_MODULE.version, description);
             cwe_warning.tids = vec![format!("{}", self.jump.tid)];

@@ -38,7 +38,7 @@ impl IrPass for InputExpressionPropagationPass {
     fn run(&mut self, program: &mut Self::Input) -> Vec<LogMessage> {
         Self::merge_same_var_assignments(program);
 
-        let graph = crate::analysis::graph::get_program_cfg(&program);
+        let graph = crate::analysis::graph::get_program_cfg(program);
         let computation = fixpoint_computation::compute_expression_propagation(&graph);
         let results = fixpoint_computation::extract_results(&graph, computation);
         Self::insert_expressions(results, program);

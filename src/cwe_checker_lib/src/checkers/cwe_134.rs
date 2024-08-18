@@ -1,24 +1,29 @@
-//! This module implements a check for CWE-134: Use of Externally-Controlled Format String.
+//! This module implements a check for CWE-134: Use of Externally-Controlled
+//! Format String.
 //!
 //! The software uses a function that accepts a format string as an argument,
 //! but the format string originates from an external source.
 //!
-//! See <https://cwe.mitre.org/data/definitions/134.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/134.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! Using forward dataflow analysis we search for external symbols that take a format string as an input parameter.
-//! (e.g. sprintf). Then we check the content of the format string parameter and if it is not part of the global read only
-//! memory of the binary, a CWE warning is generated.
+//! Using forward dataflow analysis we search for external symbols that take a
+//! format string as an input parameter (e.g. sprintf). Then we check the
+//! content of the format string parameter and if it is not part of the global
+//! read only memory of the binary, a CWE warning is generated.
 //!
 //! ### Symbols configurable in config.json
 //!
-//! - symbols that take a format string parameter.
+//! - Symbols that take a format string parameter.
 //!
 //! ## False Positives
 //!
-//! - The input was externally provided on purpose and originates from a trusted source.
-//! - A pointer target could be lost but the format string was not externally provided.
+//! - The input was externally provided on purpose and originates from a trusted
+//!   source.
+//! - A pointer target could be lost but the format string was not externally
+//!   provided.
 use super::prelude::*;
 
 use std::collections::HashMap;

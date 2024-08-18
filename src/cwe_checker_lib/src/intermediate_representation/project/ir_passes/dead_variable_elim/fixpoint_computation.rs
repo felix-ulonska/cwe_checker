@@ -1,5 +1,5 @@
 use crate::analysis::backward_interprocedural_fixpoint::{self, create_computation};
-use crate::analysis::graph::{Graph, self, Node};
+use crate::analysis::graph::{self, Graph, Node};
 use crate::analysis::interprocedural_fixpoint_generic::NodeValue;
 use crate::intermediate_representation::*;
 use std::collections::{BTreeSet, HashMap};
@@ -182,7 +182,7 @@ pub fn compute_alive_vars(
     all_phys_registers: &BTreeSet<Variable>,
     program: &Program,
 ) -> HashMap<Tid, BTreeSet<Variable>> {
-    let mut graph = graph::get_program_cfg(&program);
+    let mut graph = graph::get_program_cfg(program);
     graph.reverse();
 
     let context = Context::new(all_phys_registers, &graph);

@@ -1,23 +1,32 @@
 //! This module contains the Character Inclusion Domain (CI).
 //!
 //! This domain considers the characters of a string and distinguishes
-//! between two scenarios which are stored in different HashSets.
+//! between two scenarios which are stored in different HashSets:
+//!
 //! - The first set contains characters that are certainly contained in
 //!   the string.
 //! - The second set contains characters that may be in the string.
 //!
 //! This distinction is made when two CI domains merge.
-//! Furthermore, the CI domain does not preserve information about the order of characters.
+//!
+//! Furthermore, the CI domain does not preserve information about the order of
+//! characters.
+//!
 //! The *Top* value of the CI domain stands for an empty set of certainly
-//! contained characters and the whole alphabet of allowed characters for the possibly contained characters.
+//! contained characters and the whole alphabet of allowed characters for the
+//! possibly contained characters.
 //!
 //! The following presents an example which shows how the CI domain works:
-//!  1. When a string is assigned to the CI domain its unique characters are stored in both
-//!    sets. e.g. "Hello, World!" => ({H,e,l,o,',',' ',W,o,r,d}, {H,e,l,o,',',' ',W,o,r,d})
-//!  2. When two strings are concatenated, the union of the two sets of the two domains is taken.
-//!     e.g. "Hello, " + "World" => ({H,e,l,o,',',' '} v {W,o,r,d}, {H,e,l,o,',',' '} v {W,o,r,d})
-//!  3. When two domains are merged, the intersection of the certain sets and the union of possible sets are taken.
-//!     e.g. ({H,e,l,o,',',' '}, {H,e,l,o,',',' '}) v ({W,o,r,l,d}, {W,o,r,l,d}) => ({l,o}, {H,e,l,o,',',' ',W,o,r,d})
+//!
+//!  1. When a string is assigned to the CI domain its unique characters are
+//!     stored in both sets. e.g.
+//!     "Hello, World!" => ({H,e,l,o,',',' ',W,o,r,d}, {H,e,l,o,',',' ',W,o,r,d})
+//!  2. When two strings are concatenated, the union of the two sets of the two
+//!     domains is taken. e.g.
+//!     "Hello, " + "World" => ({H,e,l,o,',',' '} v {W,o,r,d}, {H,e,l,o,',',' '} v {W,o,r,d})
+//!  3. When two domains are merged, the intersection of the certain sets and
+//!     the union of possible sets are taken, e.g.
+//!     ({H,e,l,o,',',' '}, {H,e,l,o,',',' '}) v ({W,o,r,l,d}, {W,o,r,l,d}) => ({l,o}, {H,e,l,o,',',' ',W,o,r,d})
 
 use std::{collections::BTreeSet, fmt};
 

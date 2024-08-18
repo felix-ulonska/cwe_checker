@@ -139,7 +139,11 @@ fn get_first_blk_with_defs(sub: &Sub) -> Option<usize> {
 
 /// Substitutes logical AND on the stackpointer register by SUB.
 /// Expressions are changed to use constants w.r.t the provided bit mask.
-pub fn substitute_and_on_stackpointer(program: &mut Program, stack_pointer_register: &Variable, cpu_architecture: &str) -> Vec<LogMessage> {
+pub fn substitute_and_on_stackpointer(
+    program: &mut Program,
+    stack_pointer_register: &Variable,
+    cpu_architecture: &str,
+) -> Vec<LogMessage> {
     // for sanity check
     let sp_alignment = match cpu_architecture {
         "x86_32" => 16,
@@ -170,7 +174,7 @@ pub fn substitute_and_on_stackpointer(program: &mut Program, stack_pointer_regis
                                     {
                                         continue 'sub_loop;
                                     }
-                                  }
+                                }
                                 BinOpType::IntSub => {
                                     if journal_sp_value(
                                         journaled_sp,
@@ -191,12 +195,9 @@ pub fn substitute_and_on_stackpointer(program: &mut Program, stack_pointer_regis
                                         def.tid.clone(),
                                     );
                                     logs.append(&mut msg);
-                                    if logs
-                                        .iter()
-                                        .any(|msg| {
-                                            msg.text.contains("Unsubstitutable Operation on SP")
-                                        })
-                                    {
+                                    if logs.iter().any(|msg| {
+                                        msg.text.contains("Unsubstitutable Operation on SP")
+                                    }) {
                                         // Lost track of SP
                                         continue 'sub_loop;
                                     }
