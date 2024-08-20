@@ -6,7 +6,7 @@
 ![Acceptance tests](https://github.com/fkie-cad/cwe_checker/actions/workflows/acceptance-tests.yml/badge.svg?branch=master)
 ![Unit tests](https://github.com/fkie-cad/cwe_checker/actions/workflows/unit-tests.yml/badge.svg?branch=master)
 ![Docker-Pulls](https://img.shields.io/docker/pulls/fkiecad/cwe_checker.svg)
-[![Documentation](https://img.shields.io/badge/doc-stable-green.svg)](https://fkie-cad.github.io/cwe_checker/index.html)
+[![Documentation](https://img.shields.io/badge/doc-stable-green.svg)](https://docs.cwe-checker.io/index.html)
 
 ## What is cwe_checker? ##
 cwe_checker is a suite of checks to detect common bug classes such as Null pointer dereferences and buffer overflows.
@@ -81,7 +81,7 @@ There is _experimental_ support for the analysis of Linux loadable kernel module
 subset of the CWE checks available for user-space programs. Analyses are
 configurable via a separate [configuration file](src/lkm_config.json).
 
-If you use the stable version, you can also look at the [online documentation](https://fkie-cad.github.io/cwe_checker/index.html) for more information.
+If you use the stable version, you can also look at the [online documentation](https://docs.cwe-checker.io/index.html) for more information.
 
 ### For Bare-Metal Binaries ###
 
@@ -90,13 +90,13 @@ For that one needs to provide a bare metal configuration file via the `--bare-me
 An example for such a configuration file can be found at `bare_metal/stm32f407vg.json`
 (which was created and tested for an STM32F407VG MCU).
 
-For more information take a look at the [online documentation](https://fkie-cad.github.io/cwe_checker/index.html).
+For more information take a look at the [online documentation](https://docs.cwe-checker.io/index.html).
 
 ## Documentation and Tests ##
 
 The test binaries for our test suite can be built with `make compile_test_files` (needs Docker to be installed!). The test suite can then be run with `make test`.
 
-Source code documentation can be built with `make documentation`. For the stable version, the documentation can be found [here](https://fkie-cad.github.io/cwe_checker/index.html).
+Source code documentation can be built with `make documentation`. For the stable version, the documentation can be found [here](https://docs.cwe-checker.io/index.html).
 
 ## Implemented Checks <a name=checks></a> ##
 
@@ -120,7 +120,7 @@ So far the following analyses are implemented:
 -   [CWE-789](https://cwe.mitre.org/data/definitions/789.html): Memory Allocation with Excessive Size Value
 
 Please note that both false positives and false negatives are to be expected due to shortcuts and the nature of static analysis as well as over-approximation.
-You can find information on the inner workings of each check as well as known reasons for false positives and false negatives on the [check-specific documentation pages](https://fkie-cad.github.io/cwe_checker/doc/html/cwe_checker_lib/checkers/index.html).
+You can find information on the inner workings of each check as well as known reasons for false positives and false negatives on the [check-specific documentation pages](https://docs.cwe-checker.io/cwe_checker_lib/checkers/index.html).
 
 ## Integration into other tools ##
 

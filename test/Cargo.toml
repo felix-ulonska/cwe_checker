@@ -1,7 +1,7 @@
 [package]
 name = "acceptance_tests_ghidra"
 version = "0.1.0"
-authors = ["Faunhofer FKIE <firmware-security@fkie.fraunhofer.de>"]
+authors = ["Fraunhofer FKIE <contact@cwe-checker.io>"]
 edition = "2021"
 
 [dependencies]
