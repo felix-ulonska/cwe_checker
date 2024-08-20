@@ -1,4 +1,7 @@
-0.9-dev
+0.10-dev
+===
+
+0.9 (2024-08)
 ===
 
 -   Fixed an issue in the pcode to IR translation (PR #470)

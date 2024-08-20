@@ -2,11 +2,11 @@ GHIDRA_PATH =
 
 .PHONY: all clean test uninstall docker
 all:
-	cargo build -p cwe_checker_install --release
+	cargo build --locked -p cwe_checker_install --release
 	./target/release/cwe_checker_install ${GHIDRA_PATH}
 
 test:
-	cargo test
+	cargo test --locked
 	if [ ! -d "test/artificial_samples/build" ]; then \
 		echo "Acceptance test binaries not found. Please see test/artificial_samples/Readme.md for build instructions."; \
 		exit -1; \
@@ -15,7 +15,7 @@ test:
 		echo "Acceptance test LKMs not found. Please see test/lkm_samples/Readme.md for build instructions."; \
 		exit -1; \
 	fi
-	cargo test --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
+	cargo test --locked --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
 
 compile_test_files:
 	pushd test/artificial_samples \
@@ -36,7 +36,7 @@ clean:
 	rm -f -r doc/html
 
 uninstall:
-	cargo build -p cwe_checker_install --release
+	cargo build --locked -p cwe_checker_install --release
 	./target/release/cwe_checker_install --uninstall
 
 documentation:

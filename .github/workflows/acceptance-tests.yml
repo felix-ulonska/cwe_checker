@@ -42,14 +42,14 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.76.0
           override: true
       - name: Install cwe_checker
         run: make all GHIDRA_PATH=/opt/ghidra
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
+          args: --locked --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
 
   docker-build:
     runs-on: ubuntu-latest

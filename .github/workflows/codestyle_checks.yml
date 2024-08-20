@@ -17,7 +17,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.76.0
           override: true
           components: rustfmt
       - uses: actions-rs/cargo@v1
@@ -33,13 +33,17 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.76.0
           override: true
           components: clippy
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D clippy::all -D missing_docs
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -p cwe_checker_lib --bench "benchmarks" -- -D clippy::all
 
   doc:
     name: Rustdoc
@@ -49,7 +53,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.76.0
           override: true
           components: rust-docs
       - uses: actions-rs/cargo@v1
