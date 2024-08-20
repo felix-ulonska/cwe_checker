@@ -3,7 +3,7 @@ FROM rust:1.76-bullseye AS builder
 WORKDIR /cwe_checker
 
 COPY . .
-RUN cargo build --release
+RUN cargo build --locked --release
 
 FROM ghcr.io/fkie-cad/ghidra_headless_base:10.2.3 as runtime
 
