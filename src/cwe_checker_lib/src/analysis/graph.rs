@@ -101,8 +101,10 @@ pub enum Node<'a> {
 }
 
 impl<'a> Node<'a> {
-    /// Get the block corresponding to the node for `BlkStart` and `BlkEnd` nodes.
-    /// panics if called on a `CallReturn` node.
+    /// Get the block corresponding to the node for `BlkStart` and `BlkEnd`
+    /// nodes.
+    ///
+    /// Panics if called on a `CallReturn` or `CallSource` node.
     pub fn get_block(&self) -> &'a Term<Blk> {
         use Node::*;
         match self {
@@ -110,6 +112,16 @@ impl<'a> Node<'a> {
             CallSource { .. } | CallReturn { .. } => {
                 panic!("get_block() is undefined for CallReturn and CallSource nodes")
             }
+        }
+    }
+
+    /// Get the block corresponding to the node for `BlkStart` and `BlkEnd`
+    /// nodes.
+    pub fn try_get_block(&self) -> Option<&'a Term<Blk>> {
+        use Node::*;
+        match self {
+            BlkStart(blk, _sub) | BlkEnd(blk, _sub) => Some(blk),
+            CallSource { .. } | CallReturn { .. } => None,
         }
     }
 
