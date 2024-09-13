@@ -1,4 +1,6 @@
-use super::{Blk, ExternSymbol, Jmp, Sub};
+//! Representation of a disassembled binary.
+
+use super::{Blk, Def, ExternSymbol, Jmp, Sub, Variable};
 use crate::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -99,6 +101,47 @@ impl Program {
     pub fn jmps_mut_with_fn_tid(&mut self) -> impl Iterator<Item = (&Tid, &mut Term<Jmp>)> {
         self.blocks_mut_with_fn_tid()
             .flat_map(|(fn_tid, b)| std::iter::repeat(fn_tid).zip(b.jmps_mut()))
+    }
+
+    /// Returns the set of all variables used in the program.
+    pub fn all_variables(&self) -> BTreeSet<Variable> {
+        self.functions()
+            .flat_map(|f| f.blocks())
+            .flat_map(|b| b.defs())
+            .filter_map(|d| match &d.term {
+                Def::Assign { var, value: expr } | Def::Load { var, address: expr } => {
+                    let mut vars = expr.input_vars();
+                    vars.push(var);
+
+                    Some(vars.into_iter())
+                }
+                Def::Store {
+                    address: expr0,
+                    value: expr1,
+                } => {
+                    let mut vars0 = expr0.input_vars();
+                    let vars1 = expr1.input_vars();
+                    vars0.extend(vars1);
+
+                    Some(vars0.into_iter())
+                }
+            })
+            .chain(
+                self.functions()
+                    .flat_map(|f| f.blocks())
+                    .flat_map(|b| b.jmps())
+                    .filter_map(|j| match &j.term {
+                        Jmp::BranchInd(expr)
+                        | Jmp::CBranch {
+                            condition: expr, ..
+                        }
+                        | Jmp::CallInd { target: expr, .. } => Some(expr.input_vars().into_iter()),
+                        _ => None,
+                    }),
+            )
+            .flatten()
+            .cloned()
+            .collect()
     }
 
     /// Find a block term by its term identifier.
