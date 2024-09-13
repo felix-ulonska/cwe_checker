@@ -66,7 +66,9 @@ use petgraph::{
     visit::{EdgeRef, IntoNodeReferences},
 };
 
-mod intraprocedural_cfg;
+pub mod algo;
+pub mod intraprocedural_cfg;
+pub mod call;
 
 /// The graph type of an interprocedural control flow graph
 pub type Graph<'a> = DiGraph<Node<'a>, Edge<'a>>;
