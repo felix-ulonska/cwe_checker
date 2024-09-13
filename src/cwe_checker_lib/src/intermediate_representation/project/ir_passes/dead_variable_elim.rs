@@ -1,5 +1,6 @@
 use super::prelude::*;
 
+use crate::analysis::graph::get_program_cfg;
 use crate::intermediate_representation::Variable;
 
 use std::collections::BTreeSet;
@@ -54,15 +55,27 @@ impl IrPass for DeadVariableElimPass {
     }
 
     fn run(&mut self, program: &mut Self::Input) -> Vec<LogMessage> {
+        let mut graph = get_program_cfg(&program);
+        graph.reverse();
+        let all_variables = program.all_variables();
+        let all_variables_ref = all_variables.iter().collect::<BTreeSet<&Variable>>();
+
         // Maps block TIDs to the set of variables that are alive after
         // the execution of the BB.
-        let alive_vars_map =
-            fixpoint_computation::compute_alive_vars(&self.all_phys_registers, program);
+        let alive_vars_map = fixpoint_computation::compute_alive_vars(
+            &all_variables,
+            &self.all_phys_registers,
+            &graph,
+        );
 
         // Propagate the block-end information through the block and remove
         // dead assignment along the way.
         for b in program.blocks_mut() {
-            fixpoint_computation::remove_dead_var_assignments_of_block(b, &alive_vars_map);
+            fixpoint_computation::remove_dead_var_assignments_of_block(
+                b,
+                &alive_vars_map,
+                &all_variables_ref,
+            );
         }
 
         Vec::new()
