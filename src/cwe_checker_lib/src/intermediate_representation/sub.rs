@@ -1,4 +1,4 @@
-use super::{Blk, Datatype, Expression, Project, Variable};
+use super::{Blk, Datatype, Expression, Jmp, Project, Variable};
 use crate::prelude::*;
 use std::fmt;
 
@@ -42,6 +42,11 @@ impl Sub {
     /// Returns an iterator over the blocks in this function.
     pub fn blocks_mut(&mut self) -> impl Iterator<Item = &mut Term<Blk>> {
         self.blocks.iter_mut()
+    }
+
+    /// Returns an iterator over the jumps in this function.
+    pub fn jmps(&self) -> impl Iterator<Item = &Term<Jmp>> {
+        self.blocks().flat_map(|b| b.jmps())
     }
 
     /// Returns true iff the funtion does not return.
