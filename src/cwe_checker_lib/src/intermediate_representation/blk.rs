@@ -83,6 +83,22 @@ impl Blk {
             _ => None,
         }
     }
+
+    /// Returns the set of all constants that are used by instructions in the
+    /// block.
+    pub fn referenced_constants(&self) -> Vec<Bitvector> {
+        self.defs()
+            .map(|d| d.referenced_constants())
+            .chain(self.jmps().map(|j| j.referenced_constants()))
+            .fold(Vec::new(), |mut acc, c| {
+                match c {
+                    Some(c) => acc.extend(c),
+                    None => (),
+                }
+
+                acc
+            })
+    }
 }
 
 pub enum SinkType {

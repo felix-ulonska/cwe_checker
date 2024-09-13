@@ -61,6 +61,22 @@ pub enum Jmp {
     },
 }
 
+impl Jmp {
+    /// Returns all constants that are referenced by this jump.
+    pub fn referenced_constants(&self) -> Option<Vec<Bitvector>> {
+        use Jmp::*;
+        match self {
+            Return(expr)
+            | CallInd { target: expr, .. }
+            | CBranch {
+                condition: expr, ..
+            }
+            | BranchInd(expr) => expr.referenced_constants(),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Jmp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

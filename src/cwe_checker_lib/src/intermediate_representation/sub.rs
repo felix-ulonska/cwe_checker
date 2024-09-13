@@ -104,6 +104,13 @@ impl Sub {
     pub fn mark_non_returning(&mut self) {
         self.non_returning = true;
     }
+
+    /// Returns all constants that are referenced by this function.
+    pub fn referenced_constants(&self) -> Vec<Bitvector> {
+        self.blocks()
+            .flat_map(|b| b.referenced_constants().into_iter())
+            .collect()
+    }
 }
 
 impl Term<Sub> {
