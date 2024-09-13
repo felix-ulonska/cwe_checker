@@ -190,6 +190,12 @@ impl Tid {
         self.id.starts_with(Self::BLOCK_ID_PREFIX)
     }
 
+    /// Returns true iff this is a TID for a block that is starting at an
+    /// architectural instruction boundary.
+    pub fn is_block_without_suffix(&self) -> bool {
+        self.is_block() && self.id.split('_').count() == 2
+    }
+
     /// Returns true iff this is a TID for a block.
     pub fn is_instruction(&self) -> bool {
         self.id.starts_with(Self::INSTRUCTION_ID_PREFIX)
