@@ -68,6 +68,13 @@ impl Sub {
         self.blocks.iter_mut()
     }
 
+    /// Returns the total number of instructions in this funtion.
+    pub fn num_insn(&self) -> usize {
+        self.blocks().fold(0usize, |num_insn, blk| {
+            num_insn + blk.defs.len() + blk.jmps.len()
+        })
+    }
+
     /// Returns an iterator over the jumps in this function.
     pub fn jmps(&self) -> impl Iterator<Item = &Term<Jmp>> {
         self.blocks().flat_map(|b| b.jmps())
@@ -76,6 +83,21 @@ impl Sub {
     /// Returns true iff the funtion does not return.
     pub fn is_non_returning(&self) -> bool {
         self.non_returning
+    }
+
+    /// Returns the pair (minimum, maximum) over the set of all instruction's
+    /// addresses.
+    pub fn code_range(&self) -> (u64, u64) {
+        self.blocks()
+            .flat_map(|b| b.defs().map(|d| &d.tid))
+            .chain(self.jmps().map(|j| &j.tid))
+            .filter_map(|t| u64::try_from(t.address()).ok())
+            .fold((u64::MAX, u64::MIN), |acc, addr| {
+                (
+                    if addr < acc.0 { addr } else { acc.0 },
+                    if addr > acc.1 { addr } else { acc.1 },
+                )
+            })
     }
 
     /// Marks the function as non-returning.
