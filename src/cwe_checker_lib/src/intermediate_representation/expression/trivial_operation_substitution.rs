@@ -316,13 +316,16 @@ impl Expression {
         }
     }
 
-    /// Simplify arithmetic operations where intermediate results can be computed because some operands are constants.
+    /// Simplify arithmetic operations where intermediate results can be
+    /// computed because some operands are constants.
     fn substitute_arithmetics_with_constants(&mut self) {
         use BinOpType::*;
         use Expression::*;
         if let BinOp { op, lhs, rhs } = self {
             match (&**lhs, op, &**rhs) {
-                (Const(left), op, Const(right)) if matches!(op, IntSub | IntAdd) => {
+                (Const(left), op, Const(right))
+                    if matches!(op, IntSub | IntAdd | IntRight | IntLeft) =>
+                {
                     // Compute the result of arithmetics with constants
                     *self = Const(
                         left.bin_op(*op, right)
