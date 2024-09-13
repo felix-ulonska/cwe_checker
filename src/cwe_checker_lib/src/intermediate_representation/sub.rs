@@ -20,6 +20,30 @@ pub struct Sub {
     non_returning: bool,
 }
 
+impl fmt::Display for Term<Sub> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "FN [{}] name:{} non_returning:{}",
+            self.tid,
+            self.name,
+            if self.is_non_returning() { "yes" } else { "no" },
+        )?;
+
+        for Term { tid, term: blk } in self.blocks() {
+            writeln!(f, "  BLK [{}]", tid)?;
+            for Term { tid, term: def } in blk.defs.iter() {
+                writeln!(f, "    DEF [{}] {}", tid, def)?;
+            }
+            for Term { tid, term: jmp } in blk.jmps.iter() {
+                writeln!(f, "    JMP [{}] {}", tid, jmp)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl Sub {
     pub fn new<T, U>(name: &T, blocks: Vec<Term<Blk>>, calling_convention: Option<&U>) -> Self
     where
