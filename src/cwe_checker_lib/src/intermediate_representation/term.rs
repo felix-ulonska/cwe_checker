@@ -41,7 +41,9 @@ impl Display for TidAddress {
 
 impl<T: AsRef<str>> From<T> for TidAddress {
     fn from(a: T) -> Self {
-        Self(u64::from_str_radix(a.as_ref(), 16).ok())
+        let addr = u64::from_str_radix(a.as_ref().trim_start_matches("0x"), 16);
+
+        Self(addr.ok())
     }
 }
 
