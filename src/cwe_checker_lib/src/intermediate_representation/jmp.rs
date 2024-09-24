@@ -75,6 +75,19 @@ impl Jmp {
             _ => None,
         }
     }
+
+    /// Returns true iff the jump is a call.
+    pub fn is_call(&self) -> bool {
+        matches!(
+            self,
+            Jmp::Call { .. } | Jmp::CallInd { .. } | Jmp::CallOther { .. }
+        )
+    }
+
+    /// Returns true iff the jump is an indirect call.
+    pub fn is_indirect_call(&self) -> bool {
+        matches!(self, Jmp::CallInd { .. })
+    }
 }
 
 impl fmt::Display for Jmp {
