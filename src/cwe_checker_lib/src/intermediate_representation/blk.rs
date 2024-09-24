@@ -82,12 +82,12 @@ impl Blk {
     }
 
     /// Returns the target of all direct calls in this block.
-    pub fn get_call_targets(&self) -> Option<Vec<Tid>> {
+    pub fn get_call_targets(&self) -> Option<Vec<&Tid>> {
         match self.jmps.as_slice() {
             [Term {
                 term: Jmp::Call { target, .. },
                 ..
-            }] => Some(vec![target.clone()]),
+            }] => Some(vec![target]),
             _ => None,
         }
     }
