@@ -13,9 +13,17 @@ pub enum Stage {
     #[default]
     No,
     All,
+    /// Construction of whole-program call graph.
+    CallGraph,
+    /// Construction of whole-program control flow graph.
+    ControlFlowGraph,
+    /// Pointer inference.
     Pi,
+    /// Generation of intermediate representation.
     Ir(IrForm),
+    /// Parsing of Pcode.
     Pcode(PcodeForm),
+    /// CWE checkers.
     Cwe,
 }
 
@@ -164,6 +172,22 @@ impl Settings {
         }
     }
 
+    /// Displays the `obj`ect if the stage is being debugged.
+    ///
+    /// This is a possible cancellation point depending on the termination
+    /// policy.
+    pub fn print_compact_json<T: ToJsonCompact>(&self, obj: &T, stage: Stage) {
+        if self.should_debug(stage) {
+            obj.print_compact_json();
+            self.maybe_terminate();
+        }
+    }
+
+
+    /// Displays the `obj`ect if the stage is being debugged.
+    ///
+    /// This is a possible cancellation point depending on the termination
+    /// policy.
     pub fn dbg<T: std::fmt::Debug>(&self, obj: &T, stage: Stage) {
         if self.should_debug(stage) {
             println!("{:?}", obj);

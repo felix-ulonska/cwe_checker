@@ -17,6 +17,7 @@ use cwe_checker_lib::utils::read_config_file;
 use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
 use std::path::PathBuf;
+use std::ops::Deref;
 
 #[derive(ValueEnum, Clone, Debug, Copy)]
 /// Selects which kind of debug output is displayed.
@@ -61,6 +62,10 @@ pub enum CliDebugMode {
     IrStackPointerAlignmentSubstituted,
     /// The final IR.
     IrOptimized,
+    /// Whole-program call graph.
+    Cg,
+    /// Whole-program control flow graph.
+    Cfg,
     /// Result of the Pointer Inference computation.
     Pi,
 }
@@ -95,6 +100,8 @@ impl From<&CliDebugMode> for debug::Stage {
                 debug::Stage::Ir(debug::IrForm::StackPointerAlignmentSubstituted)
             }
             IrOptimized => debug::Stage::Ir(debug::IrForm::Optimized),
+            Cg => debug::Stage::CallGraph,
+            Cfg => debug::Stage::ControlFlowGraph,
             Pi => debug::Stage::Pi,
         }
     }
@@ -232,6 +239,12 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     let (binary, project) =
         disassemble_binary(&binary_file_path, bare_metal_config_opt, &debug_settings)?;
 
+    if debug_settings.should_debug(debug::Stage::CallGraph) {
+        // TODO: Move once call graph is used somewhere else.
+        let cg = graph::call::CallGraph::new(&project.program.term);
+        debug_settings.print_compact_json(&cg, debug::Stage::CallGraph);
+    }
+
     // Filter the modules to be executed.
     if let Some(ref partial_module_list) = args.partial {
         filter_modules_for_partial_run(&mut modules, partial_module_list);
@@ -255,6 +268,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     // Generate the control flow graph of the program
     let control_flow_graph = graph::get_program_cfg_with_logs(&project.program);
+    debug_settings.print_compact_json(control_flow_graph.deref(), debug::Stage::ControlFlowGraph);
 
     let analysis_results = AnalysisResults::new(&binary, &control_flow_graph, &project);
 
