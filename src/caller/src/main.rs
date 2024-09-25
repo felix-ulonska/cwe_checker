@@ -1,5 +1,7 @@
-//! This crate defines the command line interface for the cwe_checker.
-//! General documentation about the cwe_checker is contained in the [`cwe_checker_lib`] crate.
+//! Command line interface for the cwe_checker.
+//!
+//! General documentation about the cwe_checker is contained in the
+//! [`cwe_checker_lib`] crate.
 
 extern crate cwe_checker_lib; // Needed for the docstring-link to work
 
@@ -18,6 +20,8 @@ use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
 use std::path::PathBuf;
 use std::ops::Deref;
+
+mod cfg_stats;
 
 #[derive(ValueEnum, Clone, Debug, Copy)]
 /// Selects which kind of debug output is displayed.
@@ -166,6 +170,10 @@ struct CmdlineArgs {
     /// of invoking Ghidra.
     #[arg(long, hide(true))]
     pcode_raw: Option<String>,
+
+    /// Print some statistics and metrics of the IR-program's CFG and exit.
+    #[arg(long, hide(true))]
+    cfg_stats: bool,
 }
 
 impl From<&CmdlineArgs> for debug::Settings {
@@ -241,8 +249,14 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     if debug_settings.should_debug(debug::Stage::CallGraph) {
         // TODO: Move once call graph is used somewhere else.
-        let cg = graph::call::CallGraph::new(&project.program.term);
+        let cg = graph::call::CallGraph::new(&project.program);
         debug_settings.print_compact_json(&cg, debug::Stage::CallGraph);
+    }
+
+    if args.cfg_stats {
+        let cfg_stats = cfg_stats::CfgProperties::new(&project.program);
+        println!("{:#}", serde_json::to_value(cfg_stats)?);
+        return Ok(());
     }
 
     // Filter the modules to be executed.
