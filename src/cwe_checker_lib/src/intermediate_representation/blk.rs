@@ -81,6 +81,11 @@ impl Blk {
         self.defs.iter_mut()
     }
 
+    /// Returns the number of instructions (defs and jumps) in this basic block.
+    pub fn num_insn(&self) -> u64 {
+        (self.defs.len() + self.jmps.len()) as u64
+    }
+
     /// Returns the target of all direct calls in this block.
     pub fn get_call_targets(&self) -> Option<Vec<&Tid>> {
         match self.jmps.as_slice() {
