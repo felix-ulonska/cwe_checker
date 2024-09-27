@@ -179,7 +179,7 @@ impl<'a> AliveVariables<'a> {
                 if let Vars(vars) = vars {
                     vars.insert(var);
                 }
-            },
+            }
             _ => (),
         }
     }

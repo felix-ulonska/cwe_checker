@@ -188,7 +188,9 @@ impl Expression {
                     }
                 }
             }
-            UnOp { arg, .. } | Cast { arg, .. } | Subpiece { arg, .. } => arg.referenced_constants(),
+            UnOp { arg, .. } | Cast { arg, .. } | Subpiece { arg, .. } => {
+                arg.referenced_constants()
+            }
         }
     }
 

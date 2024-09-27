@@ -108,15 +108,13 @@ impl Def {
             Def::Store {
                 address: expr0,
                 value: expr1,
-            } => {
-                match (expr0.referenced_constants(), expr1.referenced_constants()) {
-                    (None, c) | (c, None) => c,
-                    (Some(mut c0), Some(c1)) => {
-                        c0.extend(c1);
-                        Some(c0)
-                    }
+            } => match (expr0.referenced_constants(), expr1.referenced_constants()) {
+                (None, c) | (c, None) => c,
+                (Some(mut c0), Some(c1)) => {
+                    c0.extend(c1);
+                    Some(c0)
                 }
-            }
+            },
         }
     }
 }

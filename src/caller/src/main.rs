@@ -18,8 +18,8 @@ use cwe_checker_lib::utils::read_config_file;
 
 use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
-use std::path::PathBuf;
 use std::ops::Deref;
+use std::path::PathBuf;
 
 mod cfg_stats;
 

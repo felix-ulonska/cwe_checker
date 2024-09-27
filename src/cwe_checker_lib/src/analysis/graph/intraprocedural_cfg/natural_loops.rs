@@ -1,6 +1,6 @@
 //! Natural loops.
 use crate::analysis::graph::intraprocedural_cfg::IntraproceduralCfg;
-use crate::analysis::graph::{Graph, Edge};
+use crate::analysis::graph::{Edge, Graph};
 use crate::intermediate_representation::Tid;
 
 use std::collections::BTreeSet;

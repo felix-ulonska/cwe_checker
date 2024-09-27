@@ -13,9 +13,9 @@ use crate::intermediate_representation::{Blk, Jmp, Program, SinkType, Sub as Fun
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-mod properties;
 mod dom;
 mod natural_loops;
+mod properties;
 use dom::*;
 use natural_loops::*;
 
@@ -327,9 +327,10 @@ impl<'a> IntraproceduralCfg<'a> {
     /// Returns the total number of instructions (defs and jmps) in this
     /// function.
     pub fn num_insn(&self) -> u64 {
-        self.blk_tid_to_idx_map.values().map(|blk_idx| {
-            self.graph()[blk_idx.0].get_block().num_insn()
-        }).sum()
+        self.blk_tid_to_idx_map
+            .values()
+            .map(|blk_idx| self.graph()[blk_idx.0].get_block().num_insn())
+            .sum()
     }
 
     /// Returns the start and end index of this block.

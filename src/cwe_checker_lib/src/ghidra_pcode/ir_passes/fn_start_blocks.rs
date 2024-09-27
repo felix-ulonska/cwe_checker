@@ -78,7 +78,10 @@ impl IrPass for ReorderFnBlocksPass {
                     })
             );
             // 2. This block is in the first position in the block array.
-            assert!(Self::is_fn_start_blk(&f.tid, &f.blocks().next().unwrap().tid));
+            assert!(Self::is_fn_start_blk(
+                &f.tid,
+                &f.blocks().next().unwrap().tid
+            ));
         }
     }
 }

@@ -183,7 +183,6 @@ impl Settings {
         }
     }
 
-
     /// Displays the `obj`ect if the stage is being debugged.
     ///
     /// This is a possible cancellation point depending on the termination

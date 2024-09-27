@@ -94,7 +94,7 @@ impl Instruction {
     pub fn contains_term_index(&self, index: u64) -> bool {
         index < (self.terms().len() as u64)
     }
-    
+
     /// Returns true iff this instruction is in a MIPS jump delay slot.
     pub fn is_mips_jump_delay_slot(&self) -> bool {
         self.mnemonic().starts_with("_")
