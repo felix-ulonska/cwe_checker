@@ -1,17 +1,16 @@
 //! Little helpers for developers that try to understand what their code is
 //! doing.
 
-#![allow(dead_code)]
-#![allow(missing_docs)]
-
 use std::path::PathBuf;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 /// Stages of the analysis that can be debugged separately.
 #[non_exhaustive]
 pub enum Stage {
+    /// No stages.
     #[default]
     No,
+    /// All stages.
     All,
     /// Construction of whole-program call graph.
     CallGraph,
@@ -78,19 +77,22 @@ pub enum IrForm {
 /// Substages of the Pcode transformation that can be debugged separately.
 #[non_exhaustive]
 pub enum PcodeForm {
-    /// The JSON string that comes from the Ghidra plugin.
+    /// JSON string that comes from the Ghidra plugin.
     Raw,
+    /// JSON deserialized into Rust types.
     Parsed,
-    Processed,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 /// Controls generation of log messages.
 #[non_exhaustive]
 pub enum Verbosity {
+    /// Print no log messages.
     Quiet,
+    /// Print warning and error-level log messages.
     #[default]
     Normal,
+    /// Print extra log messages.
     Verbose,
 }
 
@@ -99,9 +101,12 @@ pub enum Verbosity {
 /// interest.
 #[non_exhaustive]
 pub enum TerminationPolicy {
+    /// Continue.
     KeepRunning,
+    /// Exit.
     #[default]
     EarlyExit,
+    /// Panic.
     Panic,
 }
 
@@ -114,34 +119,40 @@ pub struct Settings {
     saved_pcode_raw: Option<PathBuf>,
 }
 
+/// Builder for debug [`Settings`].
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct SettingsBuilder {
     inner: Settings,
 }
 
 impl SettingsBuilder {
+    /// Constructs the final settings.
     pub fn build(self) -> Settings {
         self.inner
     }
 
+    /// Sets the stage that is being debugged.
     pub fn set_stage(mut self, stage: Stage) -> Self {
         self.inner.stage = stage;
 
         self
     }
 
+    /// Sets the verbosity level.
     pub fn set_verbosity(mut self, verbosity: Verbosity) -> Self {
         self.inner.verbose = verbosity;
 
         self
     }
 
+    /// Sets the termination policy.
     pub fn set_termination_policy(mut self, policy: TerminationPolicy) -> Self {
         self.inner.terminate = policy;
 
         self
     }
 
+    /// Sets the path to the file with the saved output of the Ghidra plugin.
     pub fn set_saved_pcode_raw(mut self, saved_pcode_raw: PathBuf) -> Self {
         self.inner.saved_pcode_raw = Some(saved_pcode_raw);
 
@@ -150,6 +161,7 @@ impl SettingsBuilder {
 }
 
 impl Settings {
+    /// Returns the path to the file with the saved output of the Ghidra plugin.
     pub fn get_saved_pcode_raw(&self) -> Option<PathBuf> {
         self.saved_pcode_raw.clone()
     }

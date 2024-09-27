@@ -95,7 +95,7 @@ impl Tid {
 
     /// Returns the term identifier for the program that is based at the
     /// given `address`.
-    pub fn new_program<T: Into<TidAddress> + Display + ?Sized>(address: T) -> Self {
+    pub fn new_program<T: Into<TidAddress> + Display>(address: T) -> Self {
         Self {
             id: format!("{}_{}", Self::PROGRAM_ID_PREFIX, address),
             address: address.into(),
@@ -103,7 +103,7 @@ impl Tid {
     }
 
     /// Returns the TID for the function at the given address.
-    pub fn new_function<T: Into<TidAddress> + Display + ?Sized>(address: T) -> Self {
+    pub fn new_function<T: Into<TidAddress> + Display>(address: T) -> Self {
         Self {
             id: format!("{}_{}", Self::FUNCTION_ID_PREFIX, address),
             address: address.into(),
@@ -119,7 +119,7 @@ impl Tid {
     }
 
     /// Generate a new term identifier for the block with `index` at `address`.
-    pub fn new_block<T: Into<TidAddress> + Display + ?Sized>(address: T, index: u64) -> Self {
+    pub fn new_block<T: Into<TidAddress> + Display>(address: T, index: u64) -> Self {
         let id = match index {
             0 => format!("{}_{}", Self::BLOCK_ID_PREFIX, address),
             _ => format!("{}_{}_{}", Self::BLOCK_ID_PREFIX, address, index),
@@ -133,7 +133,7 @@ impl Tid {
 
     /// Generate a new term identifier for the instruction with `index` at
     /// `address`.
-    pub fn new_instr<T: Into<TidAddress> + Display + ?Sized>(address: T, index: u64) -> Self {
+    pub fn new_instr<T: Into<TidAddress> + Display>(address: T, index: u64) -> Self {
         Tid::new_instr_with_suffix::<_, &str>(address, index, None)
     }
 
@@ -149,7 +149,7 @@ impl Tid {
     /// `address`.
     pub fn new_instr_with_suffix<T, U>(address: T, index: u64, suffix: Option<&U>) -> Self
     where
-        T: Display + Into<TidAddress> + ?Sized,
+        T: Display + Into<TidAddress>,
         U: Display + ?Sized,
     {
         match suffix {

@@ -73,6 +73,7 @@ impl InputExpressionPropagationPass {
             }
         }
     }
+
     /// Wherever possible, substitute input variables of expressions
     /// with the input expression that defines the input variable.
     ///
@@ -80,7 +81,7 @@ impl InputExpressionPropagationPass {
     /// if the input variables of the input expression itself did not change since the definition of said variable.
     ///
     /// The expression propagation allows more dead stores to be removed during
-    /// [dead variable elimination](crate::analysis::dead_variable_elimination).
+    /// [dead variable elimination](super::DeadVariableElimPass).
     fn propagate_input_expressions(
         blk: &mut Term<Blk>,
         apriori_insertable_expressions: Option<HashMap<Variable, Expression>>,

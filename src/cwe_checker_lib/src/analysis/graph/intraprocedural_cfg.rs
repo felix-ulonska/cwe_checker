@@ -284,7 +284,7 @@ impl<'a> IntraproceduralCfg<'a> {
 
     /// Returns all blocks that contain __direct__ function calls to
     /// __internal__ and __external__ functions.
-    pub fn call_sites<'b>(&'b self) -> impl Iterator<Item = BlockIdxs> + 'b {
+    pub fn call_sites(&self) -> impl Iterator<Item = BlockIdxs> + '_ {
         self.calls.iter().chain(self.ext_calls.iter()).copied()
     }
 

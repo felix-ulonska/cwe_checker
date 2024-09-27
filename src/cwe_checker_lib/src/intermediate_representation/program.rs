@@ -110,12 +110,12 @@ impl Program {
         self.functions()
             .flat_map(|f| f.blocks())
             .flat_map(|b| b.defs())
-            .filter_map(|d| match &d.term {
+            .map(|d| match &d.term {
                 Def::Assign { var, value: expr } | Def::Load { var, address: expr } => {
                     let mut vars = expr.input_vars();
                     vars.push(var);
 
-                    Some(vars.into_iter())
+                    vars.into_iter()
                 }
                 Def::Store {
                     address: expr0,
@@ -125,7 +125,7 @@ impl Program {
                     let vars1 = expr1.input_vars();
                     vars0.extend(vars1);
 
-                    Some(vars0.into_iter())
+                    vars0.into_iter()
                 }
             })
             .chain(

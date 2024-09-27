@@ -261,7 +261,7 @@ impl<'a> CallGraphBuilder<'a> {
         Self {
             graph: DiGraph::new(),
             fn_tid_to_idx_map: HashMap::new(),
-            p: &p,
+            p,
             ext_fns: p.extern_symbols.keys().collect(),
             full_cfgs: false,
         }

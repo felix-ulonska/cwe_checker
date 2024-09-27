@@ -356,7 +356,7 @@ pub fn compute_alive_vars<'a, 'b>(
             .iter()
             .collect::<BTreeSet<&'b Variable>>(),
     );
-    let context = Context::new(all_variables.clone(), all_phys_registers.clone(), &graph);
+    let context = Context::new(all_variables.clone(), all_phys_registers.clone(), graph);
 
     let no_alive_vars = AliveVariables::default();
     let mut computation = create_computation(context, None);

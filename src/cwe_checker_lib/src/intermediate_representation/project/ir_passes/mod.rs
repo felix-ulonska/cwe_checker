@@ -1,3 +1,5 @@
+//! Transforming passes that optimize the IR.
+
 mod control_flow_propagation;
 pub use control_flow_propagation::*;
 

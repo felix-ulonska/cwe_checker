@@ -79,8 +79,6 @@ impl Project {
 impl WithLogs<Project> {
     /// Performs only the optimizing normalization passes.
     ///
-    /// [`Project::normalize_basic`] **must** be called before this method.
-    ///
     /// Runs only the optimization passes that transform the program to an
     /// equivalent, simpler representation. This step is exprected to improve
     /// the speed and precision of later analyses.

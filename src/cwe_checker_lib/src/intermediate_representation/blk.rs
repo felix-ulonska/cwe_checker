@@ -40,8 +40,7 @@ pub struct Blk {
     /// this field contains possible jump target addresses for the jump.
     ///
     /// Note that possible targets of indirect calls are *not* contained,
-    /// since the [`Project` normalization passes](Project::normalize) assume
-    /// that only intraprocedural jump targets are contained in this field.
+    /// i.e., only intraprocedural jump targets are contained in this field.
     pub indirect_jmp_targets: Vec<Tid>,
 }
 
@@ -104,9 +103,8 @@ impl Blk {
             .map(|d| d.referenced_constants())
             .chain(self.jmps().map(|j| j.referenced_constants()))
             .fold(Vec::new(), |mut acc, c| {
-                match c {
-                    Some(c) => acc.extend(c),
-                    None => (),
+                if let Some(c) = c {
+                    acc.extend(c)
                 }
 
                 acc

@@ -73,7 +73,7 @@ impl IrPass for ReorderFnBlocksPass {
                 f.blocks()
                     .filter(|b| Self::is_fn_start_blk(&f.tid, &b.tid))
                     .fold(String::new(), |mut a, i| {
-                        a.push_str(format!("{},", i.tid.to_string()).as_str());
+                        a.push_str(format!("{},", i.tid).as_str());
                         a
                     })
             );

@@ -68,8 +68,8 @@ pub fn get_project_from_ghidra(
     )
 }
 
-/// Normalize the given P-Code project
-/// and then parse it into a project struct of the internally used intermediate representation.
+/// Normalize the given P-Code project and then parse it into a project struct
+/// of the internally used intermediate representation.
 pub fn parse_pcode_project_to_ir_project(
     pcode_project: PcodeProject,
     binary: &[u8],

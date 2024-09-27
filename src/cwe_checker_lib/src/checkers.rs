@@ -31,6 +31,7 @@ pub mod cwe_782;
 pub mod cwe_789;
 
 pub mod prelude {
+    //! Prelude imports for CWE checkers.
     pub use crate::utils::log::{CweWarning, LogMessage, WithLogs};
     pub use crate::CweModule;
 }

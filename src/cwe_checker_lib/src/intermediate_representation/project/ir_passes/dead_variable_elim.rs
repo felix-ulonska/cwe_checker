@@ -55,7 +55,7 @@ impl IrPass for DeadVariableElimPass {
     }
 
     fn run(&mut self, program: &mut Self::Input) -> Vec<LogMessage> {
-        let mut graph = get_program_cfg(&program);
+        let mut graph = get_program_cfg(program);
         graph.reverse();
         let all_variables = program.all_variables();
         let all_variables_ref = all_variables.iter().collect::<BTreeSet<&Variable>>();
