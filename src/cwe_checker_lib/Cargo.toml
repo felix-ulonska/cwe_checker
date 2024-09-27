@@ -3,7 +3,7 @@ name = "cwe_checker_lib"
 version = "0.9.0"
 authors = ["Fraunhofer FKIE <contact@cwe-checker.io>"]
 edition = "2021"
-rust-version = "1.76"
+rust-version = "1.81"
 
 [dependencies]
 apint = "0.2"

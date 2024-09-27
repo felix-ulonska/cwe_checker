@@ -17,7 +17,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.76.0
+          toolchain: 1.81.0
           override: true
           components: rustfmt
       - uses: actions-rs/cargo@v1
@@ -33,7 +33,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.76.0
+          toolchain: 1.81.0
           override: true
           components: clippy
       - uses: actions-rs/cargo@v1
@@ -53,7 +53,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.76.0
+          toolchain: 1.81.0
           override: true
           components: rust-docs
       - uses: actions-rs/cargo@v1
