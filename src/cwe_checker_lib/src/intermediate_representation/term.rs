@@ -347,13 +347,26 @@ pub mod tests {
     use super::*;
 
     impl Tid {
+        /// Returns a new TID with the given ID at the unknown address.
+        pub fn new<T: ToString>(id: T) -> Self {
+            Self {
+                id: id.to_string(),
+                address: TidAddress(None),
+            }
+        }
+
+        /// Set the address of the TID.
+        pub fn set_address<T: Into<TidAddress>>(&mut self, addr: T) {
+            self.address = addr.into();
+        }
+
         /// Mock a TID with the given name and the address parsed from the name.
         /// The name must have the form `prefix_address[_suffix]`, e.g. `instr_0x00001234_5`.
         pub fn mock(tid: &str) -> Tid {
             let components: Vec<_> = tid.split("_").collect();
             Tid {
                 id: tid.to_string(),
-                address: components[1].to_string(),
+                address: components[1].into(),
             }
         }
     }

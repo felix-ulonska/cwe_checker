@@ -210,14 +210,10 @@ impl Blk {
 
 #[cfg(test)]
 impl Sub {
-    pub fn mock(name: impl ToString) -> Term<Sub> {
+    pub fn mock<T: ToString>(name: T) -> Term<Sub> {
         Term {
             tid: Tid::new(name.to_string()),
-            term: Sub {
-                name: name.to_string(),
-                blocks: Vec::new(),
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>(&name, Vec::new(), None),
         }
     }
 }

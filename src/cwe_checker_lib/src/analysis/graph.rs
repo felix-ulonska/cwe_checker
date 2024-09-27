@@ -702,11 +702,7 @@ mod tests {
         };
         let sub1 = Term {
             tid: Tid::new("sub1"),
-            term: Sub {
-                name: "sub1".to_string(),
-                blocks: vec![sub1_blk1, sub1_blk2],
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>("sub1", vec![sub1_blk1, sub1_blk2], None),
         };
         let cond_jump = Jmp::CBranch {
             target: Tid::new("sub1_blk1"),
@@ -738,11 +734,7 @@ mod tests {
         };
         let sub2 = Term {
             tid: Tid::new("sub2"),
-            term: Sub {
-                name: "sub2".to_string(),
-                blocks: vec![sub2_blk1, sub2_blk2],
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>("sub2", vec![sub2_blk1, sub2_blk2], None),
         };
         let program = Term {
             tid: Tid::new("program"),
@@ -772,7 +764,7 @@ mod tests {
             term: Jmp::BranchInd(expr!("0x1000:4")), // At the moment the expression does not matter
         };
         let mut blk_tid = Tid::new("blk_00001000");
-        blk_tid.address = "00001000".to_string();
+        blk_tid.set_address("00001000");
         let blk_term = Term {
             tid: blk_tid.clone(),
             term: Blk {
@@ -783,11 +775,7 @@ mod tests {
         };
         let sub_term = Term {
             tid: Tid::new("sub"),
-            term: Sub {
-                name: "sub".to_string(),
-                blocks: vec![blk_term],
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>("sub", vec![blk_term], None),
         };
         let mut program = Program::mock_x64();
         program.subs.insert(sub_term.tid.clone(), sub_term);

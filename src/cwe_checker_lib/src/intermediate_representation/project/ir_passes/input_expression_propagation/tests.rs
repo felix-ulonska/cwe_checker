@@ -20,11 +20,7 @@ fn mock_project() -> Project {
 
     let called_function = Term {
         tid: Tid::new("called_function"),
-        term: Sub {
-            name: "called_function".to_string(),
-            blocks: vec![callee_block],
-            calling_convention: Some("_stdcall".to_string()),
-        },
+        term: Sub::new("called_function", vec![callee_block], Some("_stdcall")),
     };
 
     let entry_jmp_block = Term {
@@ -54,11 +50,7 @@ fn mock_project() -> Project {
     let mut project = Project::mock_x64();
     let sub1 = Term {
         tid: Tid::new("main"),
-        term: Sub {
-            name: "main".to_string(),
-            blocks: vec![entry_block, entry_jmp_block],
-            calling_convention: Some("_stdcall".to_string()),
-        },
+        term: Sub::new("main", vec![entry_block, entry_jmp_block], Some("_stdcall")),
     };
 
     project

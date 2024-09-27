@@ -49,11 +49,7 @@ fn mock_program() -> Term<Program> {
     };
     let sub1 = Term {
         tid: Tid::new("sub1"),
-        term: Sub {
-            name: "sub1".to_string(),
-            blocks: vec![sub1_blk1, sub1_blk2],
-            calling_convention: None,
-        },
+        term: Sub::new::<_, &str>("sub1", vec![sub1_blk1, sub1_blk2], None),
     };
     let cond_jump = Jmp::CBranch {
         target: Tid::new("sub1_blk1"),
@@ -85,11 +81,7 @@ fn mock_program() -> Term<Program> {
     };
     let sub2 = Term {
         tid: Tid::new("sub2"),
-        term: Sub {
-            name: "sub2".to_string(),
-            blocks: vec![sub2_blk1, sub2_blk2],
-            calling_convention: None,
-        },
+        term: Sub::new::<_, &str>("sub2", vec![sub2_blk1, sub2_blk2], None),
     };
     let program = Term {
         tid: Tid::new("program"),

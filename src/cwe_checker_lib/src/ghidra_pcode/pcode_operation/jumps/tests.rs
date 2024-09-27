@@ -1,4 +1,4 @@
-use crate::{expr, ghidra_pcode::pcode_op_simple::*};
+use crate::{expr, ghidra_pcode::pcode_operation::*};
 
 #[test]
 fn test_get_direct_jump_target() {

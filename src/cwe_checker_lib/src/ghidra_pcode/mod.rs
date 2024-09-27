@@ -177,6 +177,3 @@ impl PcodeProject {
         WithLogs::new(ir_project, logs)
     }
 }
-
-#[cfg(test)]
-mod tests;

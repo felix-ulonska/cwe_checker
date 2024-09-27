@@ -1,6 +1,5 @@
 use super::*;
 use crate::{def, defs, expr, variable};
-use std::borrow::BorrowMut;
 
 /// Creates a x64 or ARM32 Project for easy addidion of assignments.
 fn setup(mut defs: Vec<Term<Def>>, is_x64: bool) -> Project {
@@ -35,12 +34,16 @@ fn unexpected_alignment() {
             },
         )];
         let mut proj_x64 = setup(def_x64, true);
-        let log = substitute_and_on_stackpointer(proj_x64.borrow_mut());
+        let log = substitute_and_on_stackpointer(
+            &mut proj_x64.program,
+            &proj_x64.stack_pointer_register.clone(),
+            &proj_x64.cpu_architecture.clone(),
+        );
         if 2_i32.pow(i) == 16 {
-            assert!(log.is_none());
+            assert!(log.len() == 0);
         } else {
-            assert!(log.is_some());
-            for msg in log.unwrap() {
+            assert!(log.len() != 0);
+            for msg in log {
                 assert!(msg.text.contains("Unexpected alignment"));
             }
         }
@@ -58,12 +61,16 @@ fn unexpected_alignment() {
             },
         )];
         let mut proj_arm = setup(def_arm, false);
-        let log = substitute_and_on_stackpointer(proj_arm.borrow_mut());
+        let log = substitute_and_on_stackpointer(
+            &mut proj_arm.program,
+            &proj_arm.stack_pointer_register.clone(),
+            &proj_arm.cpu_architecture.clone(),
+        );
         if 2_i32.pow(i) == 4 {
-            assert!(log.is_none());
+            assert!(log.len() == 0);
         } else {
-            assert!(log.is_some());
-            for msg in log.unwrap() {
+            assert!(log.len() != 0);
+            for msg in log {
                 assert!(msg.text.contains("Unexpected alignment"));
             }
         }
@@ -89,7 +96,11 @@ fn compute_correct_offset_x64() {
             vec![sub_from_sp.clone(), byte_alignment_as_and.clone()],
             true,
         );
-        let log = substitute_and_on_stackpointer(proj.borrow_mut());
+        let log = substitute_and_on_stackpointer(
+            &mut proj.program,
+            &proj.stack_pointer_register.clone(),
+            &proj.cpu_architecture.clone(),
+        );
         for sub in proj.program.term.subs.into_values() {
             for blk in sub.term.blocks {
                 for def in blk.term.defs {
@@ -105,7 +116,7 @@ fn compute_correct_offset_x64() {
                         )];
 
                         assert_eq!(expected_def.term, def.term);
-                        assert!(log.is_none());
+                        assert!(log.len() == 0);
                     }
                 }
             }
@@ -132,7 +143,11 @@ fn compute_correct_offset_arm32() {
             vec![sub_from_sp.clone(), byte_alignment_as_and.clone()],
             false,
         );
-        let log = substitute_and_on_stackpointer(proj.borrow_mut());
+        let log = substitute_and_on_stackpointer(
+            &mut proj.program,
+            &proj.stack_pointer_register.clone(),
+            &proj.cpu_architecture.clone(),
+        );
         for sub in proj.program.term.subs.into_values() {
             for blk in sub.term.blocks {
                 for def in blk.term.defs {
@@ -144,7 +159,7 @@ fn compute_correct_offset_arm32() {
                         // translated alignment as substraction
                         let expected_def = def!(format!("sp:4 = sp:4 - {}:4", expected_offset));
                         assert_eq!(expected_def.term, def.term);
-                        assert!(log.is_none());
+                        assert!(log.len() == 0);
                     }
                 }
             }
@@ -181,29 +196,31 @@ fn check_bin_operations() {
             },
         );
         let mut proj_x64 = setup(vec![unsupported_def_x64.clone()], true);
-        let log_x64 = substitute_and_on_stackpointer(proj_x64.borrow_mut());
+        let log_x64 = substitute_and_on_stackpointer(
+            &mut proj_x64.program,
+            &proj_x64.stack_pointer_register.clone(),
+            &proj_x64.cpu_architecture.clone(),
+        );
         let mut proj_arm32 = setup(vec![unsupported_def_arm32.clone()], false);
-        let log_arm32 = substitute_and_on_stackpointer(proj_arm32.borrow_mut());
+        let log_arm32 = substitute_and_on_stackpointer(
+            &mut proj_arm32.program,
+            &proj_arm32.stack_pointer_register.clone(),
+            &proj_arm32.cpu_architecture.clone(),
+        );
 
-        for log in vec![log_arm32, log_x64] {
+        for mut log in vec![log_arm32, log_x64] {
             match biopty {
                 BinOpType::IntAnd => {
-                    assert_eq!(log.clone().unwrap().len(), 1);
-                    assert!(log
-                        .unwrap()
-                        .pop()
-                        .unwrap()
-                        .text
-                        .contains("Unexpected alignment"));
+                    assert_eq!(log.clone().len(), 1);
+                    assert!(log.pop().unwrap().text.contains("Unexpected alignment"));
                 }
                 BinOpType::IntAdd | BinOpType::IntSub => {
-                    assert!(log.is_none())
+                    assert!(log.len() == 0)
                 }
 
                 _ => {
-                    assert_eq!(log.clone().unwrap().len(), 1);
+                    assert_eq!(log.clone().len(), 1);
                     assert!(log
-                        .unwrap()
                         .pop()
                         .unwrap()
                         .text
@@ -248,11 +265,14 @@ fn substitution_ends_if_unsubstituable() {
         ],
         true,
     );
-    let log = substitute_and_on_stackpointer(proj.borrow_mut());
+    let mut log = substitute_and_on_stackpointer(
+        &mut proj.program,
+        &proj.stack_pointer_register.clone(),
+        &proj.cpu_architecture.clone(),
+    );
 
-    assert!(log.is_some());
+    assert!(log.len() != 0);
     assert!(log
-        .unwrap()
         .pop()
         .unwrap()
         .text
@@ -299,8 +319,12 @@ fn supports_commutative_and() {
     );
 
     let mut proj = setup(vec![bitmask_and_var, var_and_bitmask], true);
-    let log = substitute_and_on_stackpointer(proj.borrow_mut());
-    assert!(log.is_none());
+    let log = substitute_and_on_stackpointer(
+        &mut proj.program,
+        &proj.stack_pointer_register.clone(),
+        &proj.cpu_architecture.clone(),
+    );
+    assert!(log.len() == 0);
 
     let expected_def = defs!["tid_to_be_substituted: RSP:8 = RSP:8 - 0x0:8"]
         .pop()
@@ -364,7 +388,11 @@ fn skips_empty_blocks() {
 
     let expected_def = def!["tid_to_be_substituted: RSP:8 = RSP:8 - 15:8"];
 
-    substitute_and_on_stackpointer(&mut proj);
+    let _log = substitute_and_on_stackpointer(
+        &mut proj.program,
+        &proj.stack_pointer_register.clone(),
+        &proj.cpu_architecture.clone(),
+    );
 
     assert_eq!(
         proj.program

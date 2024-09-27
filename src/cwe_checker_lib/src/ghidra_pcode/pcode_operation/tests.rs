@@ -32,7 +32,6 @@ impl PcodeOperation {
         let input2 = components.next().map(|varnode| Varnode::mock(varnode));
         assert!(components.next().is_none());
         PcodeOperation {
-            pcode_index: 0,
             pcode_mnemonic,
             input0,
             input1,
@@ -47,7 +46,6 @@ fn test_pcode_op_simple_mock() {
     assert_eq!(
         PcodeOperation::mock("register_RAX_8 INT_ADD register_RBX_8 register_RCX_8"),
         PcodeOperation {
-            pcode_index: 0,
             pcode_mnemonic: PcodeOpcode::Expression(INT_ADD),
             input0: Varnode::mock("register_RBX_8"),
             input1: Some(Varnode::mock("register_RCX_8")),
@@ -375,7 +373,7 @@ fn test_wrap_in_assign_or_store() {
     let op = PcodeOperation::mock("register_EAX_4 INT_ADD register_EAX_4 const_0xCAFE_4");
     let expr = expr!("EAX:4 + 0xCAFE:4");
     // test Assign
-    let mut expected = Term {
+    let mut expected = IrTerm {
         tid: Tid::mock("instr_0x1234_0"),
         term: def!["EAX:4 = EAX:4 + 0xCAFE:4"].term,
     };
@@ -404,14 +402,14 @@ fn test_into_ir_def() {
     let op = PcodeOperation::mock("ram_0x10_8 INT_ADD register_RAX_8 ram_0x20_8");
     let defs = op.into_ir_def("0x1000");
 
-    let expected_load = Term {
+    let expected_load = IrTerm {
         tid: Tid::mock("instr_0x1000_0_load1"),
         term: Def::Load {
             var: mock_temp_var("$U_load_temp1:8"),
             address: expr!("0x20:8"),
         },
     };
-    let expected_store = Term {
+    let expected_store = IrTerm {
         tid: Tid::mock("instr_0x1000_0"),
         term: Def::Store {
             address: expr!("0x10:8"),
