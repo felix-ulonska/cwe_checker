@@ -7,3 +7,6 @@ rust-version = "1.82"
 
 [dependencies]
 colored = "2.0"
+
+[features]
+docker = []

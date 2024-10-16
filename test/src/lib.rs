@@ -1,4 +1,4 @@
-//! This crate contains acceptance tests using Ghidra as a backend for the *cwe_checker*.
+//! This crate contains acceptance tests for the cwe_checker.
 
 use colored::*;
 use std::process::Command;
@@ -39,7 +39,7 @@ pub struct CweTestCase {
 }
 
 impl CweTestCase {
-    /// Get the file path of the test binary
+    /// Get the full path of the test binary.
     fn get_filepath(&self) -> String {
         let cwd = std::env::current_dir()
             .unwrap()
@@ -72,13 +72,36 @@ impl CweTestCase {
             println!("{} \t {}", filepath, "[SKIPPED]".yellow());
             return Ok(());
         }
-        let output = Command::new("cwe_checker")
-            .arg(&filepath)
-            .arg("--partial")
-            .arg(self.check_name)
-            .arg("--quiet")
-            .output()
-            .unwrap();
+        let output = if cfg!(feature = "docker") {
+            const DOCKER_MEMORY_GIB: u64 = 8;
+            const DOCKER_CPUS: u64 = 1;
+
+            let mut cmd = Command::new("docker");
+            cmd.arg("run");
+            cmd.arg("--rm");
+            cmd.arg("-i");
+            cmd.arg("--memory");
+            cmd.arg(format!("{}g", DOCKER_MEMORY_GIB));
+            cmd.arg(format!("--cpus={}.0", DOCKER_CPUS));
+            cmd.arg("-v");
+            cmd.arg(format!("{}:/target", filepath));
+
+            cmd.arg("cwe_checker");
+            cmd.arg("--partial");
+            cmd.arg(self.check_name);
+            cmd.arg("--quiet");
+            cmd.arg("/target");
+
+            cmd.output().unwrap()
+        } else {
+            Command::new("cwe_checker")
+                .arg(&filepath)
+                .arg("--partial")
+                .arg(self.check_name)
+                .arg("--quiet")
+                .output()
+                .unwrap()
+        };
         if output.status.success() {
             let num_cwes = String::from_utf8(output.stdout)
                 .unwrap()

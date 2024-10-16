@@ -15,7 +15,7 @@ test:
 		echo "Acceptance test LKMs not found. Please see test/lkm_samples/Readme.md for build instructions."; \
 		exit -1; \
 	fi
-	cargo test --locked --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
+	cargo test --locked --no-fail-fast -p acceptance_tests_ghidra -F docker -- --show-output --ignored --test-threads 6
 
 compile_test_files:
 	pushd test/artificial_samples \
