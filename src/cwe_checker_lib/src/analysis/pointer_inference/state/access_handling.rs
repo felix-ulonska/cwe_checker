@@ -89,8 +89,11 @@ impl State {
         self.load_value_from_address(&address, size, global_memory)
     }
 
-    /// Load the value at the given address from the state and return the data read on success.
-    /// If the address contains more than one possible pointer target the results are merged for all possible pointer targets.
+    /// Load the value at the given address from the state and return the data
+    /// read on success.
+    ///
+    /// If the address contains more than one possible pointer target the
+    /// results are merged for all possible pointer targets.
     pub fn load_value_from_address(
         &self,
         address: &Data,
@@ -145,7 +148,8 @@ impl State {
         }
     }
 
-    /// Handle a load instruction by assigning the value loaded from the address given by the `address` expression to `var`.
+    /// Handle a load instruction by assigning the value loaded from the address
+    /// given by the `address` expression to `var`.
     pub fn handle_load(
         &mut self,
         var: &Variable,

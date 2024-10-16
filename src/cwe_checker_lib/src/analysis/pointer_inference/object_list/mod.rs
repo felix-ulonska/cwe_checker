@@ -10,7 +10,8 @@ mod list_manipulation;
 
 /// The list of all known abstract objects.
 ///
-/// Each abstract object is unique in the sense that there is exactly one abstract identifier pointing to it.
+/// Each abstract object is unique in the sense that there is exactly one
+/// abstract identifier pointing to it.
 /// However, an abstract object itself can be marked as non-unique
 /// to indicate that it may represent more than one actual memory object.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -44,10 +45,14 @@ impl AbstractObjectList {
     }
 
     /// Get the value at a given address.
+    ///
     /// If the address is not unique, merge the value of all possible addresses.
     ///
-    /// This function only checks for relative targets and not for absolute addresses.
-    /// If the address does not contain any relative targets an empty value is returned.
+    /// This function only checks for relative targets and not for absolute
+    /// addresses.
+    ///
+    /// If the address does not contain any relative targets an empty value is
+    /// returned.
     pub fn get_value(&self, address: &Data, size: ByteSize) -> Data {
         let mut merged_value = Data::new_empty(size);
         for (id, offset) in address.get_relative_values() {
