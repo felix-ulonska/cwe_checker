@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 const VERSION: &str = "0.1";
 
 /// The module name and version
-pub static CWE_MODULE: crate::CweModule = crate::CweModule {
+pub static CWE_MODULE: CweModule = CweModule {
     name: "CWE676",
     version: VERSION,
     run: check_cwe,
@@ -108,6 +108,7 @@ pub fn resolve_symbols<'a>(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let mut logs = Vec::new();
 

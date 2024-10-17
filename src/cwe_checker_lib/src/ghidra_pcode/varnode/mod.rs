@@ -6,7 +6,7 @@ use crate::intermediate_representation::{
     Arg as IrArg, BitvectorExtended, ByteSize, Def as IrDef, Expression as IrExpression,
     Variable as IrVariable,
 };
-use crate::Bitvector;
+use crate::prelude::*;
 
 use std::convert::From;
 use std::fmt::{self, Display};

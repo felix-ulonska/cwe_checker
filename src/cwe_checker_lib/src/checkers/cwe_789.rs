@@ -132,6 +132,7 @@ fn generate_cwe_warning(allocation: &Tid, is_stack_allocation: bool) -> CweWarni
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let mut logs = Vec::new();
     let project = analysis_results.project;

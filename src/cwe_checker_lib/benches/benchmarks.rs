@@ -249,14 +249,12 @@ mod checkers {
     use super::*;
     use cwe_checker_lib::checkers::*;
 
-    fn helper_bench_checker<T>(
-        checker: &cwe_checker_lib::CweModule,
-        group: BenchmarkGroup<T>,
-        is_lkm: bool,
-    ) where
+    fn helper_bench_checker<T>(checker: &CweModule, group: BenchmarkGroup<T>, is_lkm: bool)
+    where
         T: Measurement,
     {
         let config = get_config();
+        let debug_settings = get_debug_settings();
         let bench_with_input_loop =
             |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<T>| {
                 for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
@@ -285,7 +283,11 @@ mod checkers {
                         &analysis_results,
                         |b, analysis_results| {
                             b.iter_with_large_drop(|| {
-                                (checker.run)(analysis_results, &config[&checker.name])
+                                (checker.run)(
+                                    analysis_results,
+                                    &config[&checker.name],
+                                    &debug_settings,
+                                )
                             })
                         },
                     );

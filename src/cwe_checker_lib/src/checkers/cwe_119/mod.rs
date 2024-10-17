@@ -79,7 +79,6 @@ use super::prelude::*;
 use crate::analysis::pointer_inference::Data;
 use crate::prelude::*;
 use crate::utils::log::LogThread;
-use crate::CweModule;
 
 mod context;
 use context::Context;
@@ -102,6 +101,7 @@ pub static CWE_MODULE: CweModule = CweModule {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _config: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let log_thread = LogThread::spawn(LogThread::collect_and_deduplicate);
 

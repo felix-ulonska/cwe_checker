@@ -109,6 +109,7 @@ use state::State;
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     config_json: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let config: Config = serde_json::from_value(config_json.clone()).unwrap();
     let deallocation_symbols = config.deallocation_symbols.iter().cloned().collect();

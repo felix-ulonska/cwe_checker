@@ -32,7 +32,6 @@ use crate::intermediate_representation::*;
 use crate::prelude::*;
 use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
 use crate::utils::symbol_utils::find_symbol;
-use crate::CweModule;
 
 /// The module name and version
 pub static CWE_MODULE: CweModule = CweModule {
@@ -117,6 +116,7 @@ fn generate_cwe_warning(sub: &Term<Sub>, callsite: &Tid) -> CweWarning {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let graph = analysis_results.control_flow_graph;

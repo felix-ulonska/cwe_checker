@@ -110,6 +110,7 @@ fn generate_cwe_warning(jmp: &Term<Jmp>, extern_symbol: &ExternSymbol) -> CweWar
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();

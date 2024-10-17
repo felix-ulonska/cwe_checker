@@ -10,6 +10,7 @@ use anyhow::Error;
 use clap::{Parser, ValueEnum};
 
 use cwe_checker_lib::analysis::graph;
+use cwe_checker_lib::checkers::CweModule;
 use cwe_checker_lib::pipeline::{disassemble_binary, AnalysisResults};
 use cwe_checker_lib::utils::binary::BareMetalConfig;
 use cwe_checker_lib::utils::debug;
@@ -224,7 +225,7 @@ fn check_file_existence(file_path: &str) -> Result<String, String> {
 /// Run the cwe_checker with Ghidra as its backend.
 fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     let debug_settings = args.into();
-    let mut modules = cwe_checker_lib::get_modules();
+    let mut modules = cwe_checker_lib::checkers::get_modules();
     if args.module_versions {
         // Only print the module versions and then quit.
         println!("[cwe_checker] module_versions:");
@@ -346,7 +347,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     // Execute the modules and collect their logs and CWE-warnings.
     let mut all_cwe_warnings = Vec::new();
     for module in modules {
-        let cwe_warnings = (module.run)(&analysis_results, &config[&module.name]);
+        let cwe_warnings = (module.run)(&analysis_results, &config[&module.name], &debug_settings);
 
         all_cwe_warnings.push(cwe_warnings);
     }
@@ -387,10 +388,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
 /// Only keep the modules specified by the `--partial` parameter in the `modules` list.
 /// The parameter is a comma-separated list of module names, e.g. 'CWE332,CWE476,CWE782'.
-fn filter_modules_for_partial_run(
-    modules: &mut Vec<&cwe_checker_lib::CweModule>,
-    partial_param: &str,
-) {
+fn filter_modules_for_partial_run(modules: &mut Vec<&CweModule>, partial_param: &str) {
     let module_names: HashSet<&str> = partial_param.split(',').collect();
     *modules = module_names
         .into_iter()

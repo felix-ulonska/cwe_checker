@@ -31,7 +31,6 @@ use crate::analysis::vsa_results::{HasVsaResult, VsaResult};
 use crate::intermediate_representation::*;
 use crate::prelude::*;
 use crate::utils::symbol_utils;
-use crate::CweModule;
 
 use petgraph::visit::EdgeRef;
 
@@ -66,6 +65,7 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone())

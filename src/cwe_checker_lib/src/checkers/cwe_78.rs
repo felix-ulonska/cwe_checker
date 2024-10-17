@@ -70,6 +70,7 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let (cwe_sender, cwe_receiver): (

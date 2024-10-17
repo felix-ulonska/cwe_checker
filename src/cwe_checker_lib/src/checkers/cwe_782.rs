@@ -28,7 +28,7 @@ use crate::{
 const VERSION: &str = "0.1";
 
 /// The module name and version
-pub static CWE_MODULE: crate::CweModule = crate::CweModule {
+pub static CWE_MODULE: CweModule = CweModule {
     name: "CWE782",
     version: VERSION,
     run: check_cwe,
@@ -68,6 +68,7 @@ pub fn generate_cwe_warning(calls: &[(&str, &Tid, &str)]) -> Vec<CweWarning> {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let prog: &Term<Program> = &project.program;

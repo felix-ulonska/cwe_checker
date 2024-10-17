@@ -78,6 +78,7 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let pi_result = analysis_results.pointer_inference.unwrap();

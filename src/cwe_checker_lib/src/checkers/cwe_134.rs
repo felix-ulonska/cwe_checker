@@ -40,7 +40,6 @@ use crate::intermediate_representation::Jmp;
 use crate::intermediate_representation::RuntimeMemoryImage;
 use crate::prelude::*;
 use crate::utils::log::CweWarning;
-use crate::CweModule;
 
 /// The module name and version
 pub static CWE_MODULE: CweModule = CweModule {
@@ -77,6 +76,7 @@ pub enum StringLocation {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let mut logs = Vec::new();
 

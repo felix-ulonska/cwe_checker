@@ -30,6 +30,7 @@ use super::interprocedural_fixpoint_generic::NodeValue;
 use crate::abstract_domain::{AbstractIdentifier, DataDomain, IntervalDomain, SizedDomain};
 use crate::analysis::forward_interprocedural_fixpoint::Context as _;
 use crate::analysis::graph::{Graph, Node};
+use crate::checkers::prelude::*;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
 use crate::utils::log::*;
@@ -53,7 +54,7 @@ const VERSION: &str = "0.2";
 const POINTER_RECURSION_DEPTH_LIMIT: u64 = 2;
 
 /// The name and version number of the "Memory" CWE check.
-pub static CWE_MODULE: crate::CweModule = crate::CweModule {
+pub static CWE_MODULE: CweModule = CweModule {
     name: "Memory",
     version: VERSION,
     run: extract_pi_analysis_results,
@@ -423,6 +424,7 @@ impl<'a> PointerInference<'a> {
 pub fn extract_pi_analysis_results(
     analysis_results: &AnalysisResults,
     _analysis_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let pi_anaylsis = analysis_results.pointer_inference.unwrap();
 

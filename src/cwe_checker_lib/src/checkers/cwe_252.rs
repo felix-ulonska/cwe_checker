@@ -68,7 +68,6 @@ use crate::intermediate_representation::{ExternSymbol, Jmp, Project, Term};
 use crate::pipeline::AnalysisResults;
 use crate::prelude::*;
 use crate::utils::symbol_utils;
-use crate::CweModule;
 
 use petgraph::visit::EdgeRef;
 
@@ -273,6 +272,7 @@ fn generate_cwe_warning(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let config: Config =
         serde_json::from_value(cwe_params.clone()).expect("CWE252: invalid configuration");

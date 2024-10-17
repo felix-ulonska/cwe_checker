@@ -110,6 +110,7 @@ fn generate_cwe_warning(sub: &Term<Sub>, jmp: &Term<Jmp>, permission_const: u64)
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let mut cwes = Vec::new();

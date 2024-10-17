@@ -26,7 +26,6 @@ use super::prelude::*;
 
 use crate::prelude::*;
 use crate::utils::symbol_utils::find_symbol;
-use crate::CweModule;
 
 /// The module name and version
 pub static CWE_MODULE: CweModule = CweModule {
@@ -59,6 +58,7 @@ fn generate_cwe_warning(secure_initializer_func: &str, rand_func: &str) -> CweWa
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
+    _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
