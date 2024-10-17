@@ -167,6 +167,13 @@ impl<T> WithLogs<T> {
     pub fn add_logs(&mut self, mut logs: Vec<LogMessage>) {
         self.logs.append(&mut logs)
     }
+
+    /// Moves the logs of this object to `other_logs`.
+    pub fn move_logs_to(self, other_logs: &mut Vec<LogMessage>) -> Self {
+        let Self { object, logs } = self;
+        other_logs.extend(logs);
+        Self::wrap(object)
+    }
 }
 
 /// A generic log message.
