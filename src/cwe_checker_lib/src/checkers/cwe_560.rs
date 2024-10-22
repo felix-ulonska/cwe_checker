@@ -137,5 +137,10 @@ pub fn check_cwe(
         }
     }
 
-    WithLogs::new(cwes, log_messages)
+    WithLogs::new(
+        cwes.deduplicate_first_address()
+            .move_logs_to(&mut log_messages)
+            .into_object(),
+        log_messages,
+    )
 }

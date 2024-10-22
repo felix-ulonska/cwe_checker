@@ -103,19 +103,37 @@ pub fn resolve_symbols<'a>(
         .collect()
 }
 
-/// Iterate through all function calls inside the program and flag calls to those functions
-/// that are marked as unsafe via the configuration file.
+/// Iterate through all function calls inside the program and flag calls to
+/// those functions that are marked as unsafe via the configuration file.
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
 ) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
+
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
-    let prog: &Term<Program> = &project.program;
-    let subfunctions = &prog.term.subs;
-    let external_symbols: &BTreeMap<Tid, ExternSymbol> = &prog.term.extern_symbols;
-    let dangerous_symbols = resolve_symbols(external_symbols, &config.symbols);
-    let dangerous_calls = get_calls(subfunctions, &dangerous_symbols);
+    let prog = &project.program;
+    let functions = &prog.term.subs;
+    let external_symbols = &prog.term.extern_symbols;
 
-    WithLogs::wrap(generate_cwe_warnings(dangerous_calls))
+    let dangerous_ext_symbols = filter_dangerous_ext_symbols(external_symbols, &config.symbols);
+    let mut msg = format!(
+        "{}: Program imports the following dangerous symbols: ",
+        CWE_MODULE.name
+    );
+    for (fn_tid, fn_name) in dangerous_ext_symbols.iter() {
+        msg.push_str(&format!("{}({}),", fn_tid, fn_name));
+    }
+    logs.push(LogMessage::new_info(msg));
+
+    let dangerous_ext_calls = get_calls(functions, &dangerous_ext_symbols);
+
+    WithLogs::new(
+        generate_cwe_warnings(dangerous_ext_calls)
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }

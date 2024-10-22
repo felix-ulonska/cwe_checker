@@ -177,5 +177,5 @@ pub fn check_cwe(
         }
     }
 
-    WithLogs::wrap(cwe_warnings)
+    cwe_warnings.deduplicate_first_address()
 }

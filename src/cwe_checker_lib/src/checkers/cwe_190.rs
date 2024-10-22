@@ -140,12 +140,16 @@ fn contains_only_non_top_absolute_value(data_domain: &DataDomain<IntervalDomain>
 }
 
 /// Run the CWE check.
+///
 /// For each call to one of the symbols configured in config.json
-/// we check whether the block containing the call also contains a multiplication instruction.
+/// we check whether the block containing the call also contains a
+/// multiplication instruction.
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
 ) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
+
     let project = analysis_results.project;
     let pointer_inference_results = analysis_results.pointer_inference.unwrap();
 
@@ -177,5 +181,11 @@ pub fn check_cwe(
         }
     }
 
-    WithLogs::wrap(cwe_warnings)
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }

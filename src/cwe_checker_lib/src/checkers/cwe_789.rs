@@ -133,31 +133,49 @@ pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
 ) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let mut cwe_warnings = Vec::new();
     let pir = analysis_results.pointer_inference.unwrap();
     let symbol_map = get_symbol_map(project, &config.symbols);
 
-    'functions: for sub in project.program.term.subs.values() {
+    'functions: for f in project.program.functions() {
         // Function call allocation case
-        for (_, jump, symbol) in get_callsites(sub, &symbol_map) {
-            if let Some(interval) = match symbol.name.as_str() {
+        for (_, jump, symbol) in get_callsites(f, &symbol_map) {
+            if let Some(alloc_size_interval) = match symbol.name.as_str() {
                 "calloc" => multiply_args_for_calloc(
                     pir,
                     &jump.tid,
                     vec![&symbol.parameters[0], &symbol.parameters[1]],
                 ),
                 "realloc" => pir.eval_parameter_arg_at_call(&jump.tid, &symbol.parameters[1]),
-                _ => pir.eval_parameter_arg_at_call(&jump.tid, &symbol.parameters[0]),
+                "malloc" => pir.eval_parameter_arg_at_call(&jump.tid, &symbol.parameters[0]),
+                name => {
+                    logs.push(LogMessage::new_info(format!(
+                        "{}: Allocation size computation for calls to {} is not supported (at {}: {}).",
+                        CWE_MODULE.name, name, jump.tid, jump.term
+                    )));
+                    None
+                }
             } {
-                if exceeds_threshold_on_call(interval, config.heap_threshold) {
+                logs.push(LogMessage::new_debug(format!(
+                    "{}: Allocation size interval is {:?} for call to {} at {}: {}.",
+                    CWE_MODULE.name, alloc_size_interval, &symbol.name, jump.tid, jump.term
+                )));
+
+                if exceeds_threshold_on_call(alloc_size_interval, config.heap_threshold) {
                     cwe_warnings.push(generate_cwe_warning(&jump.tid, false));
                 }
+            } else {
+                logs.push(LogMessage::new_debug(format!(
+                    "{}: Unable to compute allocation size of call to {} at {}: {}.",
+                    CWE_MODULE.name, &symbol.name, jump.tid, jump.term
+                )));
             }
         }
         // Stack allocation case
-        for blk in &sub.term.blocks {
+        for blk in &f.term.blocks {
             let assign_on_sp: Vec<&Term<Def>> = blk
                 .term
                 .defs
@@ -174,7 +192,12 @@ pub fn check_cwe(
             }
         }
     }
-    cwe_warnings.dedup();
 
-    WithLogs::wrap(cwe_warnings)
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }

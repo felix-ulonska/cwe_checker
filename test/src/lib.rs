@@ -38,24 +38,34 @@ pub struct CweTestCase {
     is_lkm: bool,
 }
 
-impl CweTestCase {
-    /// Get the full path of the test binary.
-    fn get_filepath(&self) -> String {
-        let cwd = std::env::current_dir()
+mod helpers {
+    pub fn cwd() -> String {
+        std::env::current_dir()
             .unwrap()
             .into_os_string()
             .into_string()
-            .unwrap();
+            .unwrap()
+    }
+}
 
+impl CweTestCase {
+    /// Get the full path of the test binary.
+    fn get_filepath(&self) -> String {
         if self.is_lkm {
             format!(
                 "{}/lkm_samples/build/{}_{}_{}.ko",
-                cwd, self.cwe, self.architecture, self.compiler
+                helpers::cwd(),
+                self.cwe,
+                self.architecture,
+                self.compiler
             )
         } else {
             format!(
                 "{}/artificial_samples/build/{}_{}_{}.out",
-                cwd, self.cwe, self.architecture, self.compiler
+                helpers::cwd(),
+                self.cwe,
+                self.architecture,
+                self.compiler
             )
         }
     }
@@ -84,13 +94,14 @@ impl CweTestCase {
             cmd.arg(format!("{}g", DOCKER_MEMORY_GIB));
             cmd.arg(format!("--cpus={}.0", DOCKER_CPUS));
             cmd.arg("-v");
-            cmd.arg(format!("{}:/target", filepath));
+            cmd.arg(format!("{}:/a/target", filepath));
 
             cmd.arg("cwe_checker");
             cmd.arg("--partial");
             cmd.arg(self.check_name);
             cmd.arg("--quiet");
-            cmd.arg("/target");
+            // Placing target at `/` makes Ghidra crash on PE files...
+            cmd.arg("/a/target");
 
             cmd.output().unwrap()
         } else {
@@ -242,31 +253,122 @@ pub fn print_errors(error_log: Vec<(String, String)>) {
 mod tests {
     use super::*;
 
+    macro_rules! run_tests {
+        // Not differentiating between user and lkm expected occurrences.
+        (
+            $tests:expr,
+            $default_num:literal,
+            $cwe:literal$(,)?
+            $((
+                    $arch:literal,
+                    $comp:literal,
+                    $num: literal$(,)?
+            )),*$(,)?
+        ) => {
+            run_tests!(
+                $tests,
+                user: $default_num,
+                lkm: $default_num,
+                $cwe,
+                $((
+                    $arch,
+                    $comp,
+                    user: $num,
+                    lkm: $num,
+                ),)*
+            );
+        };
+        (
+            $tests:expr,
+            user: $default_num_user:literal,
+            lkm: $default_num_lkm:literal,
+            $cwe:literal,
+            $((
+                    $arch:literal,
+                    $comp:literal,
+                    user: $num_user:literal,
+                    lkm: $num_lkm: literal$(,)?
+            )),*$(,)?
+        ) => {
+            let mut error_log = Vec::new();
+
+            for test_case in $tests {
+                let num_expected_occurences =
+                    match (test_case.architecture, test_case.compiler) {
+                        $(
+                            ($arch, $comp) => {
+                                if test_case.is_lkm {
+                                    $num_lkm
+                                } else {
+                                    $num_user
+                                }
+                            },
+                        )*
+                        _ => {
+                            if test_case.is_lkm {
+                                $default_num_lkm
+                            } else {
+                                $default_num_user
+                            }
+                        }
+                };
+
+                if let Err(error) = test_case.run_test($cwe, num_expected_occurences) {
+                    error_log.push((test_case.get_filepath(), error));
+                }
+            }
+
+            if !error_log.is_empty() {
+                print_errors(error_log);
+                panic!();
+            }
+        };
+    }
+
     #[test]
     #[ignore]
     fn bare_metal() {
-        let filepath = "bare_metal_samples/test_sample.bin";
-        let output = Command::new("cwe_checker")
-            .arg(filepath)
+        let bin_path = format!("/{}/bare_metal_samples/test_sample.bin", helpers::cwd());
+        let config_path = format!("/{}/../bare_metal/stm32f407vg.json", helpers::cwd());
+
+        let mut cmd = if cfg!(feature = "docker") {
+            let mut cmd = Command::new("docker");
+            cmd.arg("run");
+            cmd.arg("--rm");
+            cmd.arg("-i");
+            cmd.arg("-v");
+            cmd.arg(format!("{}:{}", &bin_path, &bin_path));
+            cmd.arg("-v");
+            cmd.arg(format!("{}:{}", &config_path, &config_path));
+            cmd.arg("cwe_checker");
+            cmd
+        } else {
+            Command::new("cwe_checker")
+        };
+
+        let output = cmd
+            .arg(&bin_path)
             .arg("--partial")
             .arg("Memory")
             .arg("--quiet")
             .arg("--bare-metal-config")
-            .arg("../bare_metal/stm32f407vg.json")
+            .arg(&config_path)
             .output()
             .unwrap();
+
         let num_cwes = String::from_utf8(output.stdout)
             .unwrap()
             .lines()
             .filter(|line| line.starts_with("[CWE476]"))
             .count();
+
         // We check the number of found CWEs only approximately
         // so that this check does not fail on minor result changes.
         // The results are not yet reliable enough for a stricter check.
         if num_cwes >= 1 && num_cwes <= 10 {
-            println!("{} \t {}", filepath, "[OK]".green());
+            println!("{} \t {}", bin_path, "[OK]".green());
         } else {
-            println!("{} \t {}", filepath, "[FAILED]".red());
+            println!("{} \t {}", bin_path, "[FAILED]".red());
             panic!(
                 "Expected occurrences: Between 1 and 10. Found: {}",
                 num_cwes
@@ -277,524 +379,344 @@ mod tests {
     #[test]
     #[ignore]
     fn cwe_78() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_78", "CWE78");
 
-        // Ghidra does not recognize all extern function calls in the disassembly step for MIPS.
-        // Needs own control flow graph analysis to be fixed.
-        mark_architecture_skipped(&mut tests, "mips64");
-        mark_architecture_skipped(&mut tests, "mips64el");
-        mark_architecture_skipped(&mut tests, "mips");
-        mark_architecture_skipped(&mut tests, "mipsel");
+        // Functions called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // TODO: Investigate.
+        mark_architecture_skipped(&mut tests, "ppc");
 
-        mark_skipped(&mut tests, "x86", "gcc");
-        mark_skipped(&mut tests, "x86", "clang"); // Return value detection insufficient for x86
-        mark_skipped(&mut tests, "arm", "clang"); // Loss of stack pointer position
-        mark_skipped(&mut tests, "aarch64", "clang"); // Loss of stack pointer position
+        // Return value detection insufficient for x86.
+        mark_architecture_skipped(&mut tests, "x86");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // Pointer Inference returns insufficient results for PE
+        // Pointer Inference returns insufficient results for PE
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE78]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE78]");
     }
 
     #[test]
     #[ignore]
     fn cwe_119() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_119", "CWE119");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // TODO: Weird mixing of 64 and 32 bits.
+        mark_architecture_skipped(&mut tests, "ppc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // TODO: Some stuff was certainly broken by Pcode refactoring!
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_architecture_skipped(&mut tests, "ppc64le");
+        mark_architecture_skipped(&mut tests, "x86");
+        mark_architecture_skipped(&mut tests, "x64");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE119]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE119]");
     }
 
     #[test]
     #[ignore]
     fn cwe_125() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_119", "CWE119");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // TODO: Weird mixing of 64 and 32 bits.
+        mark_architecture_skipped(&mut tests, "ppc");
 
-        mark_skipped(&mut tests, "ppc", "gcc"); // Needs tracking of linear dependencies between register values.
+        // TODO: Some stuff was certainly broken by Pcode refactoring!
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_architecture_skipped(&mut tests, "ppc64le");
+        mark_architecture_skipped(&mut tests, "x86");
+        mark_architecture_skipped(&mut tests, "x64");
 
-        mark_skipped(&mut tests, "x86", "gcc"); // Unrelated third CWE hit in `__libc_csu_init`
-        mark_skipped(&mut tests, "x86", "clang"); // Unrelated third CWE hit in `__libc_csu_init`
-
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
-
-        for test_case in tests {
-            let num_expected_occurences = 2;
-            if let Err(error) = test_case.run_test("[CWE125]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 2, "[CWE125]");
     }
 
     #[test]
     #[ignore]
     fn cwe_134() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_134", "CWE134");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // TODO: Check reason for failure!
-        mark_skipped(&mut tests, "ppc64le", "clang"); // TODO: Check reason for failure!
+        // TODO: No PI result.
+        mark_skipped(&mut tests, "x86", "gcc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // TODO: Investigate.
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE134]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE134]");
     }
 
     #[test]
     #[ignore]
     fn cwe_190() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_190", "CWE190");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // Functions called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // TODO: No PI result.
+        mark_skipped(&mut tests, "x86", "gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 3;
-            if let Err(error) = test_case.run_test("[CWE190]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(
+            tests,
+            3,
+            "[CWE190]",
+            // Multiplications get compiled to shifts.
+            // TODO: Change test source code.
+            ("x64", "gcc", 1),
+            ("x64", "clang", 1),
+            ("x64", "mingw32-gcc", 1),
+            ("x86", "clang", 1),
+            ("x86", "mingw32-gcc", 1),
+        );
     }
 
     #[test]
     #[ignore]
     fn cwe_215() {
-        let mut error_log = Vec::new();
         // We use the test binaries of another check here.
         let mut tests = linux_test_cases("cwe_476", "CWE215");
         tests.extend(lkm_test_cases("cwe_476", "CWE215"));
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE215]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE215]");
     }
 
     #[test]
     #[ignore]
     fn cwe_243() {
-        let mut error_log = Vec::new();
-        let mut tests = linux_test_cases("cwe_243", "CWE243");
+        let tests = linux_test_cases("cwe_243", "CWE243");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
-
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE243]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE243]");
     }
 
     #[test]
     #[ignore]
     fn cwe_252() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_252", "CWE252");
-        let num_expected_occurences = 9;
-        let num_expected_occurences_lkm = 1;
 
+        // TODO: The Pcode refactoring has certainly broken some stuff here!
+        mark_architecture_skipped(&mut tests, "ppc");
         mark_architecture_skipped(&mut tests, "ppc64");
         mark_architecture_skipped(&mut tests, "ppc64le");
-        mark_skipped(&mut tests, "mips", "gcc");
-        mark_skipped(&mut tests, "mips64", "clang");
-        mark_skipped(&mut tests, "mips64el", "clang");
+        mark_architecture_skipped(&mut tests, "riscv64");
+        mark_architecture_skipped(&mut tests, "x86");
+        mark_architecture_skipped(&mut tests, "x64");
+        mark_architecture_skipped(&mut tests, "mips64");
+        mark_architecture_skipped(&mut tests, "mips64el");
         mark_skipped(&mut tests, "mipsel", "gcc");
-        mark_skipped(&mut tests, "x86", "gcc");
-        mark_skipped(&mut tests, "x86", "mingw32-gcc");
+        mark_skipped(&mut tests, "mips", "gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = if test_case.is_lkm {
-                num_expected_occurences_lkm
-            } else {
-                num_expected_occurences
-            };
-
-            if let Err(error) = test_case.run_test("[CWE252]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(
+            tests,
+            user: 9,
+            lkm: 1,
+            "[CWE252]",
+        );
     }
 
     #[test]
     #[ignore]
     fn cwe_332() {
-        let mut error_log = Vec::new();
-        let mut tests = all_test_cases("cwe_332", "CWE332");
+        let tests = all_test_cases("cwe_332", "CWE332");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
-
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
-
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE332]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE332]");
     }
 
     #[test]
     #[ignore]
     fn cwe_337() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_337", "CWE337");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // Functions called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_architecture_skipped(&mut tests, "x86"); // x86 uses the stack for return values/arguments, the check is only register based.
+        // TODO: Investigate.
+        mark_architecture_skipped(&mut tests, "x86");
+        mark_skipped(&mut tests, "x64", "mingw32-gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE337]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE337]");
     }
 
     #[test]
     #[ignore]
     fn cwe_367() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_367", "CWE367");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // Functions called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_skipped(&mut tests, "x86", "mingw32-gcc"); // Symbol names are prefixed with an underscore in the Ghidra output.
+        // TODO: Investigate.
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE367]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE367]");
     }
 
     #[test]
     #[ignore]
     fn cwe_415() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_415", "CWE416");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // Functions called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_skipped(&mut tests, "x86", "mingw32-gcc"); // TODO: Check reason for failure! Probably same as above?
+        // TODO: Investigate.
+        mark_skipped(&mut tests, "ppc", "gcc");
+        mark_skipped(&mut tests, "x86", "gcc");
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 2;
-            if let Err(error) = test_case.run_test("[CWE415]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 2, "[CWE415]");
     }
 
     #[test]
     #[ignore]
     fn cwe_416() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_416", "CWE416");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // TODO: Investigate.
+        mark_skipped(&mut tests, "ppc", "gcc");
+        mark_skipped(&mut tests, "x86", "gcc");
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        mark_skipped(&mut tests, "x86", "mingw32-gcc"); // TODO: Check reason for failure! Probably same as above?
-        mark_skipped(&mut tests, "x64", "mingw32-gcc"); // We find an additional false positive in unrelated code.
-
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE416]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE416]");
     }
 
     #[test]
     #[ignore]
     fn cwe_426() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_426", "CWE426");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // Functions called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // Multiple entry points into vulnerable function.
+        mark_skipped(&mut tests, "ppc64le", "clang");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE426]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        // Ghidra dies.
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
+
+        run_tests!(tests, 1, "[CWE426]");
     }
 
     #[test]
     #[ignore]
     fn cwe_467() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_467", "CWE467");
 
         // Only one instance is found.
-        // Other instance cannot be found, since the constant is not defined in the basic block of the call instruction.
+        // Other instance cannot be found, since the constant is not defined in
+        // the basic block of the call instruction.
         mark_skipped_user(&mut tests, "aarch64", "clang");
         mark_skipped(&mut tests, "arm", "clang");
-        mark_skipped(&mut tests, "mips", "clang");
-        mark_skipped(&mut tests, "mipsel", "clang");
+        mark_skipped(&mut tests, "riscv64", "clang");
         mark_skipped(&mut tests, "mips64", "clang");
         mark_skipped(&mut tests, "mips64el", "clang");
+        mark_skipped(&mut tests, "mips", "clang");
+        mark_skipped(&mut tests, "mipsel", "clang");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // `strncmp` called via unrecognized stub.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // TODO: Looks like it should work but it doesn't.
+        mark_skipped(&mut tests, "ppc", "gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 2;
-            if let Err(error) = test_case.run_test("[CWE467]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        // TODO: Investigate.
+        mark_skipped(&mut tests, "x64", "mingw32-gcc");
+
+        run_tests!(tests, 2, "[CWE467]");
     }
 
     #[test]
     #[ignore]
     fn cwe_476() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_476", "CWE476");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // `umask` called via unrecognized thunk.
+        // Note: Multiple entry points are not an issue here since deduplication
+        //   happens via addresses.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // No PI result after first block of function.
+        mark_skipped(&mut tests, "x86", "gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE476]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        // TODO: Investigate.
+        mark_skipped(&mut tests, "x64", "mingw32-gcc");
+
+        run_tests!(tests, 1, "[CWE476]");
     }
 
     #[test]
     #[ignore]
     fn cwe_560() {
-        let mut error_log = Vec::new();
         let mut tests = linux_test_cases("cwe_560", "CWE560");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // `umask` called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE560]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE560]");
     }
 
     #[test]
     #[ignore]
     fn cwe_676() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_676", "CWE676");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // TODO: Investigate.
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        for test_case in tests {
-            if test_case.architecture == "aarch64" && test_case.compiler == "clang" {
-                // For some reason clang adds an extra `memcpy` here, which is also in the list of dangerous functions.
-                let num_expected_occurences = 2;
-                if let Err(error) = test_case.run_test("[CWE676]", num_expected_occurences) {
-                    error_log.push((test_case.get_filepath(), error));
-                }
-            } else {
-                let num_expected_occurences = 1;
-                if let Err(error) = test_case.run_test("[CWE676]", num_expected_occurences) {
-                    error_log.push((test_case.get_filepath(), error));
-                }
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 1, "[CWE676]", ("aarch64", "clang", 2));
     }
 
     #[test]
     #[ignore]
     fn cwe_782() {
-        let mut error_log = Vec::new();
         let tests = new_test_cases("cwe_782", &["x64"], COMPILERS, "CWE782", false);
-        for test_case in tests {
-            let num_expected_occurences = 1;
-            if let Err(error) = test_case.run_test("[CWE782]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+
+        run_tests!(tests, 1, "[CWE782]");
     }
 
     #[test]
     #[ignore]
     fn cwe_787() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_119", "CWE119");
 
-        mark_skipped(&mut tests, "arm", "gcc"); // Needs tracking of linear dependencies between register values.
-        mark_skipped(&mut tests, "mips64", "gcc"); // Needs tracking of linear dependencies between register values.
-        mark_skipped(&mut tests, "mips64el", "gcc"); // Needs tracking of linear dependencies between register values.
+        mark_skipped(&mut tests, "arm", "gcc");
+        mark_skipped(&mut tests, "mips64", "gcc");
+        mark_skipped(&mut tests, "mips64el", "gcc");
+        mark_architecture_skipped(&mut tests, "mips");
+        mark_architecture_skipped(&mut tests, "mipsel");
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_architecture_skipped(&mut tests, "ppc64le");
+        // Weird mixing of 32 and 64 bit.
+        mark_skipped(&mut tests, "ppc", "gcc");
+        mark_skipped(&mut tests, "x86", "gcc");
+        mark_architecture_skipped(&mut tests, "riscv64");
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        mark_architecture_skipped(&mut tests, "mips"); // Needs tracking of linear dependencies between register values.
-        mark_architecture_skipped(&mut tests, "mipsel"); // Needs tracking of linear dependencies between register values.
-
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
-
-        mark_skipped(&mut tests, "ppc", "gcc"); // Needs tracking of linear dependencies between register values.
-
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
-
-        for test_case in tests {
-            let num_expected_occurences = 2;
-            if let Err(error) = test_case.run_test("[CWE787]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-            panic!();
-        }
+        run_tests!(tests, 2, "[CWE787]");
     }
 
     #[test]
     #[ignore]
     fn cwe_789() {
-        let mut error_log = Vec::new();
         let mut tests = all_test_cases("cwe_789", "CWE789");
 
-        mark_architecture_skipped(&mut tests, "ppc64"); // Ghidra generates mangled function names here for some reason.
-        mark_architecture_skipped(&mut tests, "ppc64le"); // Ghidra generates mangled function names here for some reason.
+        // `malloc` called via unrecognized thunk.
+        mark_architecture_skipped(&mut tests, "ppc64");
+        mark_skipped(&mut tests, "ppc64le", "gcc");
 
-        mark_compiler_skipped(&mut tests, "mingw32-gcc"); // TODO: Check reason for failure!
+        // TODO: Investigate.
+        mark_compiler_skipped(&mut tests, "mingw32-gcc");
 
-        for test_case in tests {
-            let num_expected_occurences = 2;
-            if let Err(error) = test_case.run_test("[CWE789]", num_expected_occurences) {
-                error_log.push((test_case.get_filepath(), error));
-            }
-        }
-        if !error_log.is_empty() {
-            print_errors(error_log);
-        }
+        // No PI result after first block of function.
+        mark_skipped(&mut tests, "x86", "gcc");
+
+        run_tests!(tests, 2, "[CWE789]");
     }
 }

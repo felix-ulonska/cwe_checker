@@ -150,7 +150,16 @@ pub fn check_cwe(
         logs.insert(log_msg);
     }
 
-    WithLogs::new(cwes.into_iter().collect(), logs.into_iter().collect())
+    let cwe_warnings: Vec<CweWarning> = cwes.into_iter().collect();
+    let mut logs: Vec<LogMessage> = logs.into_iter().collect();
+
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }
 
 /// A struct for collecting CWE warnings together with context information

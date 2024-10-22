@@ -72,7 +72,7 @@ use crate::CweModule;
 
 use petgraph::visit::EdgeRef;
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 mod context;
@@ -228,16 +228,12 @@ impl<'a, 'b: 'a> CweAnalysis<'a, 'b> {
             isolated_returns.analyze(&ta_comp);
         }
 
-        WithLogs::wrap(
-            self.cwe_collector
-                .try_iter()
-                // FIXME: It would be nice to preerve all reasons during
-                // deduplication.
-                .map(|msg| (msg.tids.clone(), msg))
-                .collect::<BTreeMap<_, _>>()
-                .into_values()
-                .collect(),
-        )
+        self.cwe_collector
+            .try_iter()
+            .collect::<Vec<_>>()
+            // FIXME: It would be nice to preserve all reasons during
+            // deduplication.
+            .deduplicate_addresses()
     }
 }
 

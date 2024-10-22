@@ -116,13 +116,13 @@ pub fn check_cwe(
     let mut cwe_warnings = Vec::new();
 
     let symbol_map = get_symbol_map(project, &config.symbols);
-    for sub in project.program.term.subs.values() {
-        for (block, jmp, symbol) in get_callsites(sub, &symbol_map) {
+    for f in project.program.functions() {
+        for (block, jmp, symbol) in get_callsites(f, &symbol_map) {
             if check_for_pointer_sized_arg(project, block, symbol) {
                 cwe_warnings.push(generate_cwe_warning(jmp, symbol))
             }
         }
     }
 
-    WithLogs::wrap(cwe_warnings)
+    cwe_warnings.deduplicate_first_address()
 }

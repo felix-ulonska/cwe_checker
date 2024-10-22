@@ -78,6 +78,8 @@ pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
 ) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
+
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let format_string_symbols =
@@ -104,13 +106,24 @@ pub fn check_cwe(
                         StringLocation::GlobalWriteable | StringLocation::NonGlobal
                     ) {
                         cwe_warnings.push(generate_cwe_warning(&jmp.tid, symbol, &location));
+                    } else if matches!(location, StringLocation::Unknown) {
+                        logs.push(LogMessage::new_debug(format!(
+                            "{}: No PI result for call at {}.",
+                            CWE_MODULE.name, jmp.tid
+                        )));
                     }
                 }
             }
         }
     }
 
-    WithLogs::wrap(cwe_warnings)
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }
 
 /// Returns a StringLocation based on the kind of memory
@@ -138,17 +151,22 @@ fn locate_format_string(
                         .is_address_writeable(&address_vector)
                         .unwrap()
                     {
-                        return StringLocation::GlobalWriteable;
+                        StringLocation::GlobalWriteable
+                    } else {
+                        StringLocation::GlobalReadable
                     }
-
-                    return StringLocation::GlobalReadable;
+                } else {
+                    StringLocation::NonGlobal
                 }
+            } else {
+                StringLocation::NonGlobal
             }
+        } else {
+            StringLocation::NonGlobal
         }
-        return StringLocation::NonGlobal;
+    } else {
+        StringLocation::Unknown
     }
-
-    StringLocation::Unknown
 }
 
 /// Generate the CWE warning for a detected instance of the CWE.
