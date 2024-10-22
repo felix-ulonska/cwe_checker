@@ -3,7 +3,10 @@
 use crate::prelude::*;
 
 use std::ops::{Deref, DerefMut};
-use std::{collections::BTreeMap, thread::JoinHandle};
+use std::{
+    collections::{BTreeMap, HashSet},
+    thread::JoinHandle,
+};
 
 /// A CWE warning message.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
@@ -33,6 +36,63 @@ pub struct CweWarning {
     /// generated.
     pub description: String,
 }
+
+/// Methods to deduplicate CWE warnings.
+pub trait DeduplicateCweWarnings:
+    IntoIterator<Item = CweWarning> + FromIterator<CweWarning>
+{
+    /// Deduplicates the CWE warnings inside this container based on the first
+    /// address that is associated with a warning.
+    ///
+    /// If two warnings have the same first address, only the warning comes
+    /// first in iteration order is kept.
+    fn deduplicate_first_address(self) -> WithLogs<Self> {
+        let mut logs = Vec::new();
+
+        let mut seen_addresses = HashSet::new();
+        let filter = |w: &CweWarning| {
+            let a = w.addresses.first().unwrap();
+            if seen_addresses.insert(a.clone()) {
+                true
+            } else {
+                logs.push(LogMessage::new_debug(format!(
+                    "Removed duplicate CWE warning (first address {}): {}",
+                    a, w.description,
+                )));
+                false
+            }
+        };
+
+        WithLogs::new(self.into_iter().filter(filter).collect(), logs)
+    }
+
+    /// Deduplicates the CWE warnings inside this container based on the
+    /// `addresses` field.
+    ///
+    /// If two warnings have the same `addresses`, only the warning comes first
+    /// in iteration order is kept.
+    fn deduplicate_addresses(self) -> WithLogs<Self> {
+        let mut logs = Vec::new();
+
+        let mut seen_addresses = HashSet::new();
+        let filter = |w: &CweWarning| {
+            let addresses = w.addresses.clone();
+            if seen_addresses.insert(addresses) {
+                true
+            } else {
+                logs.push(LogMessage::new_debug(format!(
+                    "Removed duplicate CWE warning (addresses): {}",
+                    w.description,
+                )));
+                false
+            }
+        };
+
+        WithLogs::new(self.into_iter().filter(filter).collect(), logs)
+    }
+}
+
+impl DeduplicateCweWarnings for Vec<CweWarning> {}
 
 impl CweWarning {
     /// Creates a new `CweWarning` by only setting name, version and
