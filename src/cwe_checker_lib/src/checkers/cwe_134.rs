@@ -26,11 +26,6 @@
 //!   provided.
 use super::prelude::*;
 
-use std::collections::HashMap;
-
-use petgraph::graph::NodeIndex;
-use petgraph::visit::EdgeRef;
-
 use crate::abstract_domain::TryToBitvec;
 use crate::analysis::graph::Edge;
 use crate::analysis::interprocedural_fixpoint_generic::NodeValue;
@@ -41,32 +36,36 @@ use crate::intermediate_representation::RuntimeMemoryImage;
 use crate::prelude::*;
 use crate::utils::log::CweWarning;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE134",
-    version: "0.1",
-    run: check_cwe,
-};
+use std::collections::HashMap;
 
-/// The configuration struct
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Config {
-    /// The names of the system call symbols.
-    format_string_symbols: Vec<String>,
-    /// The index of the format string paramater of the symbol.
-    format_string_index: HashMap<String, usize>,
-}
+use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
 
-/// The categorization of the string location based on kinds of different memory.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+cwe_module!(
+    "CWE134",
+    "0.1",
+    check_cwe,
+    config:
+        /// Names of symbols with a format string parameter.
+        format_string_symbols: Vec<String>,
+        /// Index of the format string parameter.
+        format_string_index: HashMap<String, usize>,
+);
+
+/// Categorization of the string location in memory.
 pub enum StringLocation {
-    /// Global read only memory
+    /// Global read only memory.
     GlobalReadable,
-    /// Global read and write memory
+    /// Global read and write memory.
     GlobalWriteable,
-    /// Non Global memory
+    /// Non Global memory.
+    ///
+    /// aka. not able to get a PI value for the format string parameter at call
+    /// site, PI value is not concrete, PI value is not in global memory.
     NonGlobal,
-    /// Unknown memory
+    /// Unknown memory.
+    ///
+    /// aka. no PI result for call site.
     Unknown,
 }
 
@@ -126,10 +125,9 @@ pub fn check_cwe(
     )
 }
 
-/// Returns a StringLocation based on the kind of memory
-/// holding the string.
-/// If no assumption about the string location can be made,
-/// unknown is returned.
+/// Returns a StringLocation based on the kind of memory holding the string.
+///
+/// If no assumption about the string location can be made, unknown is returned.
 fn locate_format_string(
     node: &NodeIndex,
     symbol: &ExternSymbol,

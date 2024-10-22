@@ -29,23 +29,23 @@ use crate::analysis::graph::{Edge, Node};
 use crate::intermediate_representation::Jmp;
 use crate::prelude::*;
 use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
-use petgraph::visit::EdgeRef;
+
 use std::collections::HashMap;
 
-/// The module name and version.
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE367",
-    version: "0.1",
-    run: check_cwe,
-};
+use petgraph::visit::EdgeRef;
 
-/// The configuration struct contains pairs of the form `(source_symbol, sink_symbol)`.
-/// The `source_symbol` corresponds to a check-call and the `sink_symbol` corresponds to a use-call.
-/// An execution path from a source call to a sink call corresponds to a possible Time-of-check Time-of-use Race Condition.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-struct Config {
-    pairs: Vec<(String, String)>,
-}
+cwe_module!(
+    "CWE367",
+    "0.1",
+    check_cwe,
+    config:
+        /// The configuration contains pairs of the form `(source_symbol,
+        /// sink_symbol)`. The `source_symbol` corresponds to a check-call and
+        /// the `sink_symbol` corresponds to a use-call. An execution path from
+        /// a source call to a sink call corresponds to a possible Time-of-check
+        /// Time-of-use Race Condition.
+        pairs: Vec<(String, String)>,
+);
 
 /// Generate a CWE warning for a found CWE hit.
 fn generate_cwe_warning(

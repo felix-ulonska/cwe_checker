@@ -27,22 +27,20 @@ use super::prelude::*;
 use crate::prelude::*;
 use crate::utils::symbol_utils::find_symbol;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE332",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct contains pairs of symbol names,
-/// where the first name is the name of a seeding function
-/// and the second name is the name of a corresponding random number generator access function.
-/// It is assumed that a program has to call the seeding function first
-/// to ensure that the RNG does not generate predictable random numbers.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    pairs: Vec<(String, String)>,
-}
+cwe_module!(
+    "CWE332",
+    "0.1",
+    check_cwe,
+    config:
+        /// Pairs of symbol names.
+        ///
+        /// The first name is the name of a seeding function and the second name
+        /// is the name of a corresponding random number generator access
+        /// function. It is assumed that a program has to call the seeding
+        /// function first to ensure that the RNG does not generate predictable
+        /// random numbers.
+        pairs: Vec<(String, String)>,
+);
 
 /// Generate the CWE warning for a detected instance of the CWE.
 fn generate_cwe_warning(secure_initializer_func: &str, rand_func: &str) -> CweWarning {

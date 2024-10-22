@@ -86,12 +86,7 @@ mod state;
 use state::State;
 mod stubs;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE119",
-    version: "0.3",
-    run: check_cwe,
-};
+cwe_module!("CWE119", "0.3", check_cwe);
 
 /// Run the check for CWE-119: Buffer Overflows.
 ///

@@ -35,24 +35,21 @@ use crate::intermediate_representation::*;
 use crate::pipeline::AnalysisResults;
 use crate::utils::symbol_utils::get_callsites;
 use crate::utils::symbol_utils::get_symbol_map;
-use serde::Deserialize;
-use serde::Serialize;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE789",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-/// If a threshold is exceeded, the warning is generated.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    stack_threshold: u64,
-    heap_threshold: u64,
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE789",
+    "0.1",
+    check_cwe,
+    config:
+        /// Size in bytes above which a potential stack memory exhaustion is
+        /// reported.
+        stack_threshold: u64,
+        /// Size in bytes above which a potential heap memory exhaustion is
+        /// reported.
+        heap_threshold: u64,
+        /// Heap allocation symbols.
+        symbols: Vec<String>,
+);
 
 /// Determines if `def` is an assignment on the stackpointer.
 fn is_assign_on_sp(def: &Def, sp: &Variable) -> bool {

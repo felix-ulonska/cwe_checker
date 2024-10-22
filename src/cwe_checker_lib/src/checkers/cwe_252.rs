@@ -80,22 +80,18 @@ mod isolated_returns;
 use context::*;
 use isolated_returns::*;
 
-/// CWE-252: Unchecked Return Value.
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE252",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// Configuration of the check; this is read from the `config.json` file.
-#[derive(Deserialize)]
-struct Config {
-    strict_mode: bool,
-    /// External symbols whose return values must be checked.
-    symbols: HashSet<String>,
-    /// Additional symbols that are only checked when we run in strict mode.
-    strict_symbols: HashSet<String>,
-}
+cwe_module!(
+    "CWE252",
+    "0.1",
+    check_cwe,
+    config:
+        /// Include more symbols in check.
+        strict_mode: bool,
+        /// External symbols whose return values must be checked.
+        symbols: HashSet<String>,
+        /// Additional symbols that are only checked when we run in strict mode.
+        strict_symbols: HashSet<String>,
+);
 
 impl Config {
     fn into_symbols(mut self) -> HashSet<String> {

@@ -38,21 +38,16 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::AsRef;
 
-/// The module name and version.
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE337",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    /// Sources of predictable seeds.
-    sources: Vec<String>,
-    /// Random number seeding functions.
-    seeding_functions: Vec<String>,
-}
+cwe_module!(
+    "CWE337",
+    "0.1",
+    check_cwe,
+    config:
+        /// Sources of predictable seeds.
+        sources: Vec<String>,
+        /// Random number seeding functions.
+        seeding_functions: Vec<String>,
+);
 
 /// Run the CWE check.
 ///

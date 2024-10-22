@@ -22,22 +22,16 @@
 use super::prelude::*;
 
 use crate::prelude::*;
-use std::collections::{BTreeMap, HashMap, HashSet};
-
 use crate::{
-    intermediate_representation::{ExternSymbol, Program, Sub, Term, Tid},
+    intermediate_representation::{ExternSymbol, Sub, Term, Tid},
     utils::symbol_utils::get_calls_to_symbols,
 };
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
-const VERSION: &str = "0.1";
-
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE676",
-    version: VERSION,
-    run: check_cwe,
-};
+cwe_module!("CWE676", "0.1", check_cwe);
 
 /// struct containing dangerous symbols from config.json
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
@@ -45,14 +39,16 @@ pub struct Config {
     symbols: Vec<String>,
 }
 
-/// For each subroutine and each found dangerous symbol, check for calls to the corresponding symbol
+/// For each subroutine and each found dangerous symbol, check for calls to the
+/// corresponding symbol.
 pub fn get_calls<'a>(
-    subfunctions: &'a BTreeMap<Tid, Term<Sub>>,
+    functions: &'a BTreeMap<Tid, Term<Sub>>,
     dangerous_symbols: &'a HashMap<&'a Tid, &'a str>,
 ) -> Vec<(&'a str, &'a Tid, &'a str)> {
     let mut calls: Vec<(&str, &Tid, &str)> = Vec::new();
-    for sub in subfunctions.values() {
-        calls.append(&mut get_calls_to_symbols(sub, dangerous_symbols));
+
+    for f in functions.values() {
+        calls.append(&mut get_calls_to_symbols(f, dangerous_symbols));
     }
 
     calls
@@ -88,11 +84,11 @@ pub fn generate_cwe_warnings<'a>(
 }
 
 /// Filter external symbols by dangerous symbols
-pub fn resolve_symbols<'a>(
+pub fn filter_dangerous_ext_symbols<'a>(
     external_symbols: &'a BTreeMap<Tid, ExternSymbol>,
-    symbols: &'a [String],
+    dangerous_symbols: &'a [String],
 ) -> HashMap<&'a Tid, &'a str> {
-    let dangerous_symbols: HashSet<&'a String> = symbols.iter().collect();
+    let dangerous_symbols: HashSet<&'a String> = dangerous_symbols.iter().collect();
     external_symbols
         .iter()
         .filter_map(|(tid, symbol)| {

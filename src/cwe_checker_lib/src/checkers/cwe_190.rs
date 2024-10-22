@@ -41,19 +41,15 @@ use crate::intermediate_representation::*;
 use crate::prelude::*;
 use crate::utils::symbol_utils::{get_callsites, get_symbol_map};
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE190",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-/// The `symbols` are extern function names.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE190",
+    "0.1",
+    check_cwe,
+    config:
+        /// Functions with parameters that are typically susceptible to
+        /// overflow/wraparound issues.
+        symbols: Vec<String>,
+);
 
 /// Check whether the given expression contains an integer multiplication subexpression,
 /// i.e. an `IntMult` or `IntLeft` (left shift) binary operation.

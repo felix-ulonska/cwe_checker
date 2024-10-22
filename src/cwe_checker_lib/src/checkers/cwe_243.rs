@@ -33,19 +33,15 @@ use crate::prelude::*;
 use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
 use crate::utils::symbol_utils::find_symbol;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE243",
-    version: "0.2",
-    run: check_cwe,
-};
-
-/// The configuration struct contains the list of functions
-/// that are assumed to be used to correctly drop priviledges after a `chroot` call.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    priviledge_dropping_functions: Vec<String>,
-}
+cwe_module!(
+    "CWE243",
+    "0.2",
+    check_cwe,
+    config:
+        /// This configuration contains a list of functions that are assumed to
+        /// be used to correctly drop priviledges after a `chroot` call.
+        priviledge_dropping_functions: Vec<String>,
+);
 
 /// Check whether the given block calls the given TID.
 /// If yes, return the TID of the jump term that contains the call.

@@ -26,6 +26,7 @@
 //! If the input to umask is not defined in the basic block before the call,
 //! the check will not see it. However, a log message will be generated
 //! whenever the check is unable to determine the parameter value of umask.
+
 use super::prelude::*;
 
 use crate::abstract_domain::TryToBitvec;
@@ -35,19 +36,15 @@ use crate::prelude::*;
 use crate::utils::symbol_utils::{get_callsites, get_symbol_map};
 use std::collections::BTreeSet;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE560",
-    version: "0.2",
-    run: check_cwe,
-};
+cwe_module!("CWE560", "0.2", check_cwe);
 
 /// An upper bound for the value of a presumably correct umask argument.
-pub static UPPER_BOUND_CORRECT_UMASK_ARG_VALUE: u64 = 0o177;
+static UPPER_BOUND_CORRECT_UMASK_ARG_VALUE: u64 = 0o177;
 /// An upper bound for the value of a chmod-style argument.
-pub static UPPER_BOUND_CORRECT_CHMOD_ARG_VALUE: u64 = 0o777;
+static UPPER_BOUND_CORRECT_CHMOD_ARG_VALUE: u64 = 0o777;
 
-/// Compute the parameter value of umask out of the basic block right before the umask call.
+/// Compute the parameter value of umask out of the basic block right before the
+/// umask call.
 ///
 /// The function uses the same `State` struct as the pointer inference analysis for the computation.
 fn get_umask_permission_arg(
@@ -83,7 +80,8 @@ fn get_umask_permission_arg(
 
 /// Is the given argument value considered to be a chmod-style argument?
 ///
-/// Note that `0o777` is not considered a chmod-style argument as it also denotes a usually correct umask argument.
+/// Note that `0o777` is not considered a chmod-style argument as it also
+/// denotes a usually correct umask argument.
 fn is_chmod_style_arg(arg: u64) -> bool {
     arg > UPPER_BOUND_CORRECT_UMASK_ARG_VALUE && arg != UPPER_BOUND_CORRECT_CHMOD_ARG_VALUE
 }
@@ -102,8 +100,8 @@ fn generate_cwe_warning(sub: &Term<Sub>, jmp: &Term<Jmp>, permission_const: u64)
 
 /// Execute the CWE check.
 ///
-/// For each call to umask we check whether the parameter value is a chmod-style parameter.
-/// If yes, generate a CWE warning.
+/// For each call to umask we check whether the parameter value is a chmod-style
+/// parameter. If yes, generate a CWE warning.
 /// If the parameter value cannot be determined, generate a log message.
 ///
 /// Only the basic block right before the umask call is evaluated when trying to determine the parameter value of umask.
@@ -117,12 +115,12 @@ pub fn check_cwe(
     let mut log_messages = Vec::new();
     let umask_symbol_map = get_symbol_map(project, &["umask".to_string()]);
     if !umask_symbol_map.is_empty() {
-        for sub in project.program.term.subs.values() {
-            for (block, jmp, umask_symbol) in get_callsites(sub, &umask_symbol_map) {
+        for f in project.program.functions() {
+            for (block, jmp, umask_symbol) in get_callsites(f, &umask_symbol_map) {
                 match get_umask_permission_arg(block, umask_symbol, project) {
                     Ok(permission_const) => {
                         if is_chmod_style_arg(permission_const) {
-                            cwes.push(generate_cwe_warning(sub, jmp, permission_const));
+                            cwes.push(generate_cwe_warning(f, jmp, permission_const));
                         }
                     }
                     Err(err) => {

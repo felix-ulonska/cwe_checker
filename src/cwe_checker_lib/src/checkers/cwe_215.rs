@@ -24,12 +24,7 @@ use super::prelude::*;
 use crate::prelude::*;
 use crate::utils::log::{CweWarning, LogMessage};
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE215",
-    version: "0.2",
-    run: check_cwe,
-};
+cwe_module!("CWE215", "0.2", check_cwe);
 
 /// Run the check.
 ///

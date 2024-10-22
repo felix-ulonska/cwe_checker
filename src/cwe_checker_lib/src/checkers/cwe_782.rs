@@ -1,38 +1,32 @@
-/*!
-This module implements a check for CWE-782: Exposed IOCTL with Insufficient Access Control.
+//! This module implements a check for CWE-782: Exposed IOCTL with Insufficient
+//! Access Control.
+//!
+//! See <https://cwe.mitre.org/data/definitions/782.html> for a detailed
+//! description.
+//!
+//! How the check works:
+//!
+//! - Calls to ioctl() get flagged as CWE hits.
+//!
+//! False Positives:
+//!
+//! - We cannot check whether the call contains sufficient access control.
+//!
+//! False Negatives:
+//!
+//! - There are other ways to expose I/O control without access control.
 
-See <https://cwe.mitre.org/data/definitions/782.html> for a detailed description.
-
-How the check works:
-
-* Calls to ioctl() get flagged as CWE hits.
-
-False Positives:
-
-* We cannot check whether the call contains sufficient access control.
-
-False Negatives:
-
-* There are other ways to expose I/O control without access control.
-*/
 use super::prelude::*;
 
 use crate::prelude::*;
-use std::collections::HashMap;
-
 use crate::{
     intermediate_representation::{Program, Sub, Term, Tid},
     utils::symbol_utils::{find_symbol, get_calls_to_symbols},
 };
 
-const VERSION: &str = "0.1";
+use std::collections::HashMap;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE782",
-    version: VERSION,
-    run: check_cwe,
-};
+cwe_module!("CWE782", "0.1", check_cwe);
 
 /// check whether the ioctl symbol is called by any subroutine. If so, generate the cwe warning.
 pub fn handle_sub(sub: &Term<Sub>, symbol: &HashMap<&Tid, &str>) -> Vec<CweWarning> {

@@ -31,19 +31,17 @@ use crate::prelude::*;
 use crate::utils::symbol_utils::{get_callsites, get_symbol_map};
 use std::collections::BTreeSet;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE467",
-    version: "0.2",
-    run: check_cwe,
-};
-
-/// Function symbols read from *config.json*.
-/// All parameters of these functions will be checked on whether they are pointer sized.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE467",
+    "0.2",
+    check_cwe,
+    config:
+        /// Function symbols read from *config.json*.
+        ///
+        /// All parameters of these functions will be checked on whether they
+        /// are pointer sized.
+        symbols: Vec<String>,
+);
 
 /// Compute the program state at the end of the given basic block
 /// assuming nothing is known about the state at the start of the block.
@@ -51,7 +49,7 @@ fn compute_block_end_state(project: &Project, block: &Term<Blk>) -> State {
     let stack_register = &project.stack_pointer_register;
     let mut state = State::new(stack_register, block.tid.clone(), BTreeSet::new());
 
-    for def in block.term.defs.iter() {
+    for def in block.defs() {
         match &def.term {
             Def::Store { address, value } => {
                 let _ = state.handle_store(address, value, &project.runtime_memory_image);
@@ -67,7 +65,8 @@ fn compute_block_end_state(project: &Project, block: &Term<Blk>) -> State {
     state
 }
 
-/// Check whether a parameter value of the call to `symbol` has value `sizeof(void*)`.
+/// Check whether a parameter value of the call to `symbol` has value
+/// `sizeof(void*)`.
 fn check_for_pointer_sized_arg(
     project: &Project,
     block: &Term<Blk>,

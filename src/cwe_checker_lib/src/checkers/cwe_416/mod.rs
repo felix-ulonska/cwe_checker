@@ -77,23 +77,20 @@ use crate::prelude::*;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE416",
-    version: "0.3",
-    run: check_cwe,
-};
-
-/// The configuration struct
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    /// The names of symbols that free memory (e.g. the "free" function of C).
-    /// The analysis always assumes that the memory object to be freed is the first parameter of the function.
-    deallocation_symbols: Vec<String>,
-    /// If this flag is set to `true`,
-    /// then always include the full path to the actual `free`-site in the callgraph in the CWE warning context information.
-    always_include_full_path_to_free_site: bool,
-}
+cwe_module!(
+    "CWE416",
+    "0.3",
+    check_cwe,
+    config:
+        /// The names of symbols that free memory (e.g. the "free" function of
+        /// C). The analysis always assumes that the memory object to be freed
+        /// is the first parameter of the function.
+        deallocation_symbols: Vec<String>,
+        /// If this flag is set to `true`, then always include the full path to
+        /// the actual `free`-site in the callgraph in the CWE warning context
+        /// information.
+        always_include_full_path_to_free_site: bool,
+);
 
 mod context;
 use context::Context;

@@ -40,19 +40,14 @@ use crate::prelude::*;
 use crate::utils::symbol_utils::{find_symbol, get_calls_to_symbols};
 use std::collections::HashMap;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE426",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// Function symbols read from *config.json*.
-/// The symbols are functions that change or drop privileges.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE426",
+    "0.1",
+    check_cwe,
+    config:
+        /// Functions that change or drop privileges.
+        symbols: Vec<String>
+);
 
 /// Generate the CWE warning for a detected instance of the CWE.
 fn generate_cwe_warning(sub: &Term<Sub>) -> CweWarning {

@@ -1,35 +1,44 @@
-//! This module implements a check for CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection').
+//! This module implements a check for CWE-78: Improper Neutralization of
+//! Special Elements used in an OS Command ('OS Command Injection').
 //!
-//! The software constructs all or part of an OS command using externally-influenced input from an upstream component,
-//! but it does not neutralize or incorrectly neutralizes special elements that could modify the intended OS command
-//! when it is sent to a downstream component.
+//! The software constructs all or part of an OS command using
+//! externally-influenced input from an upstream component, but it does not
+//! neutralize or incorrectly neutralizes special elements that could modify the
+//! intended OS command when it is sent to a downstream component.
 //!
-//! See <https://cwe.mitre.org/data/definitions/78.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/78.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! The check depends entirely on the string abstraction analysis that is run beforehand.
-//! The string abstraction uses a forward fixpoint analysis to determine potential strings at all
-//! nodes in the CFG. More detailed information about the string abstraction can be found in the
-//! corresponding files.
+//! The check depends entirely on the string abstraction analysis that is run
+//! beforehand. The string abstraction uses a forward fixpoint analysis to
+//! determine potential strings at all nodes in the CFG. More detailed
+//! information about the string abstraction can be found in the corresponding
+//! files.
 //!
-//! The BricksDomain, a string abstract domain defining a string as a sequence of substring sets (bricks)
-//! is used for this check. As it considers the order of characters, it can be further used for a manual
-//! post analysis of the commands given to system calls.
+//! The BricksDomain, a string abstract domain defining a string as a sequence
+//! of substring sets (bricks) is used for this check. As it considers the order
+//! of characters, it can be further used for a manual post analysis of the
+//! commands given to `system` invocations.
 //!
-//! ### Symbols configurable in config.json
+//! ### Symbols configurable in `config.json`
 //!
-//! The system calls considered in this check can be configured in the config.json.
+//! The `system` symbols considered in this check can be configured in the
+//! `config.json`.
 //!
 //! ## False Positives
 //!
-//! - The input comes from the user but proper sanitization was not detected by the analysis even though it exists.
-//! - The input comes from the user but the format string's input format could not be distinguished as non-string input.
+//! - The input comes from the user but proper sanitization was not detected by
+//!   the analysis even though it exists.
+//! - The input comes from the user but the format string's input format could
+//!   not be distinguished as non-string input.
 //!
 //! ## False Negatives
 //!
-//! - Missing substrings due to lost track of pointer targets
-//! - Non tracked function parameters cause incomplete strings that could miss possible dangerous inputs
+//! - Missing substrings due to lost track of pointer targets.
+//! - Non-tracked function parameters cause incomplete strings that could miss
+//!   possible dangerous inputs.
 use super::prelude::*;
 
 use petgraph::visit::EdgeRef;
@@ -49,21 +58,15 @@ use crate::intermediate_representation::Sub;
 use crate::prelude::*;
 
 use std::collections::BTreeMap;
-use std::fmt::Debug;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE78",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Config {
-    /// The names of the system call symbols
-    system_symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE78",
+    "0.1",
+    check_cwe,
+    config:
+        /// The names of the `system` symbols.
+        system_symbols: Vec<String>,
+);
 
 /// This check checks the string parameter at system calls given by the string abstraction analysis
 /// to find potential OS Command Injection vulnerabilities.

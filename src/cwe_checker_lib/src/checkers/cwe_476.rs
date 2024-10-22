@@ -53,22 +53,17 @@ mod context;
 
 use context::*;
 
-/// The module name and version.
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE476",
-    version: "0.3",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    /// The names of symbols for which the analysis should check whether the
-    /// return values are checked for being a NULL pointer by the analysed
-    /// binary. This list is configurable via the `config.json` configuration
-    /// file.
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE476",
+    "0.3",
+    check_cwe,
+    config:
+        /// The names of symbols for which the analysis should check whether the
+        /// return values are checked for being a NULL pointer by the analysed
+        /// binary. This list is configurable via the `config.json`
+        /// configuration file.
+        symbols: Vec<String>,
+);
 
 /// Run the CWE check.
 ///

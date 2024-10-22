@@ -34,9 +34,9 @@ pub mod cwe_789;
 
 pub mod prelude {
     //! Prelude imports for CWE checkers.
-    pub use super::{CweModule, CweModuleFn};
+    pub use super::{cwe_module, CweModule, CweModuleFn};
     pub use crate::utils::debug;
-    pub use crate::utils::log::{CweWarning, LogMessage, WithLogs};
+    pub use crate::utils::log::{CweWarning, DeduplicateCweWarnings, LogMessage, WithLogs};
 }
 use prelude::*;
 
@@ -57,6 +57,38 @@ pub struct CweModule {
     /// The function that executes the check and returns CWE warnings found during the check.
     pub run: CweModuleFn,
 }
+
+#[macro_export]
+/// Defines a CWE checker module.
+macro_rules! cwe_module {
+    (
+        $name:literal, $version:literal, $run:ident,
+        config: $($(#[doc = $config_doc:expr])*$config_key:ident: $config_type:ty),
+        *$(,)?
+     ) => {
+        cwe_module!($name, $version, $run);
+        #[doc = "The checker-specific configuration."]
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Config {
+            $(
+                $(
+                    #[doc = $config_doc]
+                )*
+                $config_key: $config_type,
+            )*
+        }
+    };
+    ($name:literal, $version:literal, $run:ident$(,)?) => {
+        #[doc = "The checker's name, version, and entry point."]
+        pub static CWE_MODULE: $crate::checkers::prelude::CweModule =
+            $crate::checkers::prelude::CweModule {
+                name: $name,
+                version: $version,
+                run: $run,
+            };
+    }
+}
+pub use cwe_module;
 
 impl std::fmt::Display for CweModule {
     /// Print the module name and its version number.
