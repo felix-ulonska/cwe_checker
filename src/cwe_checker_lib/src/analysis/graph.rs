@@ -337,10 +337,11 @@ impl<'a> GraphBuilder<'a> {
         }
     }
 
-    /// Read in target hints for indirect intraprocedural jumps from the source block
-    /// and add intraprocedural jump edges for them to the graph.
+    /// Read in target hints for indirect intraprocedural jumps from the source
+    /// block and add intraprocedural jump edges for them to the graph.
     ///
-    /// The function assumes (but does not check) that the `jump` is an intraprocedural indirect jump.
+    /// The function assumes (but does not check) that the `jump` is an
+    /// intraprocedural indirect jump.
     fn add_indirect_jumps(
         &mut self,
         source: NodeIndex,
@@ -351,8 +352,10 @@ impl<'a> GraphBuilder<'a> {
             Node::BlkEnd(source_block, _) => source_block,
             _ => panic!(),
         };
-        for target_tid in source_block.term.indirect_jmp_targets.iter() {
-            self.add_intraprocedural_edge(source, target_tid, jump, untaken_conditional);
+        if let Some(indirect_jump_targets) = source_block.ind_jump_targets() {
+            for target_tid in indirect_jump_targets {
+                self.add_intraprocedural_edge(source, target_tid, jump, untaken_conditional);
+            }
         }
     }
 
@@ -684,21 +687,17 @@ mod tests {
             tid: Tid::new("jump"),
             term: jmp,
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![call_term]);
         let sub1_blk1 = Term {
             tid: Tid::new("sub1_blk1"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![call_term],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![jmp_term]);
         let sub1_blk2 = Term {
             tid: Tid::new("sub1_blk2"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![jmp_term],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
         let sub1 = Term {
             tid: Tid::new("sub1"),
@@ -716,21 +715,17 @@ mod tests {
             tid: Tid::new("jump2"),
             term: Jmp::Branch(Tid::new("sub2_blk2")),
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![cond_jump_term, jump_term_2]);
         let sub2_blk1 = Term {
             tid: Tid::new("sub2_blk1"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![cond_jump_term, jump_term_2],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![return_term]);
         let sub2_blk2 = Term {
             tid: Tid::new("sub2_blk2"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![return_term],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
         let sub2 = Term {
             tid: Tid::new("sub2"),
@@ -765,13 +760,12 @@ mod tests {
         };
         let mut blk_tid = Tid::new("blk_00001000");
         blk_tid.set_address("00001000");
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![indirect_jmp_term])
+            .set_ind_jump_targets(vec![blk_tid.clone()]);
         let blk_term = Term {
-            tid: blk_tid.clone(),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![indirect_jmp_term],
-                indirect_jmp_targets: vec![blk_tid],
-            },
+            tid: blk_tid,
+            term: blk,
         };
         let sub_term = Term {
             tid: Tid::new("sub"),

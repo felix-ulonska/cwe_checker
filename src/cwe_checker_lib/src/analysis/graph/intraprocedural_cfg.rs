@@ -185,13 +185,13 @@ impl<'a> IntraproceduralCfgBuilder<'a> {
                 }
                 // Indirect branches.
                 Jmp::BranchInd(_) => {
-                    for end_node_idx in b
-                        .indirect_jmp_targets
-                        .iter()
-                        .map(|t| self.blk_tid_to_idx_map.get(t).unwrap().0)
-                    {
-                        self.graph
-                            .add_edge(start_node_idx, end_node_idx, Edge::Jump(j, None));
+                    if let Some(indirect_jump_targets) = b.ind_jump_targets() {
+                        for end_node_idx in
+                            indirect_jump_targets.map(|t| self.blk_tid_to_idx_map.get(t).unwrap().0)
+                        {
+                            self.graph
+                                .add_edge(start_node_idx, end_node_idx, Edge::Jump(j, None));
+                        }
                     }
                 }
                 // No interprocedural edges.

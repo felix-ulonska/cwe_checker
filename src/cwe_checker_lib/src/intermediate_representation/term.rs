@@ -22,6 +22,16 @@ pub struct Tid {
     /// The address where the term is located.
     address: TidAddress,
 }
+// TODO: Eventually we want those to be proper Newtypes. Common behavior should
+// be moved to a `Tid` trait.
+/// Identifier of a program term.
+pub type ProgramTid = Tid;
+/// Identifier of a function term.
+pub type FunctionTid = Tid;
+/// Identifier of a block term.
+pub type BlockTid = Tid;
+/// Identifier of an instruction term.
+pub type InstructionTid = Tid;
 
 /// The memory address of a term.
 ///
@@ -307,6 +317,12 @@ pub struct Term<T> {
     pub tid: Tid,
     /// The object.
     pub term: T,
+}
+
+impl<T: Display> Display for Term<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.tid, self.term)
+    }
 }
 
 impl<T> Deref for Term<T> {

@@ -31,21 +31,17 @@ fn mock_program() -> Term<Program> {
         tid: Tid::new("jump"),
         term: jmp,
     };
+    let mut blk = Blk::default();
+    blk.add_defs(vec![def_term1]).add_jumps(vec![call_term]);
     let sub1_blk1 = Term {
         tid: Tid::new("sub1_blk1"),
-        term: Blk {
-            defs: vec![def_term1],
-            jmps: vec![call_term],
-            indirect_jmp_targets: Vec::new(),
-        },
+        term: blk,
     };
+    let mut blk = Blk::default();
+    blk.add_defs(vec![def_term5]).add_jumps(vec![jmp_term]);
     let sub1_blk2 = Term {
         tid: Tid::new("sub1_blk2"),
-        term: Blk {
-            defs: vec![def_term5],
-            jmps: vec![jmp_term],
-            indirect_jmp_targets: Vec::new(),
-        },
+        term: blk,
     };
     let sub1 = Term {
         tid: Tid::new("sub1"),
@@ -63,21 +59,18 @@ fn mock_program() -> Term<Program> {
         tid: Tid::new("jump2"),
         term: Jmp::Branch(Tid::new("sub2_blk2")),
     };
+    let mut blk = Blk::default();
+    blk.add_defs(vec![def_term2, def_term3])
+        .add_jumps(vec![cond_jump_term, jump_term_2]);
     let sub2_blk1 = Term {
         tid: Tid::new("sub2_blk1"),
-        term: Blk {
-            defs: vec![def_term2, def_term3],
-            jmps: vec![cond_jump_term, jump_term_2],
-            indirect_jmp_targets: Vec::new(),
-        },
+        term: blk,
     };
+    let mut blk = Blk::default();
+    blk.add_defs(vec![def_term4]).add_jumps(vec![return_term]);
     let sub2_blk2 = Term {
         tid: Tid::new("sub2_blk2"),
-        term: Blk {
-            defs: vec![def_term4],
-            jmps: vec![return_term],
-            indirect_jmp_targets: Vec::new(),
-        },
+        term: blk,
     };
     let sub2 = Term {
         tid: Tid::new("sub2"),
