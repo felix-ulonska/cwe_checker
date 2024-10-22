@@ -3,7 +3,7 @@ name = "cwe_checker"
 version = "0.9.0"
 authors = ["Fraunhofer FKIE <contact@cwe-checker.io>"]
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.82"
 
 [dependencies]
 clap = { version = "4.0.32", features = ["derive"] }
