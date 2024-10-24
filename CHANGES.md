@@ -1,6 +1,17 @@
 0.10-dev
 ===
 
+-   Rewrite of the PcodeExtractor Ghidra plugin (PR #472)
+-   Rewrite of the internal Pcode to IR conversion (PR #472)
+-   Introduction of a dedicated intraprocedural CFG type (PR #472)
+-   Introduction of a call graph type (PR #472)
+-   Reduced memory usage of the dead variable elimination pass (PR #472)
+-   Reduced runtime of the input expression propagation pass (PR #472)
+-   Addition of benchmarks for additional architectures (PR #472)
+-   Support for additional architectures due to Ghidra update (PR #472)
+-   Feature to run acceptance tests inside the Docker container (PR #472)
+-   Introduce `--cfg-stats` flag (PR #472)
+
 0.9 (2024-08)
 ===
 
