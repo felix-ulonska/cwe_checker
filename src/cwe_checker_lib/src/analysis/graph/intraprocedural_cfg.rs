@@ -294,7 +294,7 @@ impl<'a> IntraproceduralCfg<'a> {
     }
 
     /// Returns a map that takes all __directly__ called __internal__ and
-    /// __external__functions to the number of times that they are called.
+    /// __external__ functions to the number of times that they are called.
     pub fn callees(&self) -> BTreeMap<&'a Tid, u32> {
         let mut callees = BTreeMap::new();
 
