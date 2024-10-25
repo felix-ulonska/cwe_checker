@@ -27,6 +27,7 @@
 //! dropping functions are suitable to create a safe chroot jail.
 use super::prelude::*;
 
+use crate::analysis::graph::intraprocedural_cfg::IntraproceduralCfg;
 use crate::analysis::graph::Node;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
@@ -44,46 +45,37 @@ cwe_module!(
 );
 
 /// Check whether the given block calls the given TID.
+///
 /// If yes, return the TID of the jump term that contains the call.
 fn blk_calls_tid(blk: &Term<Blk>, tid: &Tid) -> Option<Tid> {
-    for jmp in blk.term.jmps.iter() {
-        match &jmp.term {
-            Jmp::Call { target, .. } if target == tid => {
-                return Some(jmp.tid.clone());
-            }
-            _ => (),
+    let call_targets = blk.get_call_targets()?;
+
+    call_targets.iter().find_map(|t| {
+        if *t == tid {
+            Some(blk.jmps().next().unwrap().tid.clone())
+        } else {
+            None
         }
-    }
-    None
+    })
 }
 
-/// Check whether the given `sub` calls both the `chdir_tid`
+/// Check whether the function `f` calls both the `chdir_tid`
 /// and at least one of the `priviledge_dropping_tids`.
+///
 /// If yes, return true.
-fn sub_calls_chdir_and_priviledge_dropping_func(
-    sub: &Term<Sub>,
+fn f_calls_chdir_and_priviledge_dropping_func(
+    p: &Program,
+    f: &Term<Sub>,
     chdir_tid: &Tid,
     priviledge_dropping_tids: &[Tid],
 ) -> bool {
-    let mut is_chdir_called = false;
-    for blk in sub.term.blocks.iter() {
-        if blk_calls_tid(blk, chdir_tid).is_some() {
-            is_chdir_called = true;
-            break;
-        }
-    }
-    if !is_chdir_called {
-        return false;
-    }
-    for blk in sub.term.blocks.iter() {
-        if priviledge_dropping_tids
-            .iter()
-            .any(|tid| blk_calls_tid(blk, tid).is_some())
-        {
-            return true;
-        }
-    }
-    false
+    let cfg = IntraproceduralCfg::new(p, f);
+    let callees = cfg.callees();
+
+    callees.keys().any(|callee_tid| *callee_tid == chdir_tid)
+        && callees
+            .keys()
+            .any(|callee_tid| priviledge_dropping_tids.contains(callee_tid))
 }
 
 /// Generate a CWE warning for a CWE hit.
@@ -114,8 +106,10 @@ pub fn check_cwe(
     cwe_params: &serde_json::Value,
     _debug_settings: &debug::Settings,
 ) -> WithLogs<Vec<CweWarning>> {
-    let project = analysis_results.project;
-    let graph = analysis_results.control_flow_graph;
+    let mut cwe_warnings = Vec::new();
+    let project = &analysis_results.project;
+    let program = &analysis_results.project.program;
+    let graph = &analysis_results.control_flow_graph;
 
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let priviledge_dropping_tids: Vec<Tid> = config
@@ -132,43 +126,44 @@ pub fn check_cwe(
 
     let chroot_tid = match find_symbol(&project.program, "chroot") {
         Some((tid, _)) => tid.clone(),
-        None => return WithLogs::wrap(Vec::new()), // chroot is never called by the program
+        // `chroot` is not called by the program.
+        None => return WithLogs::wrap(Vec::new()),
     };
+    let chdir_tid_op = find_symbol(&project.program, "chdir").map(|(tid, _)| tid.clone());
 
-    let mut cwe_warnings = Vec::new();
     for node in graph.node_indices() {
-        if let Node::BlkEnd(blk, sub) = graph[node] {
-            if let Some(callsite_tid) = blk_calls_tid(blk, &chroot_tid) {
-                if let Some(chdir_tid) =
-                    find_symbol(&project.program, "chdir").map(|(tid, _)| tid.clone())
-                {
-                    if graph.neighbors(node).count() > 1 {
-                        panic!("Malformed Control flow graph: More than one edge for extern function call")
-                    }
-                    let chroot_return_to_node = graph.neighbors(node).next().unwrap();
-                    // If chdir is called after chroot, we assume a secure chroot jail.
-                    if is_sink_call_reachable_from_source_call(
-                        graph,
-                        chroot_return_to_node,
-                        &chroot_tid,
-                        &chdir_tid,
-                    )
-                    .is_none()
-                    {
-                        // If chdir is not called after chroot, it has to be called before it.
-                        // Additionally priviledges must be dropped to secure the chroot jail in this case.
-                        if !sub_calls_chdir_and_priviledge_dropping_func(
-                            sub,
-                            &chdir_tid,
-                            &priviledge_dropping_tids[..],
-                        ) {
-                            cwe_warnings.push(generate_cwe_warning(sub, &callsite_tid));
-                        }
-                    }
-                } else {
-                    // There is no chdir symbol, so the chroot jail cannot be secured.
-                    cwe_warnings.push(generate_cwe_warning(sub, &callsite_tid));
-                }
+        let Node::BlkEnd(blk, sub) = graph[node] else {
+            continue;
+        };
+        let Some(callsite_tid) = blk_calls_tid(blk, &chroot_tid) else {
+            // No call to `chroot`.
+            continue;
+        };
+        let Some(chdir_tid) = &chdir_tid_op else {
+            // There is no `chdir` symbol, so the chroot jail cannot be
+            // secured.
+            cwe_warnings.push(generate_cwe_warning(sub, &callsite_tid));
+            continue;
+        };
+        let chroot_return_to_node = graph.neighbors(node).next().unwrap();
+        // If chdir is called after chroot, we assume a secure chroot jail.
+        if is_sink_call_reachable_from_source_call(
+            graph,
+            chroot_return_to_node,
+            &chroot_tid,
+            chdir_tid,
+        )
+        .is_none()
+        {
+            // If chdir is not called after chroot, it has to be called before it.
+            // Additionally priviledges must be dropped to secure the chroot jail in this case.
+            if !f_calls_chdir_and_priviledge_dropping_func(
+                program,
+                sub,
+                chdir_tid,
+                &priviledge_dropping_tids[..],
+            ) {
+                cwe_warnings.push(generate_cwe_warning(sub, &callsite_tid));
             }
         }
     }
