@@ -12,10 +12,13 @@
 use super::fixpoint::Context as GeneralFPContext;
 use super::graph::*;
 use super::interprocedural_fixpoint_generic::*;
+
 use crate::intermediate_representation::*;
+
+use std::marker::PhantomData;
+
 use petgraph::graph::EdgeIndex;
 use petgraph::graph::NodeIndex;
-use std::marker::PhantomData;
 
 /// The context for an interprocedural fixpoint computation.
 ///

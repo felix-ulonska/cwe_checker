@@ -26,6 +26,10 @@ impl<'a> IntraproceduralCfg<'a> {
     /// Returns a number indicating the likeliness that this CFG was obfuscated
     /// by control flow flattening.
     ///
+    /// This works by first finding the natural loop whose header dominates the
+    /// most other blocks. The flattening score is then defined as the fraction
+    /// of blocks dominated by this header times the maximum score.
+    ///
     /// See this [blog post] for more information. The score is between 0 and
     /// 1_000_000 inclusive.
     ///

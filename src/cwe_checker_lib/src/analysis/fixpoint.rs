@@ -35,19 +35,21 @@
 //! The `Computation` object also contains methods to actually run the fixpoint computation after the starting values are set
 //! and methods to retrieve the results of the computation.
 
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
+
 use fnv::FnvHashMap;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// The context of a fixpoint computation.
 ///
 /// All trait methods have access to the FixpointProblem structure, so that context informations are accessible through it.
 pub trait Context {
-    /// the type of edge labels of the underlying graph
-    type EdgeLabel: Clone;
-    /// the type of node labels of the underlying graph
-    type NodeLabel;
+    /// The type of edge labels of the underlying graph.
+    type EdgeLabel: Debug + Clone;
+    /// The type of node labels of the underlying graph.
+    type NodeLabel: Debug;
     /// The type of the value that gets assigned to each node.
     /// The values should form a partially ordered set.
     type NodeValue: PartialEq + Eq + Clone;
@@ -202,11 +204,16 @@ impl<T: Context> Computation<T> {
     }
 
     /// Compute the fixpoint of the fixpoint problem.
-    /// Each node will be visited at most max_steps times.
-    /// If a node does not stabilize after max_steps visits, the end result will not be a fixpoint but only an intermediate result of a fixpoint computation.
+    ///
+    /// Each node will be visited at most `max_steps` times.
+    /// If a node does not stabilize after `max_steps` visits, the end result
+    /// will not be a fixpoint but only an intermediate result of a fixpoint
+    /// computation.
     pub fn compute_with_max_steps(&mut self, max_steps: u64) {
         let mut steps = vec![0; self.fp_context.get_graph().node_count()];
+
         let mut non_stabilized_nodes = BTreeSet::new();
+
         while let Some(priority) = self.worklist.iter().next_back().cloned() {
             let priority = self.worklist.take(&priority).unwrap();
             let node = self.priority_to_node_list[priority];
