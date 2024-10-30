@@ -117,6 +117,20 @@ impl Def {
             },
         }
     }
+
+    /// Returns the sum of the recursion depths of all expressions in this
+    /// `Def`.
+    pub fn recursion_depth(&self) -> u64 {
+        match self {
+            Def::Load { address: expr, .. } | Def::Assign { value: expr, .. } => {
+                expr.recursion_depth()
+            }
+            Def::Store {
+                address: expr1,
+                value: expr2,
+            } => expr1.recursion_depth() + expr2.recursion_depth(),
+        }
+    }
 }
 
 #[cfg(test)]
