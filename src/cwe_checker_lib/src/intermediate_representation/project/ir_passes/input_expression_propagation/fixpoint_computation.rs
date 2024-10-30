@@ -50,21 +50,23 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                 var,
                 value: expression,
             } => {
-                // Extend the considered expression with already known expressions.
-                let mut extended_expression = expression.clone();
-                for input_var in expression.input_vars().into_iter() {
-                    if let Some(expr) = insertable_expressions.get(input_var) {
-                        // We limit the complexity of expressions to insert.
-                        // This prevents extremely large expressions that can lead to extremely high RAM usage.
-                        // FIXME: Right now this limit is quite arbitrary. Maybe there is a better way to achieve the same result?
-                        if expr.recursion_depth() < 10 {
-                            extended_expression.substitute_input_var(input_var, expr)
-                        }
-                    }
+                // GEN: Add mapping of variable to assigned expression to state.
+                if let Some(extended_expression) =
+                    super::InputExpressionPropagationPass::extend_expression(
+                        expression,
+                        &insertable_expressions,
+                    )
+                {
+                    insertable_expressions.insert(var.clone(), extended_expression);
+                } else {
+                    let mut expression = expression.clone();
+                    expression.substitute_trivial_operations();
+
+                    insertable_expressions.insert(var.clone(), expression);
                 }
-                extended_expression.substitute_trivial_operations();
-                insertable_expressions.insert(var.clone(), extended_expression.clone());
-                // Expressions dependent on the assigned variable are no longer insertable.
+
+                // KILL: Expressions dependent on the assigned variable are no
+                // longer insertable.
                 insertable_expressions.retain(|_input_var, input_expr| {
                     !input_expr.input_vars().into_iter().any(|x| x == var)
                 });
@@ -75,10 +77,13 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
                 var,
                 address: _expression,
             } => {
-                // Expressions dependent on the assigned variable are no longer insertable
-                insertable_expressions.retain(|_input_var, input_expr| {
-                    !input_expr.input_vars().into_iter().any(|x| x == var)
+                // KILL: Expressions dependent on the assigned variable are no
+                // longer insertable. Any replacements for the assigned
+                // variable have to be invalidated as well.
+                insertable_expressions.retain(|input_var, input_expr| {
+                    input_var != var && !input_expr.input_vars().into_iter().any(|x| x == var)
                 });
+
                 Some(insertable_expressions)
             }
             Def::Store { .. } => Some(insertable_expressions),
@@ -134,6 +139,7 @@ impl<'a> crate::analysis::forward_interprocedural_fixpoint::Context<'a> for Cont
         Some(value.clone())
     }
 }
+
 /// Returns the computed result for every basic block.
 ///
 /// This returns the table of variable-expression pairs that hold at the beginning of the blocks.
