@@ -137,6 +137,12 @@ impl<'a> CgNode<'a> {
     pub fn is_external(&self) -> bool {
         matches!(self, CgNode::ExtFunction(..))
     }
+
+    /// Returns true iff this node corresponds to an artificial function.
+    pub fn is_artificial(&self) -> bool {
+        // Note: Adjust if we add more artifical functions.
+        matches!(self, CgNode::Function(Term { tid, .. }, .. ) if tid.is_artificial_sink_fn())
+    }
 }
 
 /// Call graph edge.
