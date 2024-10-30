@@ -233,9 +233,12 @@ impl Expression {
 
     /// Compute a recursion depth for the expression.
     ///
-    /// Because of the recursive nature of the [Expression] type,
-    /// overly complex expressions are very costly to clone, which in turn can negatively affect some analyses.
-    /// The recursion depth measure can be used to detect and handle such cases.
+    /// Equal to the height of the expression's AST.
+    ///
+    /// Because of the recursive nature of the [Expression] type, overly complex
+    /// expressions are very costly to clone, which in turn can negatively
+    /// affect some analyses. The recursion depth measure can be used to detect
+    /// and handle such cases.
     pub fn recursion_depth(&self) -> u64 {
         use Expression::*;
         match self {

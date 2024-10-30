@@ -28,6 +28,8 @@ pub struct Tid {
 pub type ProgramTid = Tid;
 /// Identifier of a function term.
 pub type FunctionTid = Tid;
+/// Identifier of an external function term.
+pub type ExtFunctionTid = Tid;
 /// Identifier of a block term.
 pub type BlockTid = Tid;
 /// Identifier of an instruction term.
