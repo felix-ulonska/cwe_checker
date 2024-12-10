@@ -183,7 +183,7 @@ fn generate_ghidra_call_command(
         .ok_or_else(|| anyhow!("Invalid file name"))?
         .to_string_lossy()
         .to_string();
-    let ghidra_plugin_path = get_ghidra_plugin_path("p_code_extractor");
+    let ghidra_plugin_path = get_ghidra_plugin_path("p_code_extractor")?;
 
     let mut ghidra_command = Command::new(headless_path);
     ghidra_command
