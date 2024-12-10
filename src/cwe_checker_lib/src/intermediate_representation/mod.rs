@@ -190,6 +190,7 @@ impl From<String> for Datatype {
 }
 
 #[cfg(test)]
+#[allow(hidden_glob_reexports)]
 mod tests {
     use super::*;
     use apint::BitWidth;

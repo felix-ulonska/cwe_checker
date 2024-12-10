@@ -78,11 +78,13 @@ impl<T: SpecializeByConditional + RegisterDomain> SpecializeByConditional for Da
     /// Compute the intersetion of two DataDomains.
     ///
     /// Note that this implementation is unsound for several reasons:
-    /// - For example, it assumes that two different relative values cannot intersect.
-    /// But that is not true if their offfsets are big enough
-    /// or if the relative values do in fact reference the same object despite having different identifiers.
-    /// - If intersecting relative values with absolute values we represent the result with the absolute values.
-    /// But depending on the use-case an approximation by the relative values could be more precise.
+    /// - For example, it assumes that two different relative values cannot
+    ///   intersect. But that is not true if their offfsets are big enough
+    ///   or if the relative values do in fact reference the same object despite
+    ///   having different identifiers.
+    /// - If intersecting relative values with absolute values we represent the
+    ///   result with the absolute values. But depending on the use-case an
+    ///   approximation by the relative values could be more precise.
     fn intersect(self, other: &Self) -> Result<Self, Error> {
         let mut result = match (self.contains_top_values, other.contains_top_values) {
             // If only one input value contains top elements, then the other input is the best approximation for the intersection.

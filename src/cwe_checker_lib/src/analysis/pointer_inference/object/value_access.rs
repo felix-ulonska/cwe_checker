@@ -1,7 +1,8 @@
 use super::*;
 
 impl AbstractObject {
-    /// Read the value at the given offset of the given size inside the memory region.
+    /// Read the value at the given offset of the given size inside the memory
+    /// region.
     pub fn get_value(&self, offset: Bitvector, bytesize: ByteSize) -> Data {
         self.inner.memory.get(offset, bytesize)
     }

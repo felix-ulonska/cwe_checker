@@ -31,6 +31,17 @@ pub use strings::*;
 mod domain_map;
 pub use domain_map::*;
 
+/// Marker trait to communicate that the implementing type is "cheap" to
+/// [`Clone.`].
+///
+/// Here "cheap" means something like:
+/// - copy only a few cache lines
+/// - maybe increase a refcount
+/// - no allocations
+// Ultimately we want to introduce a trait bound on the context traits to
+// require that the abstract domains are cheap to clone.
+pub trait CheapToClone {}
+
 /// The main trait describing an abstract domain.
 ///
 /// Each abstract domain is partially ordered.

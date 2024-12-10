@@ -163,7 +163,7 @@ fn test_handle_assign_and_load() {
 
     let mut block_first_def_set: HashSet<(Tid, Tid)> = HashSet::new();
     let mut return_tid = Tid::new("14718");
-    return_tid.address = "14718".to_string();
+    return_tid.set_address("14718");
     block_first_def_set.insert((return_tid, sub.tid));
 
     let constant_data_domain = DataDomain::from(Bitvector::from_i64(0x7000));

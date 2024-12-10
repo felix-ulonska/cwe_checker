@@ -98,6 +98,41 @@ impl fmt::Display for Def {
     }
 }
 
+impl Def {
+    /// Returns all constants that appear in the def.
+    pub fn referenced_constants(&self) -> Option<Vec<Bitvector>> {
+        match self {
+            Def::Load { address: expr, .. } | Def::Assign { value: expr, .. } => {
+                expr.referenced_constants()
+            }
+            Def::Store {
+                address: expr0,
+                value: expr1,
+            } => match (expr0.referenced_constants(), expr1.referenced_constants()) {
+                (None, c) | (c, None) => c,
+                (Some(mut c0), Some(c1)) => {
+                    c0.extend(c1);
+                    Some(c0)
+                }
+            },
+        }
+    }
+
+    /// Returns the sum of the recursion depths of all expressions in this
+    /// `Def`.
+    pub fn recursion_depth(&self) -> u64 {
+        match self {
+            Def::Load { address: expr, .. } | Def::Assign { value: expr, .. } => {
+                expr.recursion_depth()
+            }
+            Def::Store {
+                address: expr1,
+                value: expr2,
+            } => expr1.recursion_depth() + expr2.recursion_depth(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

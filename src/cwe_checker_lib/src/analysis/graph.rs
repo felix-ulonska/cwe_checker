@@ -1,50 +1,63 @@
 //! Generate control flow graphs out of a program term.
 //!
 //! The generated graphs follow some basic principles:
-//! * **Nodes** denote specific (abstract) points in time during program execution,
-//! i.e. information does not change on a node.
-//! So a basic block itself is not a node,
-//! but the points in time before and after execution of the basic block can be nodes.
-//! * **Edges** denote either transitions between the points in time of their start and end nodes during program execution
-//! or they denote (artificial) information flow between nodes. See the `CRCallStub` edges of interprocedural control flow graphs
-//! for an example of an edge that is only meant for information flow and not actual control flow.
+//! * **Nodes** denote specific (abstract) points in time during program
+//!   execution, i.e. information does not change on a node. So a basic block
+//!   itself is not a node, but the points in time before and after execution of
+//!   the basic block can be nodes.
+//! * **Edges** denote either transitions between the points in time of their
+//!   start and end nodes during program execution or they denote (artificial)
+//!   information flow between nodes. See the `CRCallStub` edges of
+//!   interprocedural control flow graphs for an example of an edge that is only
+//!   meant for information flow and not actual control flow.
 //!
 //! # General assumptions
 //!
-//! The graph construction algorithm assumes
-//! that each basic block of the program term ends with zero, one or two jump instructions.
-//! In the case of two jump instructions the first one is a conditional jump
-//! and the second one is an unconditional jump.
-//! Conditional calls are not supported.
-//! Missing jump instructions are supported to indicate incomplete information about the control flow,
-//! i.e. points where the control flow reconstruction failed.
-//! These points are converted to dead ends in the control flow graphs.
+//! The graph construction algorithm assumes that each basic block of the
+//! program term ends with zero, one or two jump instructions. In the case of
+//! two jump instructions the first one is a conditional jump and the second one
+//! is an unconditional jump. Conditional calls are not supported.
+//! Missing jump instructions are supported to indicate incomplete information
+//! about the control flow, i.e. points where the control flow reconstruction
+//! failed. These points are converted to dead ends in the control flow graphs.
 //!
 //! # Interprocedural control flow graph
 //!
-//! The function [`get_program_cfg`](fn.get_program_cfg.html) builds an interprocedural control flow graph out of a program term as follows:
-//! * Each basic block ([`image`](../../../../../doc/images/node_edge.png)) is converted into two nodes, *BlkStart* and *BlkEnd*,
-//! and a *block* edge from *BlkStart* to *BlkEnd*.
-//! * Jumps and calls inside the program are converted to *Jump* or *Call* edges from the *BlkEnd* node of their source
-//! to the *BlkStart* node of their target (which is the first block of the target function in case of calls).
-//! * Calls to library functions ([`image`](../../../../../doc/images/extern_calls.png)) outside the program are converted to *ExternCallStub* edges
-//! from the *BlkEnd* node of the callsite to the *BlkStart* node of the basic block the call returns to
-//! (if the call returns at all).
-//! * Right now indirect calls are handled as if they were extern calls, i.e. an *ExternCallStub* edge is added.
-//! This behaviour will change in the future, when better indirect call handling is implemented.
-//! * For each in-program call ([`image`](../../../../../doc/images/internal_function_call.png)) and corresponding return jump two nodes and four edges are generated:
+//! The function [`get_program_cfg`](fn.get_program_cfg.html) builds an
+//! interprocedural control flow graph out of a program term as follows:
+//! * Each basic block ([`image`](../../../../../doc/images/node_edge.png)) is
+//!   converted into two nodes, *BlkStart* and *BlkEnd*, and a *block* edge
+//!   from *BlkStart* to *BlkEnd*.
+//! * Jumps and calls inside the program are converted to *Jump* or *Call* edges
+//!   from the *BlkEnd* node of their source to the *BlkStart* node of their
+//!   target (which is the first block of the target function in case of calls).
+//! * Calls to library functions
+//!   ([`image`](../../../../../doc/images/extern_calls.png)) outside the
+//!   program are converted to *ExternCallStub* edges from the *BlkEnd* node of
+//!   the callsite to the *BlkStart* node of the basic block the call returns to
+//!   (if the call returns at all).
+//! * Right now indirect calls are handled as if they were extern calls, i.e. an
+//!   *ExternCallStub* edge is added. This behaviour will change in the future,
+//!   when better indirect call handling is implemented.
+//! * For each in-program call
+//!   ([`image`](../../../../../doc/images/internal_function_call.png)) and
+//!   corresponding return jump two nodes and four edges are generated:
 //!   * An artificial node *CallReturn* and node *CallSource*
-//!   * A *CRCallStub* edge from the *BlkEnd* node of the callsite to *CallReturn*
-//!   * A *CRReturnStub* edge from the *BlkEnd* node of the returning from block to *CallReturn*
-//!   * A *ReturnCombine* edge from *CallReturn* to the *BlkStart* node of the returned to block.
+//!   * A *CRCallStub* edge from the *BlkEnd* node of the callsite to
+//!     *CallReturn*
+//!   * A *CRReturnStub* edge from the *BlkEnd* node of the returning from block
+//!     to *CallReturn*
+//!   * A *ReturnCombine* edge from *CallReturn* to the *BlkStart* node of the
+//!     returned to block.
 //!   * A *CallCombine* edge from the *BlkEnd* node to the *CallSource* node.
 //!
-//! The artificial *CallReturn* nodes enable enriching the information flowing through a return edge
-//! with information recovered from the corresponding callsite during a fixpoint computation.
-
+//! The artificial *CallReturn* nodes enable enriching the information flowing
+//! through a return edge with information recovered from the corresponding
+//! callsite during a fixpoint computation.
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::{debug::ToJsonCompact, log::LogMessage};
+use crate::utils::debug::ToJsonCompact;
+use crate::utils::log::{LogMessage, WithLogs};
 use std::collections::{HashMap, HashSet};
 
 pub use petgraph::graph::NodeIndex;
@@ -52,6 +65,10 @@ use petgraph::{
     graph::DiGraph,
     visit::{EdgeRef, IntoNodeReferences},
 };
+
+pub mod algo;
+pub mod call;
+pub mod intraprocedural_cfg;
 
 /// The graph type of an interprocedural control flow graph
 pub type Graph<'a> = DiGraph<Node<'a>, Edge<'a>>;
@@ -101,8 +118,10 @@ pub enum Node<'a> {
 }
 
 impl<'a> Node<'a> {
-    /// Get the block corresponding to the node for `BlkStart` and `BlkEnd` nodes.
-    /// panics if called on a `CallReturn` node.
+    /// Get the block corresponding to the node for `BlkStart` and `BlkEnd`
+    /// nodes.
+    ///
+    /// Panics if called on a `CallReturn` or `CallSource` node.
     pub fn get_block(&self) -> &'a Term<Blk> {
         use Node::*;
         match self {
@@ -110,6 +129,16 @@ impl<'a> Node<'a> {
             CallSource { .. } | CallReturn { .. } => {
                 panic!("get_block() is undefined for CallReturn and CallSource nodes")
             }
+        }
+    }
+
+    /// Get the block corresponding to the node for `BlkStart` and `BlkEnd`
+    /// nodes.
+    pub fn try_get_block(&self) -> Option<&'a Term<Blk>> {
+        use Node::*;
+        match self {
+            BlkStart(blk, _sub) | BlkEnd(blk, _sub) => Some(blk),
+            CallSource { .. } | CallReturn { .. } => None,
         }
     }
 
@@ -206,7 +235,7 @@ impl<'a> std::fmt::Display for Edge<'a> {
 
 /// A builder struct for building graphs
 struct GraphBuilder<'a> {
-    program: &'a Term<Program>,
+    program: &'a Program,
     extern_subs: HashSet<Tid>,
     graph: Graph<'a>,
     /// Denotes the NodeIndices of possible call targets
@@ -225,7 +254,7 @@ struct GraphBuilder<'a> {
 
 impl<'a> GraphBuilder<'a> {
     /// create a new builder with an emtpy graph
-    pub fn new(program: &'a Term<Program>, extern_subs: HashSet<Tid>) -> GraphBuilder<'a> {
+    pub fn new(program: &'a Program, extern_subs: HashSet<Tid>) -> GraphBuilder<'a> {
         GraphBuilder {
             program,
             extern_subs,
@@ -256,7 +285,7 @@ impl<'a> GraphBuilder<'a> {
     /// i.e. for blocks contained in more than one function the extra nodes have to be added separately later.
     /// The `sub` a block is associated with is the `sub` that the block is contained in in the `program` struct.
     fn add_program_blocks(&mut self) {
-        let subs = self.program.term.subs.values();
+        let subs = self.program.subs.values();
         for sub in subs {
             for block in sub.term.blocks.iter() {
                 self.add_block(block, sub);
@@ -266,7 +295,7 @@ impl<'a> GraphBuilder<'a> {
 
     /// add all subs to the call targets so that call instructions can be linked to the starting block of the corresponding sub.
     fn add_subs_to_call_targets(&mut self) {
-        for sub in self.program.term.subs.values() {
+        for sub in self.program.subs.values() {
             if !sub.term.blocks.is_empty() {
                 let start_block = &sub.term.blocks[0];
                 let target_index = self.jump_targets[&(start_block.tid.clone(), sub.tid.clone())];
@@ -301,17 +330,18 @@ impl<'a> GraphBuilder<'a> {
             self.graph
                 .add_edge(source, *target_node, Edge::Jump(jump, untaken_conditional));
         } else {
-            let target_block = self.program.term.find_block(target_tid).unwrap();
+            let target_block = self.program.find_block(target_tid).unwrap();
             let (target_node, _) = self.add_block(target_block, sub_term);
             self.graph
                 .add_edge(source, target_node, Edge::Jump(jump, untaken_conditional));
         }
     }
 
-    /// Read in target hints for indirect intraprocedural jumps from the source block
-    /// and add intraprocedural jump edges for them to the graph.
+    /// Read in target hints for indirect intraprocedural jumps from the source
+    /// block and add intraprocedural jump edges for them to the graph.
     ///
-    /// The function assumes (but does not check) that the `jump` is an intraprocedural indirect jump.
+    /// The function assumes (but does not check) that the `jump` is an
+    /// intraprocedural indirect jump.
     fn add_indirect_jumps(
         &mut self,
         source: NodeIndex,
@@ -322,8 +352,10 @@ impl<'a> GraphBuilder<'a> {
             Node::BlkEnd(source_block, _) => source_block,
             _ => panic!(),
         };
-        for target_tid in source_block.term.indirect_jmp_targets.iter() {
-            self.add_intraprocedural_edge(source, target_tid, jump, untaken_conditional);
+        if let Some(indirect_jump_targets) = source_block.ind_jump_targets() {
+            for target_tid in indirect_jump_targets {
+                self.add_intraprocedural_edge(source, target_tid, jump, untaken_conditional);
+            }
         }
     }
 
@@ -358,7 +390,7 @@ impl<'a> GraphBuilder<'a> {
                     {
                         Some(*return_to_node)
                     } else {
-                        let return_block = self.program.term.find_block(return_tid).unwrap();
+                        let return_block = self.program.find_block(return_tid).unwrap();
                         Some(self.add_block(return_block, sub_term).0)
                     }
                 } else {
@@ -412,7 +444,7 @@ impl<'a> GraphBuilder<'a> {
                     {
                         *return_to_node
                     } else {
-                        let return_block = self.program.term.find_block(return_tid).unwrap();
+                        let return_block = self.program.find_block(return_tid).unwrap();
                         self.add_block(return_block, sub_term).0
                     };
                     self.graph
@@ -526,15 +558,16 @@ impl<'a> GraphBuilder<'a> {
 }
 
 /// Build the interprocedural control flow graph for a program term.
-pub fn get_program_cfg(program: &Term<Program>) -> Graph {
-    get_program_cfg_with_logs(program).0
+pub fn get_program_cfg(program: &Program) -> Graph {
+    get_program_cfg_with_logs(program).into_object()
 }
 
 /// Build the interprocedural control flow graph for a program term with log messages created by building.
-pub fn get_program_cfg_with_logs(program: &Term<Program>) -> (Graph, Vec<LogMessage>) {
-    let extern_subs = program.term.extern_symbols.keys().cloned().collect();
+pub fn get_program_cfg_with_logs(program: &Program) -> WithLogs<Graph> {
+    let extern_subs = program.extern_symbols.keys().cloned().collect();
     let mut builder = GraphBuilder::new(program, extern_subs);
-    (builder.build(), builder.log_messages)
+
+    WithLogs::new(builder.build(), builder.log_messages)
 }
 
 /// Returns a map from function TIDs to the node index of the `BlkStart` node of the first block in the function.
@@ -654,29 +687,21 @@ mod tests {
             tid: Tid::new("jump"),
             term: jmp,
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![call_term]);
         let sub1_blk1 = Term {
             tid: Tid::new("sub1_blk1"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![call_term],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![jmp_term]);
         let sub1_blk2 = Term {
             tid: Tid::new("sub1_blk2"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![jmp_term],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
         let sub1 = Term {
             tid: Tid::new("sub1"),
-            term: Sub {
-                name: "sub1".to_string(),
-                blocks: vec![sub1_blk1, sub1_blk2],
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>("sub1", vec![sub1_blk1, sub1_blk2], None),
         };
         let cond_jump = Jmp::CBranch {
             target: Tid::new("sub1_blk1"),
@@ -690,29 +715,21 @@ mod tests {
             tid: Tid::new("jump2"),
             term: Jmp::Branch(Tid::new("sub2_blk2")),
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![cond_jump_term, jump_term_2]);
         let sub2_blk1 = Term {
             tid: Tid::new("sub2_blk1"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![cond_jump_term, jump_term_2],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![return_term]);
         let sub2_blk2 = Term {
             tid: Tid::new("sub2_blk2"),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![return_term],
-                indirect_jmp_targets: Vec::new(),
-            },
+            term: blk,
         };
         let sub2 = Term {
             tid: Tid::new("sub2"),
-            term: Sub {
-                name: "sub2".to_string(),
-                blocks: vec![sub2_blk1, sub2_blk2],
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>("sub2", vec![sub2_blk1, sub2_blk2], None),
         };
         let program = Term {
             tid: Tid::new("program"),
@@ -742,22 +759,17 @@ mod tests {
             term: Jmp::BranchInd(expr!("0x1000:4")), // At the moment the expression does not matter
         };
         let mut blk_tid = Tid::new("blk_00001000");
-        blk_tid.address = "00001000".to_string();
+        blk_tid.set_address("00001000");
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![indirect_jmp_term])
+            .set_ind_jump_targets(vec![blk_tid.clone()]);
         let blk_term = Term {
-            tid: blk_tid.clone(),
-            term: Blk {
-                defs: Vec::new(),
-                jmps: vec![indirect_jmp_term],
-                indirect_jmp_targets: vec![blk_tid],
-            },
+            tid: blk_tid,
+            term: blk,
         };
         let sub_term = Term {
             tid: Tid::new("sub"),
-            term: Sub {
-                name: "sub".to_string(),
-                blocks: vec![blk_term],
-                calling_convention: None,
-            },
+            term: Sub::new::<_, &str>("sub", vec![blk_term], None),
         };
         let mut program = Program::mock_x64();
         program.subs.insert(sub_term.tid.clone(), sub_term);

@@ -60,19 +60,18 @@
 //! The list of checked external functions can be configured via the
 //! `config.json`. By selecting the `strict_mode` additional functions can be
 //! included, however, those are more likely to produce false positives.
+use super::prelude::*;
 
 use crate::analysis::graph::{Edge, NodeIndex};
 use crate::analysis::pointer_inference::PointerInference;
 use crate::intermediate_representation::{ExternSymbol, Jmp, Project, Term};
 use crate::pipeline::AnalysisResults;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils;
-use crate::CweModule;
 
 use petgraph::visit::EdgeRef;
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 mod context;
@@ -81,22 +80,18 @@ mod isolated_returns;
 use context::*;
 use isolated_returns::*;
 
-/// CWE-252: Unchecked Return Value.
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE252",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// Configuration of the check; this is read from the `config.json` file.
-#[derive(Deserialize)]
-struct Config {
-    strict_mode: bool,
-    /// External symbols whose return values must be checked.
-    symbols: HashSet<String>,
-    /// Additional symbols that are only checked when we run in strict mode.
-    strict_symbols: HashSet<String>,
-}
+cwe_module!(
+    "CWE252",
+    "0.1",
+    check_cwe,
+    config:
+        /// Include more symbols in check.
+        strict_mode: bool,
+        /// External symbols whose return values must be checked.
+        symbols: HashSet<String>,
+        /// Additional symbols that are only checked when we run in strict mode.
+        strict_symbols: HashSet<String>,
+);
 
 impl Config {
     fn into_symbols(mut self) -> HashSet<String> {
@@ -219,7 +214,7 @@ impl<'a, 'b: 'a> CweAnalysis<'a, 'b> {
     }
 
     /// Runs the CWE252 analysis and returns the generated warnings.
-    fn run(mut self) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    fn run(mut self) -> WithLogs<Vec<CweWarning>> {
         while let Some((isolated_returns, ta_comp_ctx)) = self.next_call_ctx() {
             let mut ta_comp = ta_comp_ctx.into_computation();
 
@@ -228,17 +223,12 @@ impl<'a, 'b: 'a> CweAnalysis<'a, 'b> {
             isolated_returns.analyze(&ta_comp);
         }
 
-        (
-            Vec::new(),
-            self.cwe_collector
-                .try_iter()
-                // FIXME: It would be nice to preerve all reasons during
-                // deduplication.
-                .map(|msg| (msg.tids.clone(), msg))
-                .collect::<BTreeMap<_, _>>()
-                .into_values()
-                .collect(),
-        )
+        self.cwe_collector
+            .try_iter()
+            .collect::<Vec<_>>()
+            // FIXME: It would be nice to preserve all reasons during
+            // deduplication.
+            .deduplicate_addresses()
     }
 }
 
@@ -255,12 +245,13 @@ fn generate_cwe_warning(
         CWE_MODULE.version,
         format!(
             "(Unchecked Return Value) There is no check of the return value of {} ({}).",
-            taint_source.tid.address, taint_source_name
+            taint_source.tid.address(),
+            taint_source_name
         ),
     )
     .addresses(vec![
-        taint_source.tid.address.clone(),
-        warning_location.address.clone(),
+        taint_source.tid.address().to_string(),
+        warning_location.address().to_string(),
     ])
     .tids(vec![
         format!("{}", taint_source.tid),
@@ -277,7 +268,8 @@ fn generate_cwe_warning(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
     let config: Config =
         serde_json::from_value(cwe_params.clone()).expect("CWE252: invalid configuration");
 

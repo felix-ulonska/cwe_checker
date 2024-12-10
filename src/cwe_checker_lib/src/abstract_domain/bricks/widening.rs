@@ -1,9 +1,17 @@
-//! This module implements the widening operator for the BrickDomain and BricksDomain.
+//! This module implements the widening operator for the BrickDomain and
+//! BricksDomain.
+//!
 //! The exact widening procedure depends on three constants.
-//!  - The *interval threshold* overapproximates the number of times string sequences can occur in a brick.
-//!  - The *sequence threshold* overapproximates the number of string sequences in a brick by forcing a *Top* value.
-//!  - The *length threshold* overapproximates the number of bricks in the BricksDomain and forces a *Top* value.
-//! A merge is processed without widening when none of the thresholds are exceeded.
+//!
+//!  - The *interval threshold* overapproximates the number of times string
+//!    sequences can occur in a brick.
+//!  - The *sequence threshold* overapproximates the number of string sequences
+//!    in a brick by forcing a *Top* value.
+//!  - The *length threshold* overapproximates the number of bricks in the
+//!    BricksDomain and forces a *Top* value.
+//!
+//! A merge is processed without widening when none of the thresholds are
+//! exceeded.
 
 use std::{
     cmp::{

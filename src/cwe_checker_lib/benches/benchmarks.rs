@@ -3,12 +3,14 @@
 //! This module contains microbenchmarks for various steps in the `cwe_checker`.
 //! Currently there are benchmarks for the following steps:
 //!
-//! - CFG construction,
-//! - individual normalization passes,
+//! - interprocedural CFG construction,
+//! - individual IR passes,
 //! - function signatures analysis,
 //! - pointer inference,
 //! - string abstractions,
 //! - individual checkers.
+// TODO:
+// - call graph
 //!
 //! All benchmarks are executed on the following input programs:
 //!
@@ -21,17 +23,23 @@
 //! - arm64,
 //! - armel,
 //! - armhf,
-//! - mips64el,
+//! - hppa,
+//! - m68k,
 //! - mipsel,
+//! - mips64el,
 //! - ppc64el,
+//! - riscv64,
+//! - sh4,
+//! - sparc64,
 //! - x86.
 //!
-//! Inputs are stored in the `benches/_data/` directory. We include
-//! json-serialized pcode projects and binaries. The pcode projects are
-//! included for the following reasons:
+//! Inputs are stored in the `benches/_data/` directory. We provide
+//! json-serialized pcode projects (i.e., output of the Ghidra plugin) and
+//! binaries. The pcode projects are included for the following reasons:
 //!
 //! - not requiring a Ghidra installation on the benchmarking system,
 //! - avoid that changes in Ghidra version influence the benchmark results,
+//! - result of the Ghidra analysis is non-deterministic,
 //! - reduce the time it takes to run the benchmarks.
 //!
 //! # Getting the Inputs
@@ -39,6 +47,7 @@
 //! The input programs are not included in this repository. Before you can run
 //! the benchmarks you need to download them.
 //!
+//TODO: Update
 //! ```
 //! $ cd benches/_data/
 //! $ wget https://valentinobst.de/34defc254cb6f45ef074431465b7ecc614a6a87e97b13a5c7d0a113e4ed67c6b/cwe_checker_benches.tar.gz
@@ -98,53 +107,71 @@ use criterion::{
     BatchSize, BenchmarkGroup, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
 
-use cwe_checker_lib::analysis::{self, graph};
-use cwe_checker_lib::intermediate_representation::{
-    propagate_control_flow, Project, RuntimeMemoryImage,
-};
+use cwe_checker_lib::analysis::graph;
+use cwe_checker_lib::intermediate_representation::{Project, RuntimeMemoryImage};
 use cwe_checker_lib::pipeline::AnalysisResults;
 use cwe_checker_lib::utils;
 
 mod inputs {
     //! Constants used to access inputs stored in `benches/_data`.
 
-    pub const LS_PCODE_PROJECTS: [&str; 7] = [
+    pub const LS_PCODE_PROJECTS: [&str; 12] = [
         "amd64-ls_CB30D69B24245BF2",
         "arm64-ls_8D0A90D5AA1F9151",
         "armel-ls_400B36192085C142",
         "armhf-ls_1CE9F5077E5469C9",
+        "hppa-ls_CB00BEAB0E4CF46F",
+        "m68k-ls_3A787F3CDAC20FB7",
         "mipsel-ls_7CB1427659E706FB",
         "ppc64el-ls_0507CC2232E82FA9",
+        "riscv64-ls_5E6CB71A0BF3A32C",
+        "sh4-ls_A8CBD4851F3DF96D",
+        "sparc64-ls_26C5102B99E82FE4",
         "x86-ls_AFE4E5F03F4CF0F7",
     ];
 
-    pub const NETFS_PCODE_PROJECTS: [&str; 7] = [
+    pub const NETFS_PCODE_PROJECTS: [&str; 12] = [
         "amd64-netfs.ko_2968775E85859742",
         "arm64-netfs.ko_91816E1342973AFA",
         "armhf-netfs.ko_B7FA86FF57F64C18",
+        "hppa-netfs.ko_C8E221F0DBDE60EB",
+        "m68k-netfs.ko_6CD482FD644FED53",
         "mips32r2el-netfs.ko_6DF4CC2FD1E91EDC",
         "mips64r2el-netfs.ko_5331834BF22142BD",
         "powerpc64le-netfs.ko_332ECD2BFBEE0616",
+        "riscv64-netfs.ko_F705F80482B21FC4",
+        "sh4-netfs.ko_EE85BEDC21B7A178",
+        "sparc64-netfs.ko_0E6844B4CE53C1E3",
         "x86-netfs.ko_70E21F23852A0A0B",
     ];
 
-    pub const LS_BINARIES: [&str; 7] = [
+    pub const LS_BINARIES: [&str; 12] = [
         "amd64-ls",
         "arm64-ls",
         "armel-ls",
         "armhf-ls",
+        "hppa-ls",
+        "m68k-ls",
         "mipsel-ls",
         "ppc64el-ls",
+        "riscv64-ls",
+        "sh4-ls",
+        "sparc64-ls",
         "x86-ls",
     ];
 
-    pub const NETFS_BINARIES: [&str; 7] = [
+    pub const NETFS_BINARIES: [&str; 12] = [
         "amd64-netfs.ko",
         "arm64-netfs.ko",
         "armhf-netfs.ko",
+        "hppa-netfs.ko",
+        "m68k-netfs.ko",
         "mips32r2el-netfs.ko",
         "mips64r2el-netfs.ko",
         "powerpc64le-netfs.ko",
+        "riscv64-netfs.ko",
+        "sh4-netfs.ko",
+        "sparc64-netfs.ko",
         "x86-netfs.ko",
     ];
 }
@@ -153,10 +180,13 @@ mod helpers {
     //! Helpers to get inputs and configurations.
 
     use super::*;
+    use cwe_checker_lib::utils::{debug, log::WithLogs};
 
     const PREFIX: &str = "benches/_data/";
     const CONFIG: &str = "../config.json";
 
+    /// Returns the unoptimized IR project for the given Ghidra plugin output
+    /// and corresponding binary.
     pub fn get_project_and_binary(pcode_project_json: &str, binary: &str) -> (Project, Vec<u8>) {
         let pcode_project = fs::read_to_string(format!("{}{}", PREFIX, pcode_project_json))
             .expect("Could not read pcode project.");
@@ -167,10 +197,14 @@ mod helpers {
             .bytes()
             .map(|x| x.unwrap())
             .collect();
-        let mut project =
-            utils::ghidra::parse_pcode_project_to_ir_project(pcode_project, &binary, &None)
-                .expect("Could not parse pcode project.")
-                .0;
+        let mut project = utils::ghidra::parse_pcode_project_to_ir_project(
+            pcode_project,
+            &binary,
+            &None,
+            &get_debug_settings(),
+        )
+        .expect("Could not translate Pcode project to IR project.")
+        .into_object();
         let mut runtime_memory_image =
             RuntimeMemoryImage::new(&binary).expect("Could not generate RuntimeMemoryImage.");
         if project.program.term.address_base_offset != 0 {
@@ -181,14 +215,29 @@ mod helpers {
         (project, binary)
     }
 
+    /// Returns the checker configuration.
     pub fn get_config() -> serde_json::Value {
         let config_file = std::fs::read_to_string(CONFIG).expect("Could not read config file.");
 
         serde_json::from_str(&config_file).expect("Could not deserialize config file.")
     }
 
+    /// Convenience wrapper around [`get_project_and_binary`] that just returns
+    /// the IR Project.
     pub fn get_project(pcode_project_json: &str, binary: &str) -> Project {
         get_project_and_binary(pcode_project_json, binary).0
+    }
+
+    /// Convenience wrapper to construct [`debug::Settings`].
+    pub fn get_debug_settings() -> debug::Settings {
+        debug::Settings::default()
+    }
+
+    /// Optimizes the given IR project.
+    pub fn into_optimized_project(project: Project) -> Project {
+        let mut tmp = WithLogs::new(project, vec![]);
+        tmp.optimize(&get_debug_settings());
+        tmp.into_object()
     }
 }
 
@@ -200,24 +249,23 @@ mod checkers {
     use super::*;
     use cwe_checker_lib::checkers::*;
 
-    fn helper_bench_checker<T>(
-        checker: &cwe_checker_lib::CweModule,
-        group: BenchmarkGroup<T>,
-        is_lkm: bool,
-    ) where
+    fn helper_bench_checker<T>(checker: &CweModule, group: BenchmarkGroup<T>, is_lkm: bool)
+    where
         T: Measurement,
     {
         let config = get_config();
+        let debug_settings = get_debug_settings();
         let bench_with_input_loop =
             |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<T>| {
                 for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
-                    let (mut project, binary) = get_project_and_binary(pcode_project_json, binary);
-                    let _ = project.normalize();
+                    let (project, binary) = get_project_and_binary(pcode_project_json, binary);
+                    let project = into_optimized_project(project);
                     let cfg = graph::get_program_cfg(&project.program);
 
                     let analysis_results = AnalysisResults::new(&binary, &cfg, &project);
 
-                    let (function_signatures, _) = analysis_results.compute_function_signatures();
+                    let function_signatures =
+                        analysis_results.compute_function_signatures().into_object();
                     let analysis_results =
                         analysis_results.with_function_signatures(Some(&function_signatures));
 
@@ -235,7 +283,11 @@ mod checkers {
                         &analysis_results,
                         |b, analysis_results| {
                             b.iter_with_large_drop(|| {
-                                (checker.run)(analysis_results, &config[&checker.name])
+                                (checker.run)(
+                                    analysis_results,
+                                    &config[&checker.name],
+                                    &debug_settings,
+                                )
                             })
                         },
                     );
@@ -342,8 +394,8 @@ mod core_analyses {
         let bench_with_input_loop =
             |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<WallTime>| {
                 for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
-                    let (mut project, binary) = get_project_and_binary(pcode_project_json, binary);
-                    let _ = project.normalize();
+                    let (project, binary) = get_project_and_binary(pcode_project_json, binary);
+                    let project = into_optimized_project(project);
                     let cfg = graph::get_program_cfg(&project.program);
 
                     let analysis_results = AnalysisResults::new(&binary, &cfg, &project);
@@ -383,13 +435,14 @@ mod core_analyses {
             |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<WallTime>| {
                 let config = get_config();
                 for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
-                    let (mut project, binary) = get_project_and_binary(pcode_project_json, binary);
-                    let _ = project.normalize();
+                    let (project, binary) = get_project_and_binary(pcode_project_json, binary);
+                    let project = into_optimized_project(project);
                     let cfg = graph::get_program_cfg(&project.program);
 
                     let analysis_results = AnalysisResults::new(&binary, &cfg, &project);
 
-                    let (function_signatures, _) = analysis_results.compute_function_signatures();
+                    let function_signatures =
+                        analysis_results.compute_function_signatures().into_object();
                     let analysis_results =
                         analysis_results.with_function_signatures(Some(&function_signatures));
 
@@ -427,13 +480,14 @@ mod core_analyses {
             |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<WallTime>| {
                 let config = get_config();
                 for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
-                    let (mut project, binary) = get_project_and_binary(pcode_project_json, binary);
-                    let _ = project.normalize();
+                    let (project, binary) = get_project_and_binary(pcode_project_json, binary);
+                    let project = into_optimized_project(project);
                     let cfg = graph::get_program_cfg(&project.program);
 
                     let analysis_results = AnalysisResults::new(&binary, &cfg, &project);
 
-                    let (function_signatures, _) = analysis_results.compute_function_signatures();
+                    let function_signatures =
+                        analysis_results.compute_function_signatures().into_object();
                     let analysis_results =
                         analysis_results.with_function_signatures(Some(&function_signatures));
 
@@ -475,14 +529,15 @@ mod core_analyses {
     }
 }
 
-mod normalization {
-    //! Benchmarks for individual normalization passes.
+mod optimization {
+    //! Benchmarks for individual optimization passes.
 
     use super::helpers::*;
     use super::inputs::*;
     use super::*;
+    use cwe_checker_lib::intermediate_representation::ir_passes::*;
 
-    fn helper_bench_normalization<F, G, T: Measurement, U>(
+    fn helper_bench_optimization<F, G, T: Measurement, U>(
         pre_passes: F,
         pass: G,
         mut group: BenchmarkGroup<T>,
@@ -532,78 +587,152 @@ mod normalization {
         };
         (name = $p:ident; pre_passes = $pre:expr; pass = $pass:expr; samples = $s:expr; time = $t:expr) => {
             ::paste::paste! {
-                pub fn [<bench_normalize_ $p>](c: &mut Criterion) {
-                    let mut group_ls = c.benchmark_group(stringify!([<ls_normalize_ $p>]));
+                pub fn [<bench_optimize_ $p>](c: &mut Criterion) {
+                    let mut group_ls = c.benchmark_group(stringify!([<ls_optimize_ $p>]));
                     group_ls
                         .sample_size($s)
                         .warm_up_time(time::Duration::new(($t as u64).checked_div(2).unwrap(), 0))
                         .measurement_time(time::Duration::new($t, 0));
-                    helper_bench_normalization($pre, $pass, group_ls, false);
+                    helper_bench_optimization($pre, $pass, group_ls, false);
 
-                    let mut group_netfs = c.benchmark_group(stringify!([<netfs_normalize_ $p>]));
+                    let mut group_netfs = c.benchmark_group(stringify!([<netfs_optimize_ $p>]));
                     group_netfs
                         .sample_size($s)
                         .warm_up_time(time::Duration::new(($t as u64).checked_div(2).unwrap(), 0))
                         .measurement_time(time::Duration::new($t, 0));
-                    helper_bench_normalization($pre, $pass, group_netfs, true);
+                    helper_bench_optimization($pre, $pass, group_netfs, true);
                 }
             }
         };
     }
 
     bench_pass!(
-        name = basic;
-        pre_passes = |_: &mut Project| ();
-        pass = Project::normalize_basic
-    );
-    bench_pass!(
-        name = expression_propagation;
-        pre_passes = |project: &mut Project| {
-            let _ = project.normalize_basic();
+        name = intraprocedural_dead_block_elim;
+        pre_passes = |_: &mut Project| {};
+        pass = |project: &mut Project| {
+            run_ir_pass![
+                project.program.term,
+                (),
+                IntraproceduralDeadBlockElimPass,
+                vec![],
+                &get_debug_settings(),
+            ];
         };
-        pass = analysis::expression_propagation::propagate_input_expression;
         samples = 10;
         time = 60
     );
     bench_pass!(
-        name = substitute_trivial_expressions;
+        name = input_expression_propagation;
         pre_passes = |project: &mut Project| {
-            let _ = project.normalize_basic();
-            analysis::expression_propagation::propagate_input_expression(project);
+            run_ir_pass![
+                project.program.term,
+                (),
+                IntraproceduralDeadBlockElimPass,
+                vec![],
+                &get_debug_settings(),
+            ];
         };
-        pass = Project::substitute_trivial_expressions
+        pass = |project: &mut Project| {
+            run_ir_pass![
+                project.program.term,
+                (),
+                InputExpressionPropagationPass,
+                vec![],
+                &get_debug_settings(),
+            ];
+        }
     );
     bench_pass!(
-        name = dead_variable_elimination;
+        name = trivial_expression_substitution;
         pre_passes = |project: &mut Project| {
-            let _ = project.normalize_basic();
-            analysis::expression_propagation::propagate_input_expression(project);
-            project.substitute_trivial_expressions();
+            run_ir_pass!{
+                project.program.term,
+                vec![],
+                &get_debug_settings(),
+                ((), IntraproceduralDeadBlockElimPass),
+                ((), InputExpressionPropagationPass),
+            };
         };
-        pass = analysis::dead_variable_elimination::remove_dead_var_assignments;
+        pass = |project: &mut Project| {
+            run_ir_pass![
+                project.program.term,
+                (),
+                TrivialExpressionSubstitutionPass,
+                vec![],
+                &get_debug_settings(),
+            ];
+        };
         samples = 10;
         time = 60
     );
     bench_pass!(
-        name = propagate_control_flow;
+        name = dead_variable_elim;
         pre_passes = |project: &mut Project| {
-            let _ = project.normalize_basic();
-            analysis::expression_propagation::propagate_input_expression(project);
-            project.substitute_trivial_expressions();
-            analysis::dead_variable_elimination::remove_dead_var_assignments(project);
+            run_ir_pass!{
+                project.program.term,
+                vec![],
+                &get_debug_settings(),
+                ((), IntraproceduralDeadBlockElimPass),
+                ((), InputExpressionPropagationPass),
+                ((), TrivialExpressionSubstitutionPass),
+            };
         };
-        pass = propagate_control_flow::propagate_control_flow
+        pass = |project: &mut Project| {
+            run_ir_pass![
+                project.program.term,
+                project.register_set,
+                DeadVariableElimPass,
+                vec![],
+                &get_debug_settings(),
+            ];
+        }
     );
     bench_pass!(
-        name = substitute_and_on_stackpointer;
+        name = control_flow_propagation;
         pre_passes = |project: &mut Project| {
-            let _ = project.normalize_basic();
-            analysis::expression_propagation::propagate_input_expression(project);
-            project.substitute_trivial_expressions();
-            analysis::dead_variable_elimination::remove_dead_var_assignments(project);
-            propagate_control_flow::propagate_control_flow(project);
+            run_ir_pass!{
+                project.program.term,
+                vec![],
+                &get_debug_settings(),
+                ((), IntraproceduralDeadBlockElimPass),
+                ((), InputExpressionPropagationPass),
+                ((), TrivialExpressionSubstitutionPass),
+                (project.register_set, DeadVariableElimPass),
+            };
         };
-        pass = analysis::stack_alignment_substitution::substitute_and_on_stackpointer
+        pass = |project: &mut Project| {
+            run_ir_pass![
+                project.program.term,
+                (),
+                ControlFlowPropagationPass,
+                vec![],
+                &get_debug_settings(),
+            ];
+        }
+    );
+    bench_pass!(
+        name = stack_pointer_alignment_substitution;
+        pre_passes = |project: &mut Project| {
+            run_ir_pass!{
+                project.program.term,
+                vec![],
+                &get_debug_settings(),
+                ((), IntraproceduralDeadBlockElimPass),
+                ((), InputExpressionPropagationPass),
+                ((), TrivialExpressionSubstitutionPass),
+                (project.register_set, DeadVariableElimPass),
+                ((), ControlFlowPropagationPass),
+            };
+        };
+        pass = |project: &mut Project| {
+            run_ir_pass![
+                project.program.term,
+                project,
+                StackPointerAlignmentSubstitutionPass,
+                vec![],
+                &get_debug_settings(),
+            ];
+        }
     );
 }
 
@@ -618,13 +747,12 @@ mod cfg {
         let bench_with_input_loop =
             |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<WallTime>| {
                 for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
-                    let mut project = get_project(pcode_project_json, binary);
+                    let project = get_project(pcode_project_json, binary);
 
-                    let _ = project.normalize_basic();
                     let program_unoptimized = project.program.clone();
 
-                    let _ = project.normalize_optimize();
-                    let program_optimized = project.program.clone();
+                    let optimized_project = into_optimized_project(project);
+                    let program_optimized = optimized_project.program;
 
                     group.bench_with_input(
                         BenchmarkId::new("unoptimized", pcode_project_json),
@@ -653,6 +781,55 @@ mod cfg {
     }
 }
 
+mod cg {
+    //! Benchmarks for CG construction.
+
+    use super::helpers::*;
+    use super::inputs::*;
+    use super::*;
+
+    pub fn bench_cg_construction(c: &mut Criterion) {
+        let bench_with_input_loop =
+            |pcode_projects: &[&str], binaries: &[&str], mut group: BenchmarkGroup<WallTime>| {
+                for (pcode_project_json, binary) in iter::zip(pcode_projects, binaries) {
+                    let project = get_project(pcode_project_json, binary);
+
+                    let program_unoptimized = project.program.clone();
+
+                    let optimized_project = into_optimized_project(project);
+                    let program_optimized = optimized_project.program;
+
+                    group.bench_with_input(
+                        BenchmarkId::new("unoptimized", pcode_project_json),
+                        &program_unoptimized,
+                        |b, program_unoptimized| {
+                            b.iter_with_large_drop(|| {
+                                graph::call::CallGraph::new_with_full_cfgs(program_unoptimized)
+                            });
+                        },
+                    );
+                    group.bench_with_input(
+                        BenchmarkId::new("optimized", pcode_project_json),
+                        &program_optimized,
+                        |b, program_optimized| {
+                            b.iter_with_large_drop(|| {
+                                graph::call::CallGraph::new_with_full_cfgs(program_optimized)
+                            });
+                        },
+                    );
+                }
+
+                group.finish();
+            };
+
+        let group_ls = c.benchmark_group("ls_cg_construction");
+        bench_with_input_loop(&LS_PCODE_PROJECTS, &LS_BINARIES, group_ls);
+
+        let group_netfs = c.benchmark_group("netfs_cg_construction");
+        bench_with_input_loop(&NETFS_PCODE_PROJECTS, &NETFS_BINARIES, group_netfs);
+    }
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default()
@@ -660,12 +837,13 @@ criterion_group!(
         .warm_up_time(time::Duration::new(5, 0))
         .measurement_time(time::Duration::new(10, 0));
     targets = cfg::bench_cfg_construction,
-        normalization::bench_normalize_basic,
-        normalization::bench_normalize_expression_propagation,
-        normalization::bench_normalize_substitute_trivial_expressions,
-        normalization::bench_normalize_dead_variable_elimination,
-        normalization::bench_normalize_propagate_control_flow,
-        normalization::bench_normalize_substitute_and_on_stackpointer,
+        cg::bench_cg_construction,
+        optimization::bench_optimize_intraprocedural_dead_block_elim,
+        optimization::bench_optimize_input_expression_propagation,
+        optimization::bench_optimize_trivial_expression_substitution,
+        optimization::bench_optimize_dead_variable_elim,
+        optimization::bench_optimize_control_flow_propagation,
+        optimization::bench_optimize_stack_pointer_alignment_substitution,
         core_analyses::bench_function_signatures,
         core_analyses::bench_pi,
         core_analyses::bench_string_abstractions,

@@ -1,9 +1,10 @@
 //! This module implements a check for CWE-190: Integer overflow or wraparound.
 //!
-//! An integer overflow can lead to undefined behavior and is especially dangerous
-//! in conjunction with memory management functions.
+//! An integer overflow can lead to undefined behavior and is especially
+//! dangerous in conjunction with memory management functions.
 //!
-//! See <https://cwe.mitre.org/data/definitions/190.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/190.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
@@ -17,16 +18,18 @@
 //!
 //! ## False Positives
 //!
-//! - There is no check whether the result of the multiplication is actually used
-//!   as input to the function call. However, this does not seem to generate a lot
-//!   of false positives in practice.
-//! - Values that are not absolute e.g. user controlled or depend on other values.
+//! - There is no check whether the result of the multiplication is actually
+//!   used as input to the function call. However, this does not seem to
+//!   generate a lot of false positives in practice.
+//! - Values that are not absolute e.g. user controlled or depend on other
+//!   values.
 //!
 //! ## False Negatives
 //!
-//! - All integer overflows not in a basic block right before a call to a function
-//! from the CWE190 symbol list.
+//! - All integer overflows not in a basic block right before a call to a
+//!   function from the CWE190 symbol list.
 //! - All integer overflows caused by addition or subtraction.
+use super::prelude::*;
 
 use crate::abstract_domain::AbstractDomain;
 use crate::abstract_domain::DataDomain;
@@ -36,23 +39,17 @@ use crate::analysis::pointer_inference::*;
 use crate::analysis::vsa_results::*;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::log::{CweWarning, LogMessage};
 use crate::utils::symbol_utils::{get_callsites, get_symbol_map};
-use crate::CweModule;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE190",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-/// The `symbols` are extern function names.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE190",
+    "0.1",
+    check_cwe,
+    config:
+        /// Functions with parameters that are typically susceptible to
+        /// overflow/wraparound issues.
+        symbols: Vec<String>,
+);
 
 /// Check whether the given expression contains an integer multiplication subexpression,
 /// i.e. an `IntMult` or `IntLeft` (left shift) binary operation.
@@ -96,10 +93,10 @@ fn generate_cwe_warning(callsite: &Tid, called_symbol: &ExternSymbol) -> CweWarn
         CWE_MODULE.version,
         format!(
             "(Integer Overflow or Wraparound) Potential overflow due to multiplication before call to {} at {}",
-            called_symbol.name, callsite.address
+            called_symbol.name, callsite.address()
         ))
         .tids(vec![format!("{callsite}")])
-        .addresses(vec![callsite.address.clone()])
+        .addresses(vec![callsite.address().to_string()])
         .symbols(vec![called_symbol.name.clone()])
 }
 
@@ -138,12 +135,17 @@ fn contains_only_non_top_absolute_value(data_domain: &DataDomain<IntervalDomain>
 }
 
 /// Run the CWE check.
+///
 /// For each call to one of the symbols configured in config.json
-/// we check whether the block containing the call also contains a multiplication instruction.
+/// we check whether the block containing the call also contains a
+/// multiplication instruction.
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
+
     let project = analysis_results.project;
     let pointer_inference_results = analysis_results.pointer_inference.unwrap();
 
@@ -175,5 +177,11 @@ pub fn check_cwe(
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }

@@ -61,34 +61,52 @@ pub enum Jmp {
     },
 }
 
+impl Jmp {
+    /// Returns all constants that are referenced by this jump.
+    pub fn referenced_constants(&self) -> Option<Vec<Bitvector>> {
+        use Jmp::*;
+        match self {
+            Return(expr)
+            | CallInd { target: expr, .. }
+            | CBranch {
+                condition: expr, ..
+            }
+            | BranchInd(expr) => expr.referenced_constants(),
+            _ => None,
+        }
+    }
+
+    /// Returns true iff the jump is a call.
+    pub fn is_call(&self) -> bool {
+        matches!(
+            self,
+            Jmp::Call { .. } | Jmp::CallInd { .. } | Jmp::CallOther { .. }
+        )
+    }
+
+    /// Returns true iff the jump is an indirect call.
+    pub fn is_indirect_call(&self) -> bool {
+        matches!(self, Jmp::CallInd { .. })
+    }
+}
+
 impl fmt::Display for Jmp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Jmp::Branch(tid) => write!(f, "Jump to {tid}"),
             Jmp::BranchInd(expr) => write!(f, "Jump to {expr}"),
             Jmp::CBranch { target, condition } => write!(f, "If {condition} jump to {target}"),
-            Jmp::Call { target, return_ } => write!(
-                f,
-                "call {} ret {}",
-                target,
-                return_.as_ref().unwrap_or(&Tid::new("?"))
-            ),
-            Jmp::CallInd { target, return_ } => write!(
-                f,
-                "call {} ret {}",
-                target,
-                return_.as_ref().unwrap_or(&Tid::new("?"))
-            ),
+            Jmp::Call { target, return_ } => {
+                write!(f, "call {} ret {}", target, return_.as_ref().unwrap())
+            }
+            Jmp::CallInd { target, return_ } => {
+                write!(f, "call {} ret {}", target, return_.as_ref().unwrap())
+            }
             Jmp::Return(expr) => write!(f, "ret {expr}"),
             Jmp::CallOther {
                 description,
                 return_,
-            } => write!(
-                f,
-                "call {} ret {}",
-                description,
-                return_.as_ref().unwrap_or(&Tid::new("?"))
-            ),
+            } => write!(f, "call {} ret {}", description, return_.as_ref().unwrap()),
         }
     }
 }

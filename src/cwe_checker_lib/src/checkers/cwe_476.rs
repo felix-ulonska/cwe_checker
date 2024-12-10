@@ -36,6 +36,7 @@
 //!   specifically for the return value being NULL or something else
 //! - For functions with more than one return value we do not distinguish between
 //!   the return values.
+use super::prelude::*;
 
 use crate::analysis::forward_interprocedural_fixpoint::create_computation;
 use crate::analysis::forward_interprocedural_fixpoint::Context as _;
@@ -44,11 +45,7 @@ use crate::analysis::interprocedural_fixpoint_generic::NodeValue;
 use crate::analysis::taint::state::State as TaState;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::{
-    log::{CweWarning, LogMessage},
-    symbol_utils,
-};
-use crate::CweModule;
+use crate::utils::symbol_utils;
 use petgraph::visit::EdgeRef;
 use std::collections::BTreeMap;
 
@@ -56,22 +53,17 @@ mod context;
 
 use context::*;
 
-/// The module name and version.
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE476",
-    version: "0.3",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    /// The names of symbols for which the analysis should check whether the
-    /// return values are checked for being a NULL pointer by the analysed
-    /// binary. This list is configurable via the `config.json` configuration
-    /// file.
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE476",
+    "0.3",
+    check_cwe,
+    config:
+        /// The names of symbols for which the analysis should check whether the
+        /// return values are checked for being a NULL pointer by the analysed
+        /// binary. This list is configurable via the `config.json`
+        /// configuration file.
+        symbols: Vec<String>,
+);
 
 /// Run the CWE check.
 ///
@@ -81,7 +73,8 @@ pub struct Config {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
     let project = analysis_results.project;
     let pi_result = analysis_results.pointer_inference.unwrap();
 
@@ -126,5 +119,5 @@ pub fn check_cwe(
     }
     let cwe_warnings = cwe_warnings.into_values().collect();
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::wrap(cwe_warnings)
 }

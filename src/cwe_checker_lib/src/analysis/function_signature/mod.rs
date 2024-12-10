@@ -45,7 +45,7 @@ use crate::analysis::graph::*;
 use crate::analysis::interprocedural_fixpoint_generic::NodeValue;
 use crate::intermediate_representation::*;
 use crate::prelude::*;
-use crate::utils::log::LogMessage;
+use crate::utils::log::{LogMessage, WithLogs};
 use std::collections::BTreeMap;
 
 mod context;
@@ -151,7 +151,7 @@ fn extract_fn_signatures_from_fixpoint<'a>(
 pub fn compute_function_signatures<'a>(
     project: &'a Project,
     graph: &'a Graph,
-) -> (BTreeMap<Tid, FunctionSignature>, Vec<LogMessage>) {
+) -> WithLogs<BTreeMap<Tid, FunctionSignature>> {
     let max_pointer_recursion_depth_limit: u64 = 2;
     // We gradually increase the recursion depth limit used in the fixpoint computation.
     // The idea is that for array accesses the offset has time to converge to `Top` before IDs for nested objects are created.
@@ -197,7 +197,7 @@ pub fn compute_function_signatures<'a>(
     // Propagate globals in bottom-up direction in the call graph
     propagate_globals(project, &mut fn_sig_map, &mut logs);
 
-    (fn_sig_map, logs)
+    WithLogs::new(fn_sig_map, logs)
 }
 
 /// The signature of a function.

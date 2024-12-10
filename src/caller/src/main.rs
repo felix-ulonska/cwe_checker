@@ -1,5 +1,7 @@
-//! This crate defines the command line interface for the cwe_checker.
-//! General documentation about the cwe_checker is contained in the [`cwe_checker_lib`] crate.
+//! Command line interface for the cwe_checker.
+//!
+//! General documentation about the cwe_checker is contained in the
+//! [`cwe_checker_lib`] crate.
 
 extern crate cwe_checker_lib; // Needed for the docstring-link to work
 
@@ -8,40 +10,104 @@ use anyhow::Error;
 use clap::{Parser, ValueEnum};
 
 use cwe_checker_lib::analysis::graph;
+use cwe_checker_lib::checkers::CweModule;
 use cwe_checker_lib::pipeline::{disassemble_binary, AnalysisResults};
 use cwe_checker_lib::utils::binary::BareMetalConfig;
 use cwe_checker_lib::utils::debug;
-use cwe_checker_lib::utils::log::{print_all_messages, LogLevel};
+use cwe_checker_lib::utils::log::{print_all_messages, CweWarning, LogLevel, LogMessage};
 use cwe_checker_lib::utils::read_config_file;
 
 use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
+use std::ops::Deref;
 use std::path::PathBuf;
+
+mod cfg_stats;
 
 #[derive(ValueEnum, Clone, Debug, Copy)]
 /// Selects which kind of debug output is displayed.
 pub enum CliDebugMode {
-    /// Result of the Pointer Inference computation.
-    Pi,
-    /// Unnormalized IR form of the program.
-    IrRaw,
-    /// Normalized IR form of the program.
-    IrNorm,
-    /// Optimized IR form of the program.
-    IrOpt,
     /// Output of the Ghidra plugin.
     PcodeRaw,
+    /// The output of the Ghidra plugin deserialized into Rust types.
+    PcodeParsed,
+    /// The very first IR representation of the program.
+    IrEarly,
+    /// After blocks within a function have been normal ordered.
+    IrFnBlksSorted,
+    /// After non-returning external functions have been marked.
+    IrNonRetExtFunctionsMarked,
+    /// After calls to stubs for external functions have been replaced with
+    /// calls to the external function.
+    IrExtCallsReplaced,
+    /// After existing, referenced blocks have blocks have been inlined into
+    /// functions.
+    IrInlined,
+    /// After the subregister substitution pass.
+    IrSubregistersSubstituted,
+    /// After all control flow transfers have a valid target.
+    IrCfPatched,
+    /// After empty functions have been removed.
+    IrEmptyFnRemoved,
+    /// The unoptimized IR.
+    IrRaw,
+    /// After unreachable basic blocks have been removed from functions.
+    IrIntraproceduralDeadBlocksElimed,
+    /// After trivial expressions have been replaced with their results.
+    IrTrivialExpressionsSubstituted,
+    /// After input expressions have been propagated along variable assignments.
+    IrInputExpressionsPropagated,
+    /// After assignments to dead variables have been removed.
+    IrDeadVariablesElimed,
+    /// After control flow across conditionals with the same condition has been
+    /// simplified.
+    IrControlFlowPropagated,
+    /// After stack pointer alignment via logical AND has been substituted with
+    /// a subtraction operation.
+    IrStackPointerAlignmentSubstituted,
+    /// The final IR.
+    IrOptimized,
+    /// Whole-program call graph.
+    Cg,
+    /// Whole-program control flow graph.
+    Cfg,
+    /// Result of the Pointer Inference computation.
+    Pi,
 }
 
 impl From<&CliDebugMode> for debug::Stage {
     fn from(mode: &CliDebugMode) -> Self {
         use CliDebugMode::*;
         match mode {
-            Pi => debug::Stage::Pi,
-            IrRaw => debug::Stage::Ir(debug::IrForm::Raw),
-            IrNorm => debug::Stage::Ir(debug::IrForm::Normalized),
-            IrOpt => debug::Stage::Ir(debug::IrForm::Optimized),
             PcodeRaw => debug::Stage::Pcode(debug::PcodeForm::Raw),
+            PcodeParsed => debug::Stage::Pcode(debug::PcodeForm::Parsed),
+            IrEarly => debug::Stage::Ir(debug::IrForm::Early),
+            IrFnBlksSorted => debug::Stage::Ir(debug::IrForm::FnBlksSorted),
+            IrNonRetExtFunctionsMarked => debug::Stage::Ir(debug::IrForm::NonRetExtFunctionsMarked),
+            IrExtCallsReplaced => debug::Stage::Ir(debug::IrForm::ExtCallsReplaced),
+            IrInlined => debug::Stage::Ir(debug::IrForm::Inlined),
+            IrSubregistersSubstituted => debug::Stage::Ir(debug::IrForm::SubregistersSubstituted),
+            IrCfPatched => debug::Stage::Ir(debug::IrForm::CfPatched),
+            IrEmptyFnRemoved => debug::Stage::Ir(debug::IrForm::EmptyFnRemoved),
+            IrRaw => debug::Stage::Ir(debug::IrForm::Raw),
+            IrIntraproceduralDeadBlocksElimed => {
+                debug::Stage::Ir(debug::IrForm::IntraproceduralDeadBlocksElimed)
+            }
+            IrTrivialExpressionsSubstituted => {
+                debug::Stage::Ir(debug::IrForm::TrivialExpressionsSubstituted)
+            }
+            IrInputExpressionsPropagated => {
+                debug::Stage::Ir(debug::IrForm::InputExpressionsPropagated)
+            }
+            IrDeadVariablesElimed => debug::Stage::Ir(debug::IrForm::DeadVariablesElimed),
+            IrControlFlowPropagated => debug::Stage::Ir(debug::IrForm::ControlFlowPropagated),
+            IrStackPointerAlignmentSubstituted => {
+                debug::Stage::Ir(debug::IrForm::StackPointerAlignmentSubstituted)
+            }
+            IrOptimized => debug::Stage::Ir(debug::IrForm::Optimized),
+            Cg => debug::Stage::CallGraph,
+            Cfg => debug::Stage::ControlFlowGraph,
+            Pi => debug::Stage::Pi,
         }
     }
 }
@@ -105,6 +171,10 @@ struct CmdlineArgs {
     /// of invoking Ghidra.
     #[arg(long, hide(true))]
     pcode_raw: Option<String>,
+
+    /// Print some statistics and metrics of the IR-program's CFG and exit.
+    #[arg(long, hide(true))]
+    cfg_stats: bool,
 }
 
 impl From<&CmdlineArgs> for debug::Settings {
@@ -155,7 +225,7 @@ fn check_file_existence(file_path: &str) -> Result<String, String> {
 /// Run the cwe_checker with Ghidra as its backend.
 fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     let debug_settings = args.into();
-    let mut modules = cwe_checker_lib::get_modules();
+    let mut modules = cwe_checker_lib::checkers::get_modules();
     if args.module_versions {
         // Only print the module versions and then quit.
         println!("[cwe_checker] module_versions:");
@@ -175,8 +245,20 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     let binary_file_path = PathBuf::from(args.binary.clone().unwrap());
 
-    let (binary, project, mut all_logs) =
+    let (binary, project) =
         disassemble_binary(&binary_file_path, bare_metal_config_opt, &debug_settings)?;
+
+    if debug_settings.should_debug(debug::Stage::CallGraph) {
+        // TODO: Move once call graph is used somewhere else.
+        let cg = graph::call::CallGraph::new(&project.program);
+        debug_settings.print_compact_json(&cg, debug::Stage::CallGraph);
+    }
+
+    if args.cfg_stats {
+        let cfg_stats = cfg_stats::CfgProperties::new(&project.program);
+        println!("{:#}", serde_json::to_value(cfg_stats)?);
+        return Ok(());
+    }
 
     // Filter the modules to be executed.
     if let Some(ref partial_module_list) = args.partial {
@@ -200,8 +282,8 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     };
 
     // Generate the control flow graph of the program
-    let (control_flow_graph, mut logs_graph) = graph::get_program_cfg_with_logs(&project.program);
-    all_logs.append(&mut logs_graph);
+    let control_flow_graph = graph::get_program_cfg_with_logs(&project.program);
+    debug_settings.print_compact_json(control_flow_graph.deref(), debug::Stage::ControlFlowGraph);
 
     let analysis_results = AnalysisResults::new(&binary, &control_flow_graph, &project);
 
@@ -221,13 +303,14 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     // Compute function signatures if required
     let function_signatures = if pi_analysis_needed {
-        let (function_signatures, mut logs) = analysis_results.compute_function_signatures();
-        all_logs.append(&mut logs);
+        let function_signatures = analysis_results.compute_function_signatures();
+
         Some(function_signatures)
     } else {
         None
     };
-    let analysis_results = analysis_results.with_function_signatures(function_signatures.as_ref());
+    let analysis_results =
+        analysis_results.with_function_signatures(function_signatures.as_deref());
     // Compute pointer inference if required
     let pi_analysis_results = if pi_analysis_needed {
         Some(analysis_results.compute_pointer_inference(&config["Memory"], args.statistics))
@@ -262,35 +345,50 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     }
 
     // Execute the modules and collect their logs and CWE-warnings.
-    let mut all_cwes = Vec::new();
+    let mut all_cwe_warnings = Vec::new();
     for module in modules {
-        let (mut logs, mut cwes) = (module.run)(&analysis_results, &config[&module.name]);
-        all_logs.append(&mut logs);
-        all_cwes.append(&mut cwes);
+        let cwe_warnings = (module.run)(&analysis_results, &config[&module.name], &debug_settings);
+
+        all_cwe_warnings.push(cwe_warnings);
     }
-    all_cwes.sort();
 
     // Print the results of the modules.
-    if args.quiet {
-        all_logs = Vec::new(); // Suppress all log messages since the `--quiet` flag is set.
+    let all_logs: Vec<&LogMessage> = if args.quiet {
+        Vec::new() // Suppress all log messages since the `--quiet` flag is set.
     } else {
+        let mut all_logs = Vec::new();
+
+        // Aggregate the logs of all objects that come with logs.
+        all_logs.extend(project.logs().iter());
+        all_logs.extend(control_flow_graph.logs().iter());
+        if let Some(function_signatures) = &function_signatures {
+            all_logs.extend(function_signatures.logs().iter());
+        }
+        for cwe_warnings in all_cwe_warnings.iter() {
+            all_logs.extend(cwe_warnings.logs().iter());
+        }
+
         if args.statistics {
-            cwe_checker_lib::utils::log::add_debug_log_statistics(&mut all_logs);
+            // TODO: Fix the `--statistics` flag.
+            //cwe_checker_lib::utils::log::add_debug_log_statistics(&mut all_logs);
+            todo!()
         }
         if !args.verbose {
             all_logs.retain(|log_msg| log_msg.level != LogLevel::Debug);
         }
-    }
+
+        all_logs
+    };
+    let all_cwes: Vec<&CweWarning> = all_cwe_warnings.iter().flat_map(|x| x.iter()).collect();
+
     print_all_messages(all_logs, all_cwes, args.out.as_deref(), args.json);
+
     Ok(())
 }
 
 /// Only keep the modules specified by the `--partial` parameter in the `modules` list.
 /// The parameter is a comma-separated list of module names, e.g. 'CWE332,CWE476,CWE782'.
-fn filter_modules_for_partial_run(
-    modules: &mut Vec<&cwe_checker_lib::CweModule>,
-    partial_param: &str,
-) {
+fn filter_modules_for_partial_run(modules: &mut Vec<&CweModule>, partial_param: &str) {
     let module_names: HashSet<&str> = partial_param.split(',').collect();
     *modules = module_names
         .into_iter()

@@ -173,6 +173,27 @@ impl Expression {
         }
     }
 
+    /// Returns all constants that appear in the expression.
+    pub fn referenced_constants(&self) -> Option<Vec<Bitvector>> {
+        use Expression::*;
+        match self {
+            Var(_) | Unknown { .. } => None,
+            Const(c) => Some(vec![c.clone()]),
+            BinOp { lhs, rhs, .. } => {
+                match (lhs.referenced_constants(), rhs.referenced_constants()) {
+                    (None, c) | (c, None) => c,
+                    (Some(mut c0), Some(c1)) => {
+                        c0.extend(c1);
+                        Some(c0)
+                    }
+                }
+            }
+            UnOp { arg, .. } | Cast { arg, .. } | Subpiece { arg, .. } => {
+                arg.referenced_constants()
+            }
+        }
+    }
+
     /// Return an array of all input variables of the given expression.
     /// The array may contain duplicates.
     pub fn input_vars(&self) -> Vec<&Variable> {
@@ -212,9 +233,12 @@ impl Expression {
 
     /// Compute a recursion depth for the expression.
     ///
-    /// Because of the recursive nature of the [Expression] type,
-    /// overly complex expressions are very costly to clone, which in turn can negatively affect some analyses.
-    /// The recursion depth measure can be used to detect and handle such cases.
+    /// Equal to the height of the expression's AST.
+    ///
+    /// Because of the recursive nature of the [Expression] type, overly complex
+    /// expressions are very costly to clone, which in turn can negatively
+    /// affect some analyses. The recursion depth measure can be used to detect
+    /// and handle such cases.
     pub fn recursion_depth(&self) -> u64 {
         use Expression::*;
         match self {

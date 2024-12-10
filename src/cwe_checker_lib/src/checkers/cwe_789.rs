@@ -1,25 +1,29 @@
-//! This module implements a check for CWE-789: Memory Allocation with Excessive Size Value.
+//! This module implements a check for CWE-789: Memory Allocation with Excessive
+//! Size Value.
 //!
-//! Stack memory allocation and function calls like malloc are covered in this module.
-//! Excessive allocation of memory might destabilize programs on machines with limited resources.
+//! Stack memory allocation and function calls like malloc are covered in this
+//! module. Excessive allocation of memory might destabilize programs on
+//! machines with limited resources.
 //!
-//! See <https://cwe.mitre.org/data/definitions/789.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/789.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! Every instruction is checked if it assigns a new value to the stack pointer. If
-//! this is the case, the value range of the assignment is checked and if it
-//! exceeds the defined `stack_threshold` defined in config.json, a warning is generated.
-//! For calls like malloc, the provided argument is checked, if its value exceeds
-//! the defined `heap_threshold`. The covered function calls are defined in config.json.
-//! The defined thresholds are provided in bytes.
+//! Every instruction is checked if it assigns a new value to the stack pointer.
+//! If this is the case, the value range of the assignment is checked and if it
+//! exceeds the defined `stack_threshold` defined in config.json, a warning is
+//! generated. For calls like malloc, the provided argument is checked, if its
+//! value exceeds the defined `heap_threshold`. The covered function calls are
+//! defined in config.json. The defined thresholds are provided in bytes.
 //!
 //! ## False Positives
 //!
 //! ## False Negatives
 //!
-//! - At most one warning for stack memory allocation is created for each Function. This means multiple weaknesses
-//! are not detected individually.
+//! - At most one warning for stack memory allocation is created for each
+//!   Function. This means multiple weaknesses are not detected individually.
+use super::prelude::*;
 
 use crate::abstract_domain::DataDomain;
 use crate::abstract_domain::IntervalDomain;
@@ -29,29 +33,23 @@ use crate::analysis::pointer_inference::PointerInference;
 use crate::analysis::vsa_results::*;
 use crate::intermediate_representation::*;
 use crate::pipeline::AnalysisResults;
-use crate::utils::log::CweWarning;
-use crate::utils::log::LogMessage;
 use crate::utils::symbol_utils::get_callsites;
 use crate::utils::symbol_utils::get_symbol_map;
-use crate::CweModule;
-use serde::Deserialize;
-use serde::Serialize;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE789",
-    version: "0.1",
-    run: check_cwe,
-};
-
-/// The configuration struct.
-/// If a threshold is exceeded, the warning is generated.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Config {
-    stack_threshold: u64,
-    heap_threshold: u64,
-    symbols: Vec<String>,
-}
+cwe_module!(
+    "CWE789",
+    "0.1",
+    check_cwe,
+    config:
+        /// Size in bytes above which a potential stack memory exhaustion is
+        /// reported.
+        stack_threshold: u64,
+        /// Size in bytes above which a potential heap memory exhaustion is
+        /// reported.
+        heap_threshold: u64,
+        /// Heap allocation symbols.
+        symbols: Vec<String>,
+);
 
 /// Determines if `def` is an assignment on the stackpointer.
 fn is_assign_on_sp(def: &Def, sp: &Variable) -> bool {
@@ -117,11 +115,11 @@ fn generate_cwe_warning(allocation: &Tid, is_stack_allocation: bool) -> CweWarni
                 true => " stack ",
                 false => " heap ",
             },
-            allocation.address
+            allocation.address()
         ),
     )
     .tids(vec![format!("{allocation}")])
-    .addresses(vec![allocation.address.clone()])
+    .addresses(vec![allocation.address().to_string()])
     .symbols(vec![])
 }
 
@@ -131,32 +129,51 @@ fn generate_cwe_warning(allocation: &Tid, is_stack_allocation: bool) -> CweWarni
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let mut cwe_warnings = Vec::new();
     let pir = analysis_results.pointer_inference.unwrap();
     let symbol_map = get_symbol_map(project, &config.symbols);
 
-    'functions: for sub in project.program.term.subs.values() {
+    'functions: for f in project.program.functions() {
         // Function call allocation case
-        for (_, jump, symbol) in get_callsites(sub, &symbol_map) {
-            if let Some(interval) = match symbol.name.as_str() {
+        for (_, jump, symbol) in get_callsites(f, &symbol_map) {
+            if let Some(alloc_size_interval) = match symbol.name.as_str() {
                 "calloc" => multiply_args_for_calloc(
                     pir,
                     &jump.tid,
                     vec![&symbol.parameters[0], &symbol.parameters[1]],
                 ),
                 "realloc" => pir.eval_parameter_arg_at_call(&jump.tid, &symbol.parameters[1]),
-                _ => pir.eval_parameter_arg_at_call(&jump.tid, &symbol.parameters[0]),
+                "malloc" => pir.eval_parameter_arg_at_call(&jump.tid, &symbol.parameters[0]),
+                name => {
+                    logs.push(LogMessage::new_info(format!(
+                        "{}: Allocation size computation for calls to {} is not supported (at {}: {}).",
+                        CWE_MODULE.name, name, jump.tid, jump.term
+                    )));
+                    None
+                }
             } {
-                if exceeds_threshold_on_call(interval, config.heap_threshold) {
+                logs.push(LogMessage::new_debug(format!(
+                    "{}: Allocation size interval is {:?} for call to {} at {}: {}.",
+                    CWE_MODULE.name, alloc_size_interval, &symbol.name, jump.tid, jump.term
+                )));
+
+                if exceeds_threshold_on_call(alloc_size_interval, config.heap_threshold) {
                     cwe_warnings.push(generate_cwe_warning(&jump.tid, false));
                 }
+            } else {
+                logs.push(LogMessage::new_debug(format!(
+                    "{}: Unable to compute allocation size of call to {} at {}: {}.",
+                    CWE_MODULE.name, &symbol.name, jump.tid, jump.term
+                )));
             }
         }
         // Stack allocation case
-        for blk in &sub.term.blocks {
+        for blk in &f.term.blocks {
             let assign_on_sp: Vec<&Term<Def>> = blk
                 .term
                 .defs
@@ -173,7 +190,12 @@ pub fn check_cwe(
             }
         }
     }
-    cwe_warnings.dedup();
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }

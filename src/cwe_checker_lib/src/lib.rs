@@ -68,12 +68,10 @@ by reading the check-specific module documentation in the [`checkers`] module.
 pub mod abstract_domain;
 pub mod analysis;
 pub mod checkers;
+pub mod ghidra_pcode;
 pub mod intermediate_representation;
-pub mod pcode;
 pub mod pipeline;
 pub mod utils;
-
-use utils::log::{CweWarning, LogMessage};
 
 mod prelude {
     pub use apint::Width;
@@ -82,55 +80,7 @@ mod prelude {
     pub use crate::intermediate_representation::{Bitvector, BitvectorExtended, ByteSize};
     pub use crate::intermediate_representation::{Term, Tid};
     pub use crate::pipeline::AnalysisResults;
+
     pub use anyhow::Context as _;
     pub use anyhow::{anyhow, Error};
-}
-use prelude::*;
-
-/// The generic function signature for the main function of a CWE module
-pub type CweModuleFn =
-    fn(&AnalysisResults, &serde_json::Value) -> (Vec<LogMessage>, Vec<CweWarning>);
-
-/// A structure containing general information about a CWE analysis module,
-/// including the function to be called to run the analysis.
-pub struct CweModule {
-    /// The name of the CWE check.
-    pub name: &'static str,
-    /// The version number of the CWE check.
-    /// Should be incremented whenever significant changes are made to the check.
-    pub version: &'static str,
-    /// The function that executes the check and returns CWE warnings found during the check.
-    pub run: CweModuleFn,
-}
-
-impl std::fmt::Display for CweModule {
-    /// Print the module name and its version number.
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, r#""{}": "{}""#, self.name, self.version)
-    }
-}
-
-/// Get a list of all known analysis modules.
-pub fn get_modules() -> Vec<&'static CweModule> {
-    vec![
-        &crate::checkers::cwe_78::CWE_MODULE,
-        &crate::checkers::cwe_119::CWE_MODULE,
-        &crate::checkers::cwe_134::CWE_MODULE,
-        &crate::checkers::cwe_190::CWE_MODULE,
-        &crate::checkers::cwe_215::CWE_MODULE,
-        &crate::checkers::cwe_243::CWE_MODULE,
-        &crate::checkers::cwe_252::CWE_MODULE,
-        &crate::checkers::cwe_332::CWE_MODULE,
-        &crate::checkers::cwe_337::CWE_MODULE,
-        &crate::checkers::cwe_367::CWE_MODULE,
-        &crate::checkers::cwe_416::CWE_MODULE,
-        &crate::checkers::cwe_426::CWE_MODULE,
-        &crate::checkers::cwe_467::CWE_MODULE,
-        &crate::checkers::cwe_476::CWE_MODULE,
-        &crate::checkers::cwe_560::CWE_MODULE,
-        &crate::checkers::cwe_676::CWE_MODULE,
-        &crate::checkers::cwe_782::CWE_MODULE,
-        &crate::checkers::cwe_789::CWE_MODULE,
-        &crate::analysis::pointer_inference::CWE_MODULE,
-    ]
 }

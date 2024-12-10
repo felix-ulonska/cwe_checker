@@ -147,12 +147,15 @@ impl<T: AbstractDomain + SizedDomain + HasTop + std::fmt::Debug> MemRegion<T> {
     }
 
     /// Get the value at the given position.
-    /// If there is no value at the position or the size of the element is not the same as the provided size, return `T::new_top()`.
+    ///
+    /// If there is no value at the position or the size of the element is not
+    /// the same as the provided size, return `T::new_top()`.
     pub fn get(&self, position: Bitvector, size_in_bytes: ByteSize) -> T {
         assert_eq!(
             ByteSize::from(position.width()),
             self.inner.address_bytesize
         );
+
         let position = Int::from(position).try_to_i64().unwrap();
 
         if let Some(elem) = self.inner.values.get(&position) {

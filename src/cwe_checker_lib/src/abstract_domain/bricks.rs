@@ -2,25 +2,29 @@
 //!
 //! The BricksDomain contains a sorted list of normalized BrickDomains.
 //! It represents the composition of a string through sub sequences.
-//! When a string is assigned to the BricksDomain, it is defined as a single sequence bricks
-//! which occurs at least and at most one time which is represented by a min and max value in the
+//! When a string is assigned to the BricksDomain, it is defined as a single
+//! sequence bricks which occurs at least and at most one time which is
+//! represented by a min and max value in the
 //! BrickDomain. e.g. "cwe" => \[\[{"cwe"}\]^{1,1}\]
 //!
-//! If two string are concatenated, their brick sequences are concatenated.
+//! If two string are concatenated, their brick sequences are concatenated:
 //! e.g. B1 = \[\[{"a"}\]^{1,1}\], B2 = \[\[{"b"}\]^{1,1}\] => B_new = \[\[{"a"}\]^{1,1}, \[{"b"}\]^{1,1}\]
 //!
-//! A set of strings can be built from multiple configurations of bricks
+//! A set of strings can be built from multiple configurations of bricks:
 //! e.g. \[{"abc"}\]^{1,1} <=> \[{"a"}\]^{1,1}\[{"b"}\]^{1,1}\[{"c"}\]^{1,1}
 //!
 //! Introducing a normalized form \[T\]^{1,1} or \[T\]^{0, max>0}
 //! will keep string representations unambiguous.
 //!
 //! Widening is applied for merges, so that the domains do not become too big.
-//! Certain thresholds are defined which cause the domains to be widened if exceeded.
-//! These thresholds are:
-//!  - the *interval threshold* which overapproximates the number of times string sequences can occur in a brick.
-//!  - the *sequence threshold* which  overapproximates the number of string sequences in a brick by forcing a *Top* value.
-//!  - the *length threshold* which  overapproximates the number of bricks in the BricksDomain and forces a *Top* value.
+//! Certain thresholds are defined which cause the domains to be widened if
+//! exceeded. These thresholds are:
+//!  - The *interval threshold* which overapproximates the number of times
+//!    string sequences can occur in a brick.
+//!  - The *sequence threshold* which  overapproximates the number of string
+//!    sequences in a brick by forcing a *Top* value.
+//!  - The *length threshold* which  overapproximates the number of bricks in
+//!    the BricksDomain and forces a *Top* value.
 
 use std::{collections::BTreeSet, fmt};
 

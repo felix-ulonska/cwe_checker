@@ -1,3 +1,5 @@
+//! Types and traits for defining [`AbstractDomain`]s that are spaces of
+//! functions onto [`AbstractDomain`]s.
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -6,19 +8,21 @@ use std::sync::Arc;
 
 use super::*;
 
-/// A `DomainMap<Key, Value, MapMergeStrategy>` is a wrapper type around a `BTreeMap<Key, Value>
-/// where the `Value` type is an abstract domain and the map itself is also an abstract domain.
+/// A `DomainMap<Key, Value, MapMergeStrategy>` is a wrapper type around a
+/// `BTreeMap<Key, Value> where the `Value` type is an abstract domain and the
+/// map itself is also an abstract domain. This captures the fact that the set
+/// of functions from any set into a poset form a poset themselves.
 ///
-/// For example, a map from registers to an abstract domain representing the contained values
-/// can be represented by a `DomainMap`.
+/// For example, a map from registers to an abstract domain representing the
+/// contained values can be represented by a `DomainMap`.
 ///
 /// A `DomainMap` has two main advantages over a regular `BTreeMap`:
 /// * The map itself is wrapped into an `Arc<..>` to enable cheap cloning of `DomainMaps`.
 /// * The `DomainMap` automatically implements the [`AbstractDomain`] trait
-/// according to the provided [`MapMergeStrategy`] used for merging two maps.
+///   according to the provided [`MapMergeStrategy`] used for merging two maps.
 ///
-/// Since a `DomainMap` implements the `Deref` and `DerefMut` traits with target the inner `BTreeMap`,
-/// it can be used just like a `BTreeMap`.
+/// Since a `DomainMap` implements the `Deref` and `DerefMut` traits with target
+/// the inner `BTreeMap`, it can be used just like a `BTreeMap`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct DomainMap<K, V, S>
 where
@@ -75,7 +79,8 @@ where
     V: AbstractDomain,
     S: MapMergeStrategy<K, V>,
 {
-    /// Generate a new `DomainMap` from an iterator over the key-value pairs that it should contain.
+    /// Generate a new `DomainMap` from an iterator over the key-value pairs
+    /// that it should contain.
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (K, V)>,
@@ -93,7 +98,8 @@ where
     V: AbstractDomain,
     S: MapMergeStrategy<K, V> + Clone + Eq,
 {
-    /// Merge two `DomainMaps` according to the [`MapMergeStrategy`] of the `DomainMap`.
+    /// Merge two `DomainMaps` according to the [`MapMergeStrategy`] of the
+    /// `DomainMap`.
     fn merge(&self, other: &Self) -> Self {
         if self == other {
             self.clone()
@@ -149,7 +155,8 @@ where
     }
 }
 
-/// A `MapMergeStrategy` determines how the merge-method for a [`DomainMap`] works.
+/// A `MapMergeStrategy` determines how the merge-method for a [`DomainMap`]
+/// works.
 ///
 /// The possible strategies are:
 /// * [`UnionMergeStrategy`]
@@ -175,13 +182,15 @@ pub trait MapMergeStrategy<K: Ord + Clone, V: AbstractDomain> {
     fn merge_map_with(map: &mut BTreeMap<K, V>, other: &BTreeMap<K, V>);
 }
 
-/// A [`MapMergeStrategy`] where key-value pairs whose key is only present in one input map
-/// are added to the merged map.
-/// `Top` values and their corresponding keys are also preserved in the merged map.
+/// A [`MapMergeStrategy`] where key-value pairs whose key is only present in
+/// one input map are added to the merged map.
 ///
-/// The strategy is meant to be used for maps
-/// where the values associated to keys not present in the map
-/// have an implicit bottom value of the value abstract domain associated to them.
+/// `Top` values and their corresponding keys are also preserved in the merged
+/// map.
+///
+/// The strategy is meant to be used for maps where the values associated to
+/// keys not present in the map have an implicit bottom value of the value
+/// abstract domain associated to them.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct UnionMergeStrategy {
     _private: (), // Marker to prevent instantiation
@@ -228,13 +237,17 @@ impl<K: Ord + Clone, V: AbstractDomain> MapMergeStrategy<K, V> for IntersectMerg
     }
 }
 
-/// A [`MapMergeStrategy`] where for every key that only occurs in one input map of the merge function
-/// the corresponding value is merged with `Top` before being added to the merged map.
-/// Furthermore, keys whose values are merged to the `Top` value are removed from the merged map.
+/// A [`MapMergeStrategy`] where for every key that only occurs in one input map
+/// of the merge function the corresponding value is merged with `Top` before
+/// being added to the merged map.
 ///
-/// The strategy  is an alternative to the [`IntersectMergeStrategy`]
-/// in cases where the `Top` value of the value domain is not a maximal element of the abstract domain
-/// and should instead be interpreted as a default element assigned to all keys not present in a domain map.
+/// Furthermore, keys whose values are merged to the `Top` value are removed
+/// from the merged map.
+///
+/// The strategy  is an alternative to the [`IntersectMergeStrategy`] in cases
+/// where the `Top` value of the value domain is not a maximal element of the
+/// abstract domain and should instead be interpreted as a default element
+/// assigned to all keys not present in a domain map.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct MergeTopStrategy {
     _private: (), // Marker to prevent instantiation

@@ -1,13 +1,12 @@
 //! Utility functions for executing Ghidra and extracting P-Code from the output.
 
+use crate::ghidra_pcode::PcodeProject;
+use crate::intermediate_representation::{Project, RuntimeMemoryImage};
 use crate::prelude::*;
 use crate::utils::binary::BareMetalConfig;
+use crate::utils::debug;
+use crate::utils::log::{LogMessage, WithLogs};
 use crate::utils::{get_ghidra_plugin_path, read_config_file};
-use crate::{
-    intermediate_representation::{Project, RuntimeMemoryImage},
-    utils::debug,
-    utils::log::LogMessage,
-};
 
 use directories::ProjectDirs;
 use nix::{sys::stat, unistd};
@@ -25,11 +24,15 @@ pub fn get_project_from_ghidra(
     binary: &[u8],
     bare_metal_config_opt: Option<BareMetalConfig>,
     debug_settings: &debug::Settings,
-) -> Result<(Project, Vec<LogMessage>), Error> {
+) -> Result<WithLogs<Project>, Error> {
     let pcode_project = if let Some(saved_pcode_raw) = debug_settings.get_saved_pcode_raw() {
-        let file = std::fs::File::open(saved_pcode_raw)
+        let mut file = std::fs::File::open(saved_pcode_raw)
             .expect("Failed to open saved output of Pcode Extractor plugin.");
-        serde_json::from_reader(std::io::BufReader::new(file))?
+        let mut saved_pcode_raw = String::new();
+        file.read_to_string(&mut saved_pcode_raw)
+            .expect("Failed to read saved Pcode Extractor plugin output");
+        debug_settings.print(&saved_pcode_raw, debug::Stage::Pcode(debug::PcodeForm::Raw));
+        serde_json::from_str(&saved_pcode_raw)?
     } else {
         let tmp_folder = get_tmp_folder()?;
         // We add a timestamp suffix to file names
@@ -52,50 +55,67 @@ pub fn get_project_from_ghidra(
         )?;
         execute_ghidra(ghidra_command, &fifo_path, debug_settings)?
     };
+    debug_settings.print(
+        &pcode_project,
+        debug::Stage::Pcode(debug::PcodeForm::Parsed),
+    );
 
-    parse_pcode_project_to_ir_project(pcode_project, binary, &bare_metal_config_opt)
+    parse_pcode_project_to_ir_project(
+        pcode_project,
+        binary,
+        &bare_metal_config_opt,
+        debug_settings,
+    )
 }
 
-/// Normalize the given P-Code project
-/// and then parse it into a project struct of the internally used intermediate representation.
+/// Normalize the given P-Code project and then parse it into a project struct
+/// of the internally used intermediate representation.
 pub fn parse_pcode_project_to_ir_project(
-    mut pcode_project: crate::pcode::Project,
+    pcode_project: PcodeProject,
     binary: &[u8],
     bare_metal_config_opt: &Option<BareMetalConfig>,
-) -> Result<(Project, Vec<LogMessage>), Error> {
+    debug_settings: &debug::Settings,
+) -> Result<WithLogs<Project>, Error> {
     let bare_metal_base_address_opt = bare_metal_config_opt
         .as_ref()
         .map(|config| config.parse_binary_base_address());
-    let mut log_messages = pcode_project.normalize();
-    let project: Project = match RuntimeMemoryImage::get_base_address(binary) {
-        Ok(binary_base_address) => pcode_project.into_ir_project(binary_base_address),
+
+    let project: WithLogs<Project> = match RuntimeMemoryImage::get_base_address(binary) {
+        Ok(binary_base_address) => {
+            pcode_project.into_ir_project(binary_base_address, debug_settings)
+        }
         Err(_err) => {
             if let Some(binary_base_address) = bare_metal_base_address_opt {
-                let mut project = pcode_project.into_ir_project(binary_base_address);
+                let mut project =
+                    pcode_project.into_ir_project(binary_base_address, debug_settings);
+
                 project.program.term.address_base_offset = 0;
+
                 project
             } else {
-                log_messages.push(LogMessage::new_info("Could not determine binary base address. Using base address of Ghidra output as fallback."));
-                let mut project = pcode_project.into_ir_project(0);
+                let mut project = pcode_project.into_ir_project(0, debug_settings);
+                project.add_log_msg(LogMessage::new_info("Could not determine binary base address. Using base address of Ghidra output as fallback."));
+
                 // For PE files setting the address_base_offset to zero is a hack, which worked for the tested PE files.
                 // But this hack will probably not work in general!
                 project.program.term.address_base_offset = 0;
+
                 project
             }
         }
     };
 
-    Ok((project, log_messages))
+    Ok(project)
 }
 
 /// Execute Ghidra with the P-Code plugin and return the parsed P-Code project.
 ///
-/// Note that this function will abort the program is the Ghidra execution does not succeed.
+/// Note that this function will abort the program if the Ghidra execution does not succeed.
 fn execute_ghidra(
     mut ghidra_command: Command,
     fifo_path: &PathBuf,
     debug_settings: &debug::Settings,
-) -> Result<crate::pcode::Project, Error> {
+) -> Result<PcodeProject, Error> {
     let should_print_ghidra_error = debug_settings.verbose();
     // Create a new fifo and give read and write rights to the owner
     unistd::mkfifo(fifo_path, stat::Mode::from_bits(0o600).unwrap())
@@ -136,14 +156,14 @@ fn execute_ghidra(
     file.read_to_string(&mut buf)
         .expect("Error while reading from FIFO.");
     debug_settings.print(&buf, debug::Stage::Pcode(debug::PcodeForm::Raw));
-    let pcode_parsing_result = serde_json::from_str(&buf);
+    let pcode_parsing_result = serde_json::from_str(&buf).expect("Failed to parse plugin output.");
 
     ghidra_subprocess
         .join()
         .expect("The Ghidra thread to be joined has panicked!");
     // Clean up the FIFO pipe and propagate errors from the JSON parsing.
     std::fs::remove_file(fifo_path).context("Could not clean up FIFO pipe")?;
-    Ok(pcode_parsing_result?)
+    Ok(pcode_parsing_result)
 }
 
 /// Generate the command that is used to call Ghidra and execute the P-Code-Extractor plugin in it.

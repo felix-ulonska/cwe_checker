@@ -1,6 +1,6 @@
 name: Acceptance tests
 
-on: 
+on:
   push:
     branches:
       - master
@@ -10,16 +10,16 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GHIDRA_RELEASE_TAG: Ghidra_10.2.3_build
-  GHIDRA_VERSION: ghidra_10.2.3_PUBLIC_20230208
 
-jobs: 
- 
+jobs:
+
   acceptance-tests:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
+      - name: Build the cwe_checker docker image
+        run: docker build -t cwe_checker .
       - name: Build and run docker image for cross compiling
         run: |
           pushd test/artificial_samples
@@ -28,28 +28,27 @@ jobs:
           popd
           pushd test/lkm_samples
           ./build.sh
-      - uses: actions/setup-java@v1
-        with:
-          java-version: "17.0.x"
-          java-package: jdk
-          architecture: x64
-      - name: Install Ghidra
-        run: |
-          wget https://github.com/NationalSecurityAgency/ghidra/releases/download/${GHIDRA_RELEASE_TAG}/${GHIDRA_VERSION}.zip
-          unzip -d ghidra ${GHIDRA_VERSION}.zip
-          mv ghidra/ghidra_* /opt/ghidra
-          rm ${GHIDRA_VERSION}.zip
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.76.0
+          toolchain: 1.82.0
           override: true
-      - name: Install cwe_checker
-        run: make all GHIDRA_PATH=/opt/ghidra
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --locked --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
+          args: --locked --no-fail-fast -p acceptance_tests_ghidra -F docker -- --show-output --ignored
+      - name: Generate zip with test binaries
+        run: |
+          zip artificial_samples.zip test/artificial_samples/build/*.out
+          zip lkm_samples.zip test/lkm_samples/build/*.ko
+      - name: Archive test binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-test-binaries
+          path: |
+            artificial_samples.zip
+            lkm_samples.zip
+
 
   docker-build:
     runs-on: ubuntu-latest

@@ -1,50 +1,51 @@
-//! This module implements a check for CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition.
+//! This module implements a check for CWE-367: Time-of-check Time-of-use
+//! (TOCTOU) Race Condition.
 //!
-//! Time-of-check Time-of-use race conditions happen when a property of a resource
-//! (e.g. access rights of a file) get checked before the resource is accessed, leaving
-//! a short time window for an attacker to change the entity and thus invalidating
-//! the check before the access.
+//! Time-of-check Time-of-use race conditions happen when a property of a
+//! resource (e.g. access rights of a file) get checked before the resource is
+//! accessed, leaving a short time window for an attacker to change the entity
+//! and thus invalidating the check before the access.
 //!
-//! See <https://cwe.mitre.org/data/definitions/367.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/367.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! For pairs of (check-call, use-call), configurable in config.json, we check whether
-//! a function may call the check-call before the use-call.
+//! For pairs of (check-call, use-call), configurable in config.json, we check
+//! whether a function may call the check-call before the use-call.
 //!
 //! ## False Positives
 //!
-//! - The check-call and the use-call may access different, unrelated resources
+//! The check-call and the use-call may access different, unrelated resources
 //! (e. g. different files).
 //!
 //! ## False Negatives
 //!
-//! - If the check-call and the use-call happen in different functions it will not
-//!   be found by the check.
+//! If the check-call and the use-call happen in different functions it will
+//! not be found by the checked.
+use super::prelude::*;
 
 use crate::analysis::graph::{Edge, Node};
 use crate::intermediate_representation::Jmp;
 use crate::prelude::*;
 use crate::utils::graph_utils::is_sink_call_reachable_from_source_call;
-use crate::utils::log::{CweWarning, LogMessage};
-use crate::CweModule;
-use petgraph::visit::EdgeRef;
+
 use std::collections::HashMap;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE367",
-    version: "0.1",
-    run: check_cwe,
-};
+use petgraph::visit::EdgeRef;
 
-/// The configuration struct contains pairs of the form `(source_symbol, sink_symbol)`.
-/// The `source_symbol` corresponds to a check-call and the `sink_symbol` corresponds to a use-call.
-/// An execution path from a source call to a sink call corresponds to a possible Time-of-check Time-of-use Race Condition.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-struct Config {
-    pairs: Vec<(String, String)>,
-}
+cwe_module!(
+    "CWE367",
+    "0.1",
+    check_cwe,
+    config:
+        /// The configuration contains pairs of the form `(source_symbol,
+        /// sink_symbol)`. The `source_symbol` corresponds to a check-call and
+        /// the `sink_symbol` corresponds to a use-call. An execution path from
+        /// a source call to a sink call corresponds to a possible Time-of-check
+        /// Time-of-use Race Condition.
+        pairs: Vec<(String, String)>,
+);
 
 /// Generate a CWE warning for a found CWE hit.
 fn generate_cwe_warning(
@@ -59,10 +60,10 @@ fn generate_cwe_warning(
         CWE_MODULE.version,
         format!(
             "(Time-of-check Time-of-use Race Condition) '{}' is reachable from '{}' at {} ({}). This could lead to a TOCTOU.",
-            sink, source, sink_callsite.address, sub_name
+            sink, source, sink_callsite.address(), sub_name
         ))
         .tids(vec![format!("{source_callsite}"), format!("{sink_callsite}")])
-        .addresses(vec![source_callsite.address, sink_callsite.address])
+        .addresses(vec![source_callsite.address().to_string(), sink_callsite.address().to_string()])
         .symbols(vec![source.into(), sink.into()])
 }
 
@@ -70,7 +71,8 @@ fn generate_cwe_warning(
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let project = analysis_results.project;
     let graph = analysis_results.control_flow_graph;
@@ -119,5 +121,5 @@ pub fn check_cwe(
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    cwe_warnings.deduplicate_addresses()
 }

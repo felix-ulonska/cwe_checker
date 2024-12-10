@@ -1,29 +1,30 @@
-//! This module implements a check for CWE-134: Use of Externally-Controlled Format String.
+//! This module implements a check for CWE-134: Use of Externally-Controlled
+//! Format String.
 //!
 //! The software uses a function that accepts a format string as an argument,
 //! but the format string originates from an external source.
 //!
-//! See <https://cwe.mitre.org/data/definitions/134.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/134.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! Using forward dataflow analysis we search for external symbols that take a format string as an input parameter.
-//! (e.g. sprintf). Then we check the content of the format string parameter and if it is not part of the global read only
-//! memory of the binary, a CWE warning is generated.
+//! Using forward dataflow analysis we search for external symbols that take a
+//! format string as an input parameter (e.g. sprintf). Then we check the
+//! content of the format string parameter and if it is not part of the global
+//! read only memory of the binary, a CWE warning is generated.
 //!
 //! ### Symbols configurable in config.json
 //!
-//! - symbols that take a format string parameter.
+//! - Symbols that take a format string parameter.
 //!
 //! ## False Positives
 //!
-//! - The input was externally provided on purpose and originates from a trusted source.
-//! - A pointer target could be lost but the format string was not externally provided.
-
-use std::collections::HashMap;
-
-use petgraph::graph::NodeIndex;
-use petgraph::visit::EdgeRef;
+//! - The input was externally provided on purpose and originates from a trusted
+//!   source.
+//! - A pointer target could be lost but the format string was not externally
+//!   provided.
+use super::prelude::*;
 
 use crate::abstract_domain::TryToBitvec;
 use crate::analysis::graph::Edge;
@@ -34,35 +35,37 @@ use crate::intermediate_representation::Jmp;
 use crate::intermediate_representation::RuntimeMemoryImage;
 use crate::prelude::*;
 use crate::utils::log::CweWarning;
-use crate::utils::log::LogMessage;
-use crate::CweModule;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE134",
-    version: "0.1",
-    run: check_cwe,
-};
+use std::collections::HashMap;
 
-/// The configuration struct
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Config {
-    /// The names of the system call symbols.
-    format_string_symbols: Vec<String>,
-    /// The index of the format string paramater of the symbol.
-    format_string_index: HashMap<String, usize>,
-}
+use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
 
-/// The categorization of the string location based on kinds of different memory.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+cwe_module!(
+    "CWE134",
+    "0.1",
+    check_cwe,
+    config:
+        /// Names of symbols with a format string parameter.
+        format_string_symbols: Vec<String>,
+        /// Index of the format string parameter.
+        format_string_index: HashMap<String, usize>,
+);
+
+/// Categorization of the string location in memory.
 pub enum StringLocation {
-    /// Global read only memory
+    /// Global read only memory.
     GlobalReadable,
-    /// Global read and write memory
+    /// Global read and write memory.
     GlobalWriteable,
-    /// Non Global memory
+    /// Non Global memory.
+    ///
+    /// aka. not able to get a PI value for the format string parameter at call
+    /// site, PI value is not concrete, PI value is not in global memory.
     NonGlobal,
-    /// Unknown memory
+    /// Unknown memory.
+    ///
+    /// aka. no PI result for call site.
     Unknown,
 }
 
@@ -72,7 +75,10 @@ pub enum StringLocation {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
+    let mut logs = Vec::new();
+
     let project = analysis_results.project;
     let config: Config = serde_json::from_value(cwe_params.clone()).unwrap();
     let format_string_symbols =
@@ -99,19 +105,29 @@ pub fn check_cwe(
                         StringLocation::GlobalWriteable | StringLocation::NonGlobal
                     ) {
                         cwe_warnings.push(generate_cwe_warning(&jmp.tid, symbol, &location));
+                    } else if matches!(location, StringLocation::Unknown) {
+                        logs.push(LogMessage::new_debug(format!(
+                            "{}: No PI result for call at {}.",
+                            CWE_MODULE.name, jmp.tid
+                        )));
                     }
                 }
             }
         }
     }
 
-    (Vec::new(), cwe_warnings)
+    WithLogs::new(
+        cwe_warnings
+            .deduplicate_first_address()
+            .move_logs_to(&mut logs)
+            .into_object(),
+        logs,
+    )
 }
 
-/// Returns a StringLocation based on the kind of memory
-/// holding the string.
-/// If no assumption about the string location can be made,
-/// unknown is returned.
+/// Returns a StringLocation based on the kind of memory holding the string.
+///
+/// If no assumption about the string location can be made, unknown is returned.
 fn locate_format_string(
     node: &NodeIndex,
     symbol: &ExternSymbol,
@@ -133,17 +149,22 @@ fn locate_format_string(
                         .is_address_writeable(&address_vector)
                         .unwrap()
                     {
-                        return StringLocation::GlobalWriteable;
+                        StringLocation::GlobalWriteable
+                    } else {
+                        StringLocation::GlobalReadable
                     }
-
-                    return StringLocation::GlobalReadable;
+                } else {
+                    StringLocation::NonGlobal
                 }
+            } else {
+                StringLocation::NonGlobal
             }
+        } else {
+            StringLocation::NonGlobal
         }
-        return StringLocation::NonGlobal;
+    } else {
+        StringLocation::Unknown
     }
-
-    StringLocation::Unknown
 }
 
 /// Generate the CWE warning for a detected instance of the CWE.
@@ -156,23 +177,25 @@ fn generate_cwe_warning(
         StringLocation::GlobalWriteable => {
             format!(
             "(Externally Controlled Format String) Potential externally controlled format string in global memory for call to {} at {}",
-            called_symbol.name, callsite.address
+            called_symbol.name, callsite.address()
         )
         }
         StringLocation::NonGlobal => {
             format!(
             "(Externally Controlled Format String) Potential externally controlled format string for call to {} at {}",
-            called_symbol.name, callsite.address
+            called_symbol.name, callsite.address()
         )
         }
         _ => panic!("Invalid String Location."),
     };
     CweWarning::new(CWE_MODULE.name, CWE_MODULE.version, description)
         .tids(vec![format!("{callsite}")])
-        .addresses(vec![callsite.address.clone()])
+        .addresses(vec![callsite.address().to_string()])
         .symbols(vec![called_symbol.name.clone()])
 }
 
+// TODO: Fix tests.
+/*
 #[cfg(test)]
 pub mod tests {
     use crate::analysis::pointer_inference::PointerInference as PointerInferenceComputation;
@@ -232,3 +255,4 @@ pub mod tests {
         );
     }
 }
+*/

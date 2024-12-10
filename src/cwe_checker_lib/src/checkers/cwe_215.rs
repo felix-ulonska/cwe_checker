@@ -1,14 +1,16 @@
-//! This module implements a check for CWE-215: Information Exposure Through Debug Information.
+//! This module implements a check for CWE-215: Information Exposure Through
+//! Debug Information.
 //!
-//! Sensitive debugging information can be leveraged to get a better understanding
-//! of a binary in less time.
+//! Sensitive debugging information can be leveraged to get a better
+//! understanding of a binary in less time.
 //!
-//! See <https://cwe.mitre.org/data/definitions/215.html> for a detailed description.
+//! See <https://cwe.mitre.org/data/definitions/215.html> for a detailed
+//! description.
 //!
 //! ## How the check works
 //!
-//! For ELF binaries we check whether they contain sections containing debug information.
-//! Other binary formats are currently not supported by this check.
+//! For ELF binaries we check whether they contain sections containing debug
+//! information. Other binary formats are currently not supported by this check.
 //!
 //! ## False Positives
 //!
@@ -17,17 +19,12 @@
 //! ## False Negatives
 //!
 //! None known.
+use super::prelude::*;
 
 use crate::prelude::*;
 use crate::utils::log::{CweWarning, LogMessage};
-use crate::CweModule;
 
-/// The module name and version
-pub static CWE_MODULE: CweModule = CweModule {
-    name: "CWE215",
-    version: "0.2",
-    run: check_cwe,
-};
+cwe_module!("CWE215", "0.2", check_cwe);
 
 /// Run the check.
 ///
@@ -36,10 +33,11 @@ pub static CWE_MODULE: CweModule = CweModule {
 pub fn check_cwe(
     analysis_results: &AnalysisResults,
     _cwe_params: &serde_json::Value,
-) -> (Vec<LogMessage>, Vec<CweWarning>) {
+    _debug_settings: &debug::Settings,
+) -> WithLogs<Vec<CweWarning>> {
     let binary = analysis_results.binary;
 
-    match goblin::Object::parse(binary) {
+    let (logs, cwe_warnings) = match goblin::Object::parse(binary) {
         Ok(goblin::Object::Elf(elf_binary)) => {
             for section_header in elf_binary.section_headers {
                 if let Some(section_name) = elf_binary.shdr_strtab.get_at(section_header.sh_name) {
@@ -49,7 +47,7 @@ pub fn check_cwe(
                             CWE_MODULE.version,
                             "(Information Exposure Through Debug Information) The binary contains debug symbols."
                         );
-                        return (Vec::new(), vec![cwe_warning]);
+                        return WithLogs::wrap(vec![cwe_warning]);
                     }
                 }
             }
@@ -67,5 +65,7 @@ pub fn check_cwe(
                 .source(CWE_MODULE.name);
             (vec![err_log], Vec::new())
         }
-    }
+    };
+
+    WithLogs::new(cwe_warnings, logs)
 }

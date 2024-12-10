@@ -1,7 +1,12 @@
 //! Structs and functions for generating log messages and CWE warnings.
 
 use crate::prelude::*;
-use std::{collections::BTreeMap, thread::JoinHandle};
+
+use std::ops::{Deref, DerefMut};
+use std::{
+    collections::{BTreeMap, HashSet},
+    thread::JoinHandle,
+};
 
 /// A CWE warning message.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
@@ -11,23 +16,87 @@ pub struct CweWarning {
     /// The version number of the check.
     pub version: String,
     /// Addresses in the binary associated with the CWE warning.
-    /// The first address usually denotes the program point where the CWE warning was generated.
+    ///
+    /// The first address usually denotes the program point where the CWE
+    /// warning was generated.
     pub addresses: Vec<String>,
     /// Term IDs associated to the CWE warning.
+    ///
     /// May be more exact than the addresses, e.g. for `Def` terms.
     pub tids: Vec<String>,
     /// Symbol names (usually of extern symbols) associated to the CWE warning.
     pub symbols: Vec<String>,
-    /// Other useful information. Content depends on the check that generated the CWE warning.
+    /// Other useful information. Content depends on the check that generated
+    /// the CWE warning.
     pub other: Vec<Vec<String>>,
     /// A short description of the warning that is presented to the user.
-    /// Should contain all essential information necessary to understand the warning,
-    /// including the address in the binary for which the warning was generated.
+    ///
+    /// Should contain all essential information necessary to understand the
+    /// warning, including the address in the binary for which the warning was
+    /// generated.
     pub description: String,
 }
 
+/// Methods to deduplicate CWE warnings.
+pub trait DeduplicateCweWarnings:
+    IntoIterator<Item = CweWarning> + FromIterator<CweWarning>
+{
+    /// Deduplicates the CWE warnings inside this container based on the first
+    /// address that is associated with a warning.
+    ///
+    /// If two warnings have the same first address, only the warning comes
+    /// first in iteration order is kept.
+    fn deduplicate_first_address(self) -> WithLogs<Self> {
+        let mut logs = Vec::new();
+
+        let mut seen_addresses = HashSet::new();
+        let filter = |w: &CweWarning| {
+            let a = w.addresses.first().unwrap();
+            if seen_addresses.insert(a.clone()) {
+                true
+            } else {
+                logs.push(LogMessage::new_debug(format!(
+                    "Removed duplicate CWE warning (first address {}): {}",
+                    a, w.description,
+                )));
+                false
+            }
+        };
+
+        WithLogs::new(self.into_iter().filter(filter).collect(), logs)
+    }
+
+    /// Deduplicates the CWE warnings inside this container based on the
+    /// `addresses` field.
+    ///
+    /// If two warnings have the same `addresses`, only the warning comes first
+    /// in iteration order is kept.
+    fn deduplicate_addresses(self) -> WithLogs<Self> {
+        let mut logs = Vec::new();
+
+        let mut seen_addresses = HashSet::new();
+        let filter = |w: &CweWarning| {
+            let addresses = w.addresses.clone();
+            if seen_addresses.insert(addresses) {
+                true
+            } else {
+                logs.push(LogMessage::new_debug(format!(
+                    "Removed duplicate CWE warning (addresses): {}",
+                    w.description,
+                )));
+                false
+            }
+        };
+
+        WithLogs::new(self.into_iter().filter(filter).collect(), logs)
+    }
+}
+
+impl DeduplicateCweWarnings for Vec<CweWarning> {}
+
 impl CweWarning {
-    /// Creates a new CweWarning by only setting name, version and description
+    /// Creates a new `CweWarning` by only setting name, version and
+    /// description.
     pub fn new(
         name: impl ToString,
         version: impl ToString,
@@ -44,25 +113,25 @@ impl CweWarning {
         }
     }
 
-    /// Sets the address field of the CweWarning
+    /// Sets the address field of the CweWarning.
     pub fn addresses(mut self, addresses: Vec<String>) -> CweWarning {
         self.addresses = addresses;
         self
     }
 
-    /// Sets the Tids field of the CweWarning
+    /// Sets the Tids field of the CweWarning.
     pub fn tids(mut self, tids: Vec<String>) -> CweWarning {
         self.tids = tids;
         self
     }
 
-    /// Sets the symbols field of the CweWarning
+    /// Sets the symbols field of the CweWarning.
     pub fn symbols(mut self, symbols: Vec<String>) -> CweWarning {
         self.symbols = symbols;
         self
     }
 
-    /// Sets the other field of the CweWarning
+    /// Sets the other field of the CweWarning.
     pub fn other(mut self, other: Vec<Vec<String>>) -> CweWarning {
         self.other = other;
         self
@@ -76,6 +145,94 @@ impl std::fmt::Display for CweWarning {
             "[{}] ({}) {}",
             self.name, self.version, self.description
         )
+    }
+}
+
+/// An object together with the logs that were generated during the construction
+/// of the object,
+///
+/// The logs are append only.
+#[derive(Clone)]
+pub struct WithLogs<T> {
+    object: T,
+    logs: Vec<LogMessage>,
+}
+
+impl<T> Deref for WithLogs<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.object
+    }
+}
+
+impl<T> DerefMut for WithLogs<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.object
+    }
+}
+
+impl<T> AsRef<T> for WithLogs<T> {
+    fn as_ref(&self) -> &T {
+        self.deref()
+    }
+}
+
+impl<T> AsMut<T> for WithLogs<T> {
+    fn as_mut(&mut self) -> &mut T {
+        self.deref_mut()
+    }
+}
+
+impl<T> WithLogs<T> {
+    /// Creates a new `WithLogs` from the given object and log messages.
+    pub fn new(object: T, logs: Vec<LogMessage>) -> Self {
+        Self { object, logs }
+    }
+
+    /// Creates a new `WithLogs` from the given object.
+    pub fn wrap(object: T) -> Self {
+        Self {
+            object,
+            logs: Vec::with_capacity(0),
+        }
+    }
+
+    /// Returns the wrapped object.
+    pub fn into_object(self) -> T {
+        self.object
+    }
+
+    /// Returns the wrapped log messages.
+    pub fn into_logs(self) -> Vec<LogMessage> {
+        self.logs
+    }
+
+    /// Returns the wrapped log messages.
+    pub fn logs(&self) -> &Vec<LogMessage> {
+        &self.logs
+    }
+
+    /// Returns the wrapped object and log messages.
+    pub fn into_object_logs(self) -> (T, Vec<LogMessage>) {
+        (self.object, self.logs)
+    }
+
+    /// Adds a single log message.
+    pub fn add_log_msg(&mut self, msg: LogMessage) {
+        self.logs.push(msg)
+    }
+
+    /// Adds multiple log messages.
+    pub fn add_logs(&mut self, mut logs: Vec<LogMessage>) {
+        self.logs.append(&mut logs)
+    }
+
+    /// Moves the logs of this object to `other_logs`.
+    pub fn move_logs_to(self, other_logs: &mut Vec<LogMessage>) -> Self {
+        let Self { object, logs } = self;
+        other_logs.extend(logs);
+        Self::wrap(object)
     }
 }
 
@@ -93,7 +250,7 @@ pub struct LogMessage {
 }
 
 impl LogMessage {
-    /// Create a new `Info`-level log message
+    /// Creates a new `Info`-level log message.
     pub fn new_info(text: impl Into<String>) -> LogMessage {
         LogMessage {
             text: text.into(),
@@ -103,7 +260,7 @@ impl LogMessage {
         }
     }
 
-    /// Create a new `Debug`-level log message
+    /// Creates a new `Debug`-level log message.
     pub fn new_debug(text: impl Into<String>) -> LogMessage {
         LogMessage {
             text: text.into(),
@@ -113,7 +270,7 @@ impl LogMessage {
         }
     }
 
-    /// Create a new `Error`-level log message
+    /// Creates a new `Error`-level log message.
     pub fn new_error(text: impl Into<String>) -> LogMessage {
         LogMessage {
             text: text.into(),
@@ -167,12 +324,14 @@ impl std::fmt::Display for LogMessage {
 /// Print all provided log- and CWE-messages.
 ///
 /// Log-messages will always be printed to `stdout`.
-/// CWE-warnings will either be printed to `stdout` or to the file path provided in `out_path`.
+/// CWE-warnings will either be printed to `stdout` or to the file path provided
+/// in `out_path`.
 ///
-/// If `emit_json` is set, the CWE-warnings will be converted to json for the output.
+/// If `emit_json` is set, the CWE-warnings will be converted to json for the
+/// output.
 pub fn print_all_messages(
-    logs: Vec<LogMessage>,
-    cwes: Vec<CweWarning>,
+    logs: Vec<&LogMessage>,
+    cwes: Vec<&CweWarning>,
     out_path: Option<&str>,
     emit_json: bool,
 ) {
@@ -238,9 +397,9 @@ pub enum LogThreadMsg {
     Log(LogMessage),
     /// A CWE warning
     Cwe(CweWarning),
-    /// If the log collector thread receives this signal,
-    /// it should stop receiving new messages
-    /// and instead terminate and return the collected messages prior to receiving the termination signal.
+    /// If the log collector thread receives this signal, it should stop
+    /// receiving new messages and instead terminate and return the collected
+    /// messages prior to receiving the termination signal.
     Terminate,
 }
 
@@ -261,11 +420,12 @@ impl From<CweWarning> for LogThreadMsg {
 /// With [`LogThread::spawn()`] one can create a new log thread
 /// whose handle is contained in the returned `LogThread` struct.
 /// By calling the [`collect()`](LogThread::collect()) method
-/// one can tell the log thread to shut down
-/// and return the logs collected to this point.
+/// one can tell the log thread to shut down and return the logs collected to
+/// this point.
+///
 /// If the `LogThread` object gets dropped before calling `collect()`,
-/// the corresponding logging thread will be stopped
-/// and all collected logs will be discarded.
+/// the corresponding logging thread will be stopped and all collected logs will
+/// be discarded.
 ///
 /// If one deliberately wants to discard all logging messages,
 /// one can simply create a sender to a disconnected channel
@@ -276,8 +436,8 @@ pub struct LogThread {
 }
 
 impl Drop for LogThread {
-    /// If the logging thread still exists,
-    /// send it the `Terminate` signal.
+    /// If the logging thread still exists, send it the `Terminate` signal.
+    ///
     /// Then wait until the logging thread stopped.
     fn drop(&mut self) {
         // Make sure the logging thread gets terminated when dropping this.
@@ -289,14 +449,17 @@ impl Drop for LogThread {
 }
 
 impl LogThread {
-    /// Create a new `LogThread` object with a handle to a freshly spawned logging collector thread.
+    /// Create a new `LogThread` object with a handle to a freshly spawned
+    /// logging collector thread.
     ///
-    /// The parameter is the function containing the actual log collection logic.
-    /// I.e. the function should receive messages through the given receiver until the channel disconnects
-    /// or until it receives a [`LogThreadMsg::Terminate`] message.
-    /// After that it should return the logs collected up to that point.
+    /// The parameter is the function containing the actual log collection
+    /// logic. I.e. the function should receive messages through the given
+    /// receiver until the channel disconnects or until it receives a
+    /// [`LogThreadMsg::Terminate`] message. After that it should return the
+    /// logs collected up to that point.
     ///
-    /// See [`LogThread::collect_and_deduplicate`] for a standard collector function that can be used here.
+    /// See [`LogThread::collect_and_deduplicate`] for a standard collector
+    /// function that can be used here.
     pub fn spawn<F>(collector_func: F) -> LogThread
     where
         F: FnOnce(crossbeam_channel::Receiver<LogThreadMsg>) -> (Vec<LogMessage>, Vec<CweWarning>)
@@ -312,13 +475,16 @@ impl LogThread {
     }
 
     /// Just create a disconnected sender to a (non-existing) logging thread.
-    /// Can be used like a sender to a channel that deliberately discards all messages sent to it.
+    ///
+    /// Can be used like a sender to a channel that deliberately discards all
+    /// messages sent to it.
     pub fn create_disconnected_sender() -> crossbeam_channel::Sender<LogThreadMsg> {
         let (sender, _) = crossbeam_channel::unbounded();
         sender
     }
 
-    /// Get a sender that can be used to send messages to the logging thread corresponding to this `LogThread` instance.
+    /// Get a sender that can be used to send messages to the logging thread
+    /// corresponding to this `LogThread` instance.
     pub fn get_msg_sender(&self) -> crossbeam_channel::Sender<LogThreadMsg> {
         self.msg_sender.clone()
     }
@@ -334,15 +500,20 @@ impl LogThread {
         }
     }
 
-    /// This function is collects logs from the given receiver until a [`LogThreadMsg::Terminate`] signal is received.
+    /// This function collects logs from the given receiver until a
+    /// [`LogThreadMsg::Terminate`] signal is received.
+    ///
     /// All collected logs are deduplicated before being returned.
     ///
-    /// CWE warnings and log messages are deduplicated if two messages share the same address of origin.
-    /// In such a case only the last message received is kept.
-    /// If a CWE message has more than one address only the first address is considered when deduplicating.
-    /// Note that this may lead to information loss if log messages with the same origin address that are not duplicates are generated.
+    /// CWE warnings and log messages are deduplicated if two messages share the
+    /// same address of origin. In such a case only the last message received is
+    /// kept. If a CWE message has more than one address only the first address
+    /// is considered when deduplicating.
+    /// Note that this may lead to information loss if log messages with the
+    /// same origin address that are not duplicates are generated.
     ///
-    /// This function can be used as a standard collector function for [`LogThread::spawn`].
+    /// This function can be used as a standard collector function for
+    /// [`LogThread::spawn`].
     pub fn collect_and_deduplicate(
         receiver: crossbeam_channel::Receiver<LogThreadMsg>,
     ) -> (Vec<LogMessage>, Vec<CweWarning>) {
@@ -354,7 +525,7 @@ impl LogThread {
             match log_thread_msg {
                 LogThreadMsg::Log(log_message) => {
                     if let Some(ref tid) = log_message.location {
-                        logs_with_address.insert(tid.address.clone(), log_message);
+                        logs_with_address.insert(tid.address().to_string(), log_message);
                     } else {
                         general_logs.push(log_message);
                     }

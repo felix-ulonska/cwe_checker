@@ -15,17 +15,26 @@ test:
 		echo "Acceptance test LKMs not found. Please see test/lkm_samples/Readme.md for build instructions."; \
 		exit -1; \
 	fi
-	cargo test --locked --no-fail-fast -p acceptance_tests_ghidra -- --show-output --ignored --test-threads 1
+	cargo test --locked --no-fail-fast -p acceptance_tests_ghidra -F docker -- --show-output --ignored --test-threads 6
 
 compile_test_files:
 	pushd test/artificial_samples \
 	&& docker build -t cross_compiling . \
-	&& docker run --rm -v $(pwd)/build:/home/cwe/artificial_samples/build cross_compiling sudo /home/cwe/.local/bin/scons \
+	&& rm -rf build/* \
+	&& mkdir -p build/ \
+	&& docker run --rm -v $(shell pwd)/test/artificial_samples/build:/home/cwe/artificial_samples/build cross_compiling sudo /usr/local/bin/scons \
 	&& popd \
 	&& pushd test/lkm_samples \
 	&& ./build.sh
 
-codestyle-check:
+bench:
+	if [ ! -d "src/cwe_checker_lib/benches/_data/" ]; then \
+		echo "Benchmark binaries not found. Please see src/cwe_checker_lib/benches/benchmarks.rs for instructions."; \
+		exit -1; \
+	fi
+	cargo bench --bench "benchmarks" -- --save-baseline __last_make_run
+
+check:
 	cargo fmt -- --check
 	cargo clippy -- -D clippy::all -D missing_docs
 	cargo clippy -p cwe_checker_lib --bench "benchmarks" -- -D clippy::all

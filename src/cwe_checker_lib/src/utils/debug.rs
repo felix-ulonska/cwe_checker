@@ -1,21 +1,28 @@
 //! Little helpers for developers that try to understand what their code is
 //! doing.
 
-#![allow(dead_code)]
-#![allow(missing_docs)]
-
 use std::path::PathBuf;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 /// Stages of the analysis that can be debugged separately.
 #[non_exhaustive]
 pub enum Stage {
+    /// No stages.
     #[default]
     No,
+    /// All stages.
     All,
+    /// Construction of whole-program call graph.
+    CallGraph,
+    /// Construction of whole-program control flow graph.
+    ControlFlowGraph,
+    /// Pointer inference.
     Pi,
+    /// Generation of intermediate representation.
     Ir(IrForm),
+    /// Parsing of Pcode.
     Pcode(PcodeForm),
+    /// CWE checkers.
     Cwe,
 }
 
@@ -23,8 +30,46 @@ pub enum Stage {
 /// Substages of the IR generation that can be debugged separately.
 #[non_exhaustive]
 pub enum IrForm {
+    /// The very first IR representation of the program.
+    Early,
+    /// Indirect calls with a single target have been replaced by direct calls
+    /// to this target.
+    SingleTargetIndirectCallsReplaced,
+    /// After blocks within a function have been normal ordered.
+    FnBlksSorted,
+    /// After non-returning external functions have been marked.
+    NonRetExtFunctionsMarked,
+    /// After calls to stubs for external functions have been replaced with
+    /// calls to the external function.
+    ExtCallsReplaced,
+    /// After existing, referenced blocks have blocks have been inlined into
+    /// functions.
+    Inlined,
+    /// After the subregister substitution pass.
+    SubregistersSubstituted,
+    /// After all control flow transfers have a valid target.
+    CfPatched,
+    /// After empty functions have been removed.
+    EmptyFnRemoved,
+    /// After nonexisting entry points have been removed.
+    EntryPointsExist,
+    /// The unoptimized IR.
     Raw,
-    Normalized,
+    /// After unreachable basic blocks have been removed from functions.
+    IntraproceduralDeadBlocksElimed,
+    /// After trivial expressions have been replaced with their results.
+    TrivialExpressionsSubstituted,
+    /// After input expressions have been propagated along variable assignments.
+    InputExpressionsPropagated,
+    /// After assignments to dead variables have been removed.
+    DeadVariablesElimed,
+    /// After control flow across conditionals with the same condition has been
+    /// simplified.
+    ControlFlowPropagated,
+    /// After stack pointer alignment via logical AND has been substituted with
+    /// a subtraction operation.
+    StackPointerAlignmentSubstituted,
+    /// The final IR.
     Optimized,
 }
 
@@ -32,17 +77,22 @@ pub enum IrForm {
 /// Substages of the Pcode transformation that can be debugged separately.
 #[non_exhaustive]
 pub enum PcodeForm {
+    /// JSON string that comes from the Ghidra plugin.
     Raw,
-    Processed,
+    /// JSON deserialized into Rust types.
+    Parsed,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 /// Controls generation of log messages.
 #[non_exhaustive]
 pub enum Verbosity {
+    /// Print no log messages.
     Quiet,
+    /// Print warning and error-level log messages.
     #[default]
     Normal,
+    /// Print extra log messages.
     Verbose,
 }
 
@@ -51,9 +101,12 @@ pub enum Verbosity {
 /// interest.
 #[non_exhaustive]
 pub enum TerminationPolicy {
+    /// Continue.
     KeepRunning,
+    /// Exit.
     #[default]
     EarlyExit,
+    /// Panic.
     Panic,
 }
 
@@ -66,34 +119,40 @@ pub struct Settings {
     saved_pcode_raw: Option<PathBuf>,
 }
 
+/// Builder for debug [`Settings`].
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct SettingsBuilder {
     inner: Settings,
 }
 
 impl SettingsBuilder {
+    /// Constructs the final settings.
     pub fn build(self) -> Settings {
         self.inner
     }
 
+    /// Sets the stage that is being debugged.
     pub fn set_stage(mut self, stage: Stage) -> Self {
         self.inner.stage = stage;
 
         self
     }
 
+    /// Sets the verbosity level.
     pub fn set_verbosity(mut self, verbosity: Verbosity) -> Self {
         self.inner.verbose = verbosity;
 
         self
     }
 
+    /// Sets the termination policy.
     pub fn set_termination_policy(mut self, policy: TerminationPolicy) -> Self {
         self.inner.terminate = policy;
 
         self
     }
 
+    /// Sets the path to the file with the saved output of the Ghidra plugin.
     pub fn set_saved_pcode_raw(mut self, saved_pcode_raw: PathBuf) -> Self {
         self.inner.saved_pcode_raw = Some(saved_pcode_raw);
 
@@ -102,6 +161,7 @@ impl SettingsBuilder {
 }
 
 impl Settings {
+    /// Returns the path to the file with the saved output of the Ghidra plugin.
     pub fn get_saved_pcode_raw(&self) -> Option<PathBuf> {
         self.saved_pcode_raw.clone()
     }
@@ -124,6 +184,28 @@ impl Settings {
         }
     }
 
+    /// Displays the `obj`ect if the stage is being debugged.
+    ///
+    /// This is a possible cancellation point depending on the termination
+    /// policy.
+    pub fn print_compact_json<T: ToJsonCompact>(&self, obj: &T, stage: Stage) {
+        if self.should_debug(stage) {
+            obj.print_compact_json();
+            self.maybe_terminate();
+        }
+    }
+
+    /// Displays the `obj`ect if the stage is being debugged.
+    ///
+    /// This is a possible cancellation point depending on the termination
+    /// policy.
+    pub fn dbg<T: std::fmt::Debug>(&self, obj: &T, stage: Stage) {
+        if self.should_debug(stage) {
+            println!("{:?}", obj);
+            self.maybe_terminate();
+        }
+    }
+
     /// Terminates the process according to the termination policy.
     fn maybe_terminate(&self) {
         match self.terminate {
@@ -136,6 +218,11 @@ impl Settings {
     /// Returns true if the logging level is at least verbose.
     pub fn verbose(&self) -> bool {
         matches!(self.verbose, Verbosity::Verbose)
+    }
+
+    /// Returns true if logging is disabled.
+    pub fn quiet(&self) -> bool {
+        matches!(self.verbose, Verbosity::Quiet)
     }
 }
 
