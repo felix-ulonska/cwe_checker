@@ -72,6 +72,10 @@ If you installed the *cwe_checker* locally, run
 ```bash
 cwe_checker BINARY
 ```
+If you use nix flakes, run
+```bash
+nix run github:fkie-cad/cwe_checker -- BINARY
+```
 You can adjust the behavior of most checks via a configuration file located at `src/config.json`.
 If you modify it, add the command line flag `--config=src/config.json` to tell the *cwe_checker* to use the modified file.
 For information about other available command line flags you can pass the `--help` flag to the *cwe_checker*.

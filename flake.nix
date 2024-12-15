@@ -1,7 +1,8 @@
 {
-  description = "Nix flake with Ghidra as a dependency";
+  description = "Nix flake for the cwe_checker with patched Ghidra as a dependency";
 
   inputs = {
+    # depend on nixos-unstable for the latest rust version.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
@@ -16,14 +17,14 @@
       };
       cwe-ghidra = pkgs.ghidra.withExtensions (p: with p; [ ghidra-cwe-checker-plugin ]);
       # Path to java ghidra plugin
-      ghidra_pcode_extract = pkgs.runCommand 
-        "pcode_extractor" { src = ./src/ghidra/p_code_extractor; }
+      cwe-checker-ghidra-plugins = pkgs.runCommand 
+        "cwe-checker-ghidra-plugins" { src = ./src/ghidra/p_code_extractor; }
         ''
         mkdir -p $out/p_code_extractor
         cp -rf $src/* $out/p_code_extractor
         '';
-      # Build ghidra package with analyzeHeadless in support/ where it is the default
-      # cwe_checker expectes it in support/
+      # Build ghidra package with analyzeHeadless in support/ instead of bin/.
+      # This is where the cwe_checker expects it to be
       cwe-ghidra-path-fix = pkgs.stdenv.mkDerivation {
         name = "analyzeHeadless";
         pname = "analyzeHeadless";
@@ -52,7 +53,7 @@
         text = builtins.toJSON { ghidra_path = ''${cwe-ghidra-path-fix}''; };
       };
       # creates config dir for cwe_checker
-      cwe-checker-config = pkgs.runCommand "configs" { src = ./src; } 
+      cwe-checker-configs = pkgs.runCommand "cwe-checker-configs" { src = ./src; } 
       ''
       mkdir -p $out
       cp $src/config.json $out
@@ -62,8 +63,8 @@
       # target bin for nix run .#
       cwe-checker = pkgs.writeScriptBin "cwe-checker" ''
       #!/bin/sh
-      CWE_CHECKER_CONFIGS_PATH=${cwe-checker-config} \
-      CWE_CHECKER_GHIDRA_PLUGINS_PATH=${ghidra_pcode_extract} \
+      CWE_CHECKER_CONFIGS_PATH=${cwe-checker-configs} \
+      CWE_CHECKER_GHIDRA_PLUGINS_PATH=${cwe-checker-ghidra-plugins} \
       ${cwe-checker-bins}/bin/cwe_checker $@;
       '';
     in
@@ -75,8 +76,8 @@
           cwe-ghidra-path-fix
         ];
         shellHook = ''
-        export CWE_CHECKER_CONFIGS_PATH=${cwe-checker-config} \
-        export CWE_CHECKER_GHIDRA_PLUGINS_PATH=${ghidra_pcode_extract} \
+        export CWE_CHECKER_CONFIGS_PATH=${cwe-checker-configs} \
+        export CWE_CHECKER_GHIDRA_PLUGINS_PATH=${cwe-checker-ghidra-plugins} \
         '';
       };
       packages.x86_64-linux.default = cwe-checker;
