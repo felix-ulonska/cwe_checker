@@ -7,5 +7,4 @@ public class Program {
 	public Program(ArrayList<Function> functions) {
 		this.functions = functions;
 	}
-
 }
