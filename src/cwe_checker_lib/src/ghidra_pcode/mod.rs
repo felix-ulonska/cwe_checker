@@ -34,6 +34,8 @@ mod term;
 use term::*;
 mod register_properties;
 use register_properties::*;
+mod memory_block;
+use memory_block::*;
 pub mod ir_passes;
 use ir_passes::*;
 
@@ -61,11 +63,17 @@ pub struct PcodeProject {
     datatype_properties: DatatypeProperties,
     /// Program image base address in memory.
     image_base: String,
+    /// Memory Blocks as parsed by Ghidra
+    mem_blocks: Vec<MemoryBlock>,
 }
 
 impl Display for PcodeProject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.program)
+        write!(f, "{}", self.program)?;
+        for blk in &self.mem_blocks {
+            writeln!(f, "{}", blk)?;
+        }
+        Ok(())
     }
 }
 
