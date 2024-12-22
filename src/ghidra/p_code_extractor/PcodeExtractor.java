@@ -34,6 +34,10 @@ import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.util.exception.InvalidInputException;
+import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.program.model.listing.CodeUnit;
+import ghidra.program.model.listing.CodeUnitIterator;
 import com.google.gson.*;
 
 public class PcodeExtractor extends GhidraScript {
@@ -157,9 +161,12 @@ public class PcodeExtractor extends GhidraScript {
 
         ArrayList<MemoryBlk> memBlks = readMemoryMap();
 
+        ArrayList<CodeRef> codeRefs = getAllReferences();
+
         // assembling everything together
         PcodeProject project = new PcodeProject(functions, registerProperties, cpuArch, externalFunctions,
-                entry_points, stackPointerRegister, callingConventions, dataTypeProperties, imageBase, memBlks);
+                entry_points, stackPointerRegister, callingConventions, dataTypeProperties, imageBase, memBlks,
+                codeRefs);
 
         // serialization
         Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
@@ -184,7 +191,31 @@ public class PcodeExtractor extends GhidraScript {
         }
 
         println("Pcode was successfully extracted!");
+    }
 
+    private ArrayList<CodeRef> getAllReferences() {
+        Listing listing = currentProgram.getListing();
+        CodeUnitIterator codeUnits = listing.getCodeUnits(true);
+
+        ArrayList<CodeRef> codeRefs = new ArrayList<>();
+
+        while (codeUnits.hasNext()) {
+            CodeUnit codeUnit = codeUnits.next();
+            Address address = codeUnit.getAddress();
+
+            // Get all references from this address
+            Reference[] references = currentProgram.getReferenceManager().getReferencesFrom(address);
+            for (Reference ref: references) {
+                Address toAddress = ref.getToAddress();
+                MemoryBlock block = currentProgram.getMemory().getBlock(address);
+
+                if (block != null && block.isExecute()) {
+                    codeRefs.add(new CodeRef(address.getOffset(), toAddress.getOffset()));
+                    println("Found code pointer reference: " + address + " -> " + toAddress);
+                }
+            }
+        }
+        return codeRefs;
     }
 
     private ArrayList<MemoryBlk> readMemoryMap() throws IOException, Exception, MemoryAccessException {

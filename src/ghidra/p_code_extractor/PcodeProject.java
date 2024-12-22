@@ -18,6 +18,7 @@ public class PcodeProject {
     private DatatypeProperties datatype_properties;
     private String image_base;
     private ArrayList<MemoryBlk> mem_blocks;
+    private ArrayList<CodeRef> code_refs;
 
     public PcodeProject(ArrayList<Function> functions,
             ArrayList<RegisterProperties> register_properties,
@@ -27,7 +28,8 @@ public class PcodeProject {
             Varnode stack_pointer_register,
 	    HashMap<String, CallingConvention> calling_conventions,
             DatatypeProperties datatype_properties,
-	    String image_base, ArrayList<MemoryBlk> memBlocks) {
+	    String image_base, ArrayList<MemoryBlk> memBlocks,
+                        ArrayList<CodeRef> code_refs) {
         this.program = new Program(functions);
         this.register_properties = register_properties;
         this.cpu_arch = cpu_arch;
@@ -38,6 +40,7 @@ public class PcodeProject {
         this.datatype_properties = datatype_properties;
 	this.image_base = image_base;
         this.mem_blocks = memBlocks;
+        this.code_refs = code_refs;
 
     }
 
