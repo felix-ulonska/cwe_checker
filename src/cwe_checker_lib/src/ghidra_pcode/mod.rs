@@ -36,6 +36,8 @@ mod register_properties;
 use register_properties::*;
 mod memory_block;
 use memory_block::*;
+mod code_ref;
+use code_ref::*;
 pub mod ir_passes;
 use ir_passes::*;
 
@@ -65,6 +67,8 @@ pub struct PcodeProject {
     image_base: String,
     /// Memory Blocks as parsed by Ghidra
     mem_blocks: Vec<MemoryBlock>,
+    /// Code References
+    code_refs: Vec<CodeRef>,
 }
 
 impl Display for PcodeProject {
@@ -72,6 +76,9 @@ impl Display for PcodeProject {
         write!(f, "{}", self.program)?;
         for blk in &self.mem_blocks {
             writeln!(f, "{}", blk)?;
+        }
+        for _ref in &self.code_refs {
+            writeln!(f, "{}", _ref)?;
         }
         Ok(())
     }

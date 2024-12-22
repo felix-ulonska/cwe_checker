@@ -29,6 +29,6 @@ pub struct MemoryBlock {
 
 impl Display for MemoryBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MEM_SEGMENT: {} @ {} size {}", self.name, self.base_address, self.size)
+        write!(f, "MEM_SEGMENT: {} @ {} size {:#x}", self.name, self.base_address, self.size)
     }
 }
