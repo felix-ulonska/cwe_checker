@@ -29,6 +29,8 @@ pub struct Project {
     pub datatype_properties: DatatypeProperties,
     /// Represents the memory after loading the binary.
     pub runtime_memory_image: RuntimeMemoryImage,
+    /// References to Code
+    pub code_references: Vec<CodeReference>,
 }
 
 impl Project {

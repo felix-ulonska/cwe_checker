@@ -3,6 +3,8 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::utils::binary::MemorySegment;
+
 pub fn deserialize_hex<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where
     D: Deserializer<'de>,
@@ -20,14 +22,14 @@ where
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct MemoryBlock {
-    name: String,
-    base_address: u64,
+    pub name: String,
+    pub base_address: u64,
     #[serde(deserialize_with = "deserialize_hex")]
-    data: Vec<u8>,
-    size: i32,
-    is_executable: bool,
-    is_readable: bool,
-    is_writeable: bool
+    pub data: Vec<u8>,
+    pub size: i32,
+    pub is_executable: bool,
+    pub is_readable: bool,
+    pub is_writeable: bool
 }
 
 fn display_prem(perm: bool, display_char: &str) -> &str {
@@ -35,6 +37,19 @@ fn display_prem(perm: bool, display_char: &str) -> &str {
         display_char
     } else {
         "-"
+    }
+}
+
+impl MemoryBlock {
+    pub fn to_ir_memory_segment(&self) -> MemorySegment {
+        MemorySegment {
+            name : Some(self.name.to_owned()),
+            bytes : self.data.clone(),
+            base_address : self.base_address,
+            read_flag : self.is_readable,
+            execute_flag : self.is_executable,
+            write_flag : self.is_writeable
+        }
     }
 }
 

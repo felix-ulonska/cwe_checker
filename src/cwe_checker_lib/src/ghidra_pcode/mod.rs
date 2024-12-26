@@ -1,15 +1,16 @@
 //! Translation from Pcode to the internal intermediate representation.
 
 use crate::intermediate_representation::{
-    Program as IrProgram, Project as IrProject, RuntimeMemoryImage as IrRuntimeMemoryImage,
-    Term as IrTerm, Tid,
+    CodeReference, Program as IrProgram, Project as IrProject, RuntimeMemoryImage, Term as IrTerm, Tid
 };
+use crate::utils::binary::MemorySegment;
 use crate::utils::debug;
 use crate::utils::log::{LogMessage, WithLogs};
 
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 mod calling_convention;
@@ -186,7 +187,15 @@ impl PcodeProject {
                 .collect(),
             register_set: register_map.get_base_reg_ir_vars(),
             datatype_properties: self.datatype_properties.into(),
-            runtime_memory_image: IrRuntimeMemoryImage::empty(true),
+            runtime_memory_image: RuntimeMemoryImage { 
+                memory_segments: self.mem_blocks.into_iter().map(|mem| mem.to_ir_memory_segment()).collect(),
+                is_little_endian: true,
+                is_lkm: false
+            },
+            code_references: self.code_refs.into_iter().map(|code_ref| CodeReference {
+                from: code_ref.from,
+                to: code_ref.to
+            }).collect_vec()
         };
 
         WithLogs::new(ir_project, logs)
