@@ -1,8 +1,8 @@
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
+import java.io.IOException;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.address.Address;
-
-import java.io.IOException;
 
 /**
  * Wrapper class for MemoryBlock
@@ -16,6 +16,10 @@ public class MemoryBlk {
     public String base_address;
     public String data;
     public long size;
+    public boolean is_executable;
+    public boolean is_readable;
+    public boolean is_writeable;
+
 
     public MemoryBlk(MemoryBlock memBlock) throws IOException, MemoryAccessException {
         this.name = memBlock.getName();
@@ -25,6 +29,9 @@ public class MemoryBlk {
         this.base_address = start.getPhysicalAddress().toString();
         memBlock.getBytes(start, data);
         this.data = bytesToHex(data);
+        this.is_executable = memBlock.isExecute();
+        this.is_readable = memBlock.isRead();
+        this.is_writeable = memBlock.isWrite();
     }
 
     private String bytesToHex(byte[] bytes) {

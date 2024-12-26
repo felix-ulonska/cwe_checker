@@ -25,10 +25,28 @@ pub struct MemoryBlock {
     #[serde(deserialize_with = "deserialize_hex")]
     data: Vec<u8>,
     size: i32,
+    is_executable: bool,
+    is_readable: bool,
+    is_writeable: bool
+}
+
+fn display_prem(perm: bool, display_char: &str) -> &str {
+    if perm {
+        display_char
+    } else {
+        "-"
+    }
 }
 
 impl Display for MemoryBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MEM_SEGMENT: {} @ {} size {:#x}", self.name, self.base_address, self.size)
+        write!(f, "MEM_SEGMENT: {} @ {} size {:#x} [{}{}{}]",
+            self.name,
+            self.base_address,
+            self.size,
+            display_prem(self.is_readable, "R"),
+            display_prem(self.is_writeable, "W"),
+            display_prem(self.is_executable, "X")
+        )
     }
 }

@@ -67,6 +67,8 @@ pub struct MemorySegment {
     pub write_flag: bool,
     /// Is the segment executable
     pub execute_flag: bool,
+    /// Name of the segment, if avaible
+    pub name: Option<String>,
 }
 
 impl MemorySegment {
@@ -91,6 +93,7 @@ impl MemorySegment {
             read_flag: true,
             write_flag: section_header.is_writable(),
             execute_flag: section_header.is_executable(),
+            name: None,
         }
     }
 
@@ -107,6 +110,7 @@ impl MemorySegment {
             read_flag: program_header.is_read(),
             write_flag: program_header.is_write(),
             execute_flag: program_header.is_executable(),
+            name: None,
         }
     }
 
@@ -129,6 +133,7 @@ impl MemorySegment {
             read_flag: (section_header.characteristics & 0x40000000) != 0,
             write_flag: (section_header.characteristics & 0x80000000) != 0,
             execute_flag: (section_header.characteristics & 0x20000000) != 0,
+            name: None,
         }
     }
 
@@ -141,6 +146,7 @@ impl MemorySegment {
             read_flag: true,
             write_flag: true,
             execute_flag: true,
+            name: None,
         }
     }
 
@@ -154,6 +160,7 @@ impl MemorySegment {
             read_flag: true,
             write_flag: true,
             execute_flag: false,
+            name: None,
         }
     }
 }
