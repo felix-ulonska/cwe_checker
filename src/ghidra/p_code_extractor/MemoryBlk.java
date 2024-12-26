@@ -13,7 +13,7 @@ import ghidra.program.model.address.Address;
 
 public class MemoryBlk {
     public String name;
-    public String base_address;
+    public long base_address;
     public String data;
     public long size;
     public boolean is_executable;
@@ -26,7 +26,7 @@ public class MemoryBlk {
         this.size = memBlock.getSize();
         byte[] data = new byte[(int) memBlock.getSize()];
         Address start = memBlock.getStart();
-        this.base_address = start.getPhysicalAddress().toString();
+        this.base_address = start.getPhysicalAddress().getOffset();
         memBlock.getBytes(start, data);
         this.data = bytesToHex(data);
         this.is_executable = memBlock.isExecute();

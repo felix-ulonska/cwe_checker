@@ -21,7 +21,7 @@ where
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct MemoryBlock {
     name: String,
-    base_address: String,
+    base_address: u64,
     #[serde(deserialize_with = "deserialize_hex")]
     data: Vec<u8>,
     size: i32,
@@ -40,7 +40,7 @@ fn display_prem(perm: bool, display_char: &str) -> &str {
 
 impl Display for MemoryBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MEM_SEGMENT: {} @ {} size {:#x} [{}{}{}]",
+        write!(f, "MEM_SEGMENT: {} @ {:#x} size {:#x} [{}{}{}]",
             self.name,
             self.base_address,
             self.size,
