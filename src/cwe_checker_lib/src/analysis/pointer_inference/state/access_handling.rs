@@ -217,6 +217,7 @@ impl State {
                 size,
                 arg,
             } => self.eval_recursive(arg).subpiece(*low_byte, *size),
+            Phi(_) => todo!("Phi Func not implemented!")
         }
     }
 

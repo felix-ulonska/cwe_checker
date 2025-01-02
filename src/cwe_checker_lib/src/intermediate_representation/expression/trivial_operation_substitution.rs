@@ -529,6 +529,7 @@ impl Expression {
                 rhs.substitute_trivial_operations();
                 self.substitute_trivial_binops();
             }
+            Expression::Phi(_) => todo!("Encountered unexpected Phi Instructions")
         }
     }
 }

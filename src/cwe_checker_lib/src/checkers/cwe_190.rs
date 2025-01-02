@@ -64,7 +64,7 @@ fn expression_contains_multiplication(expr: &Expression) -> bool {
             op: BinOpType::IntLeft,
             ..
         } => true,
-        Var(_) | Const(_) | Unknown { .. } => false,
+        Var(_) | Const(_) | Unknown { .. } | Phi (_) => false,
         BinOp { lhs, rhs, .. } => {
             expression_contains_multiplication(lhs) || expression_contains_multiplication(rhs)
         }

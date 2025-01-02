@@ -158,6 +158,7 @@ impl State {
                 size,
                 arg,
             } => self.eval(arg).subpiece(*low_byte, *size),
+            Expression::Phi(_) => todo!("Encountered unexpected Phi Instructions")
         }
     }
 

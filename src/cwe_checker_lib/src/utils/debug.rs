@@ -69,6 +69,8 @@ pub enum IrForm {
     /// After stack pointer alignment via logical AND has been substituted with
     /// a subtraction operation.
     StackPointerAlignmentSubstituted,
+    /// Single Static Assigment form
+    SingleStaticAssigment,
     /// The final IR.
     Optimized,
 }

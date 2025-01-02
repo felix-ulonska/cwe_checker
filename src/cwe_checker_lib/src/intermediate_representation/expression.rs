@@ -74,6 +74,8 @@ pub enum Expression {
         /// The argument from which to extract the bitvector from.
         arg: Box<Expression>,
     },
+    /// Single Static Assigment combination operator
+    Phi(Vec<Variable>)
 }
 
 /// The type/mnemonic of a binary operation.
@@ -170,6 +172,8 @@ impl Expression {
                 _ => arg.bytesize(),
             },
             Cast { size, .. } | Unknown { size, .. } | Subpiece { size, .. } => *size,
+            // TODO: this could be slow
+            Phi(inputs) => inputs.into_iter().max_by_key(|input| input.size).expect("inputs were empty!").size
         }
     }
 
@@ -177,7 +181,7 @@ impl Expression {
     pub fn referenced_constants(&self) -> Option<Vec<Bitvector>> {
         use Expression::*;
         match self {
-            Var(_) | Unknown { .. } => None,
+            Var(_) | Phi { .. } | Unknown { .. } => None,
             Const(c) => Some(vec![c.clone()]),
             BinOp { lhs, rhs, .. } => {
                 match (lhs.referenced_constants(), rhs.referenced_constants()) {
@@ -207,6 +211,7 @@ impl Expression {
                 vars
             }
             UnOp { arg, .. } | Cast { arg, .. } | Subpiece { arg, .. } => arg.input_vars(),
+            Phi(inputs) => inputs.iter().collect()
         }
     }
 
@@ -228,6 +233,8 @@ impl Expression {
                 lhs.substitute_input_var(input_var, replace_with_expression);
                 rhs.substitute_input_var(input_var, replace_with_expression);
             }
+            // TODO: check if wrong?
+            Phi(_) => ()
         }
     }
 
@@ -242,7 +249,7 @@ impl Expression {
     pub fn recursion_depth(&self) -> u64 {
         use Expression::*;
         match self {
-            Const(_) | Unknown { .. } | Var(_) => 0,
+            Const(_) | Unknown { .. } | Var(_) | Phi (_) => 0,
             Subpiece { arg, .. } | Cast { arg, .. } | UnOp { arg, .. } => arg.recursion_depth() + 1,
             BinOp { lhs, rhs, .. } => {
                 std::cmp::max(lhs.recursion_depth(), rhs.recursion_depth()) + 1
@@ -278,6 +285,10 @@ impl fmt::Display for Expression {
                 arg,
             } => {
                 write!(f, "({})[{}-{}]", arg, low_byte.0, low_byte.0 + size.0 - 1)
+            }
+            Expression::Phi(inputs) => {
+                // TODO: this can be optimized, surely
+                write!(f, "phi({})", inputs.iter().map(|v| v.name.clone()).collect::<Vec<_>>().join(","))
             }
         }
     }

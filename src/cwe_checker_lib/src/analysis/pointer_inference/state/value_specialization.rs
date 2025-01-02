@@ -77,6 +77,7 @@ impl State {
                     }
                     Ok(())
                 }
+                Expression::Phi(_) => todo!("Encountered unexpected Phi Instructions")
             }
         }
     }
