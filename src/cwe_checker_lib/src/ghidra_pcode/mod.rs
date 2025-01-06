@@ -3,7 +3,6 @@
 use crate::intermediate_representation::{
     CodeReference, Program as IrProgram, Project as IrProject, RuntimeMemoryImage, Term as IrTerm, Tid
 };
-use crate::utils::binary::MemorySegment;
 use crate::utils::debug;
 use crate::utils::log::{LogMessage, WithLogs};
 
