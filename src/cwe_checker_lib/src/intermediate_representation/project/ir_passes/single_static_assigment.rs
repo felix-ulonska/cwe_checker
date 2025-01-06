@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
-use nix::sys::wait::wait;
 use petgraph::visit::EdgeRef;
 
 use crate::{analysis::graph::{get_program_cfg, Node}, intermediate_representation::{Def, Expression, Project, Variable}, prelude::{Term, Tid}, utils::debug::IrForm};
@@ -39,9 +38,6 @@ impl SingleStaticAssigment {
         }
         used_register_vars
     }
-    fn get_incoming_edges_for_each_blk() {
-
-    }
 }
 
 fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap::<String, Vec<String>> {
@@ -60,21 +56,14 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap::<String, Vec<S
                 let target_node = edge.target();
                 if let Some(blk) = cfg[target_node].try_get_block(){
                     let incoming_edges = incoming_edge_for_each_block
-                        .get_mut(&blk.tid.to_string())
+                        .get_mut(&cfg[edge.source()].get_block().tid.to_string())
                         .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
-                    incoming_edges.push(cfg[edge.source()].get_block().tid.to_string());
+                    incoming_edges.push(blk.tid.to_string());
                 }
             }
         }
     }
 
-    for block in program.blocks() {
-        print!("Block {} has incoming edge from ", block.tid.to_string());
-        for edge in &incoming_edge_for_each_block[&block.tid.to_string()] {
-            print!("{}, ", edge);
-        }
-        println!("");
-    }
     incoming_edge_for_each_block
 }
 
@@ -150,6 +139,24 @@ fn rename_all_vars_and_add_empty_phi_fn(program: &mut Program, used_register_var
     active_var_at_end_of_block
 }
 
+fn fix_phi_functions(program: &mut Program, incoming_edge_for_each_block: HashMap::<String,Vec<String>>, active_var_at_end_of_block: HashMap<String, HashMap::<String, i64>>) {
+    for block in program.blocks_mut() {
+        for incoming_edge_name in &incoming_edge_for_each_block[&block.tid.to_string()] {
+            for def in block.defs_mut() {
+                if let Term { term: Def::Assign { var,  value: Expression::Phi(inputs) }, .. } = def {
+                    let original_name = var.name.split("_").take(1).collect_vec()[0];
+                    println!("Incoming name: {};{}", &incoming_edge_name.clone(), original_name);
+                    inputs.push(Variable {
+                        name: format!("{}_{}", original_name, active_var_at_end_of_block[&incoming_edge_name.clone()][original_name]),
+                        size: var.size,
+                        is_temp: false
+                    })
+                } 
+            }
+        }
+    }
+}
+
 impl IrPass for SingleStaticAssigment {
     const NAME: &'static str = "SingleStaticAssigment";
 
@@ -180,20 +187,15 @@ impl IrPass for SingleStaticAssigment {
 
         let active_var_at_end_of_block = rename_all_vars_and_add_empty_phi_fn(&mut program, &used_register_vars);
 
-        for block in program.blocks_mut() {
-            for incoming_edge_name in &incoming_edge_for_each_block[&block.tid.to_string()] {
-                active_var_at_end_of_blockj
-                
-            }
-        }
+        fix_phi_functions(program, incoming_edge_for_each_block, active_var_at_end_of_block);
 
         logs
     }
 
-        fn assert_postconditions(_construction_input: &Self::ConstructionInput, _program: &Self::Input) {
-            todo!()
-        }
+    fn assert_postconditions(_construction_input: &Self::ConstructionInput, _program: &Self::Input) {
+        todo!()
     }
+}
 
     #[cfg(test)]
     mod tests {
@@ -253,7 +255,7 @@ impl IrPass for SingleStaticAssigment {
         blk1.term.add_jumps(vec![if_jmp, else_jmp]);
         let jmp_to_3 = Jmp::Branch(Tid::new(blk3.tid.clone()));
         let blk1_jmp = Term {
-            tid: Tid::new("foo_jmp_else"),
+            tid: Tid::new("foo_jmp_else_2"),
             term: jmp_to_3,
         };
         blk2.add_jumps(vec![blk1_jmp]);
