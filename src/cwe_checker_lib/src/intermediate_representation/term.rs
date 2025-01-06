@@ -103,6 +103,7 @@ impl Tid {
     const FUNCTION_ID_PREFIX: &'static str = "fun";
     const EXT_FUNCTION_ID_PREFIX: &'static str = "ext_fun";
     const BLOCK_ID_PREFIX: &'static str = "blk";
+    const PHI_ID_PREFIX: &'static str = "phi";
     const INSTRUCTION_ID_PREFIX: &'static str = "instr";
 
     /// Returns the term identifier for the program that is based at the
@@ -147,6 +148,14 @@ impl Tid {
     /// `address`.
     pub fn new_instr<T: Into<TidAddress> + Display>(address: T, index: u64) -> Self {
         Tid::new_instr_with_suffix::<_, &str>(address, index, None)
+    }
+    
+    pub fn new_phi(block_tid: &Tid, var_id: &str) -> Self {
+        Self {
+            id: format!("{}_{}_{}", Self::PHI_ID_PREFIX, block_tid.id, var_id),
+            // Todo investigate if other possible?
+            address: block_tid.address.clone()
+        }
     }
 
     /// Converts TID into a TID for an instruction at the same address.

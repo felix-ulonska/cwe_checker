@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::Expression;
+use super::{Expression, Variable};
 use crate::prelude::*;
 
 /// A `Jmp` instruction affects the control flow of a program, i.e. it may change the instruction pointer.
@@ -87,6 +87,23 @@ impl Jmp {
     /// Returns true iff the jump is an indirect call.
     pub fn is_indirect_call(&self) -> bool {
         matches!(self, Jmp::CallInd { .. })
+    }
+    
+    /// Substitute every occurence of `input_var` in the address and value expressions
+    /// with `replace_with_expression`.
+    /// Does not change the target variable of assignment- and load-instructions.
+    pub fn substitute_input_var(
+        &mut self,
+        input_var: &Variable,
+        replace_with_expression: &Expression,
+    ) {
+        match self {
+            Jmp::BranchInd(expr) => expr.substitute_input_var(input_var, replace_with_expression),
+            Jmp::CBranch { condition, .. } => condition.substitute_input_var(input_var, replace_with_expression),
+            Jmp::CallInd { target, .. } => target.substitute_input_var(input_var, replace_with_expression),
+            Jmp::Return(expression) => expression.substitute_input_var(input_var, replace_with_expression),
+            Jmp::CallOther { .. } | Jmp::Call { .. } | Jmp::Branch(_) => ()
+        }
     }
 }
 

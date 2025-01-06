@@ -65,6 +65,8 @@ pub enum CliDebugMode {
     /// After stack pointer alignment via logical AND has been substituted with
     /// a subtraction operation.
     IrStackPointerAlignmentSubstituted,
+    /// Single Static Assigment Form
+    IrSSA,
     /// The final IR.
     IrOptimized,
     /// Whole-program call graph.
@@ -104,6 +106,7 @@ impl From<&CliDebugMode> for debug::Stage {
             IrStackPointerAlignmentSubstituted => {
                 debug::Stage::Ir(debug::IrForm::StackPointerAlignmentSubstituted)
             }
+            IrSSA => debug::Stage::Ir(debug::IrForm::SingleStaticAssigment),
             IrOptimized => debug::Stage::Ir(debug::IrForm::Optimized),
             Cg => debug::Stage::CallGraph,
             Cfg => debug::Stage::ControlFlowGraph,

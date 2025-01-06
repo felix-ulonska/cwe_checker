@@ -17,6 +17,7 @@ impl RuntimeMemoryImage {
         RuntimeMemoryImage {
             memory_segments: vec![
                 MemorySegment {
+                    name: None,
                     bytes: [0xb0u8, 0xb1, 0xb2, 0xb3, 0xb4].to_vec(),
                     base_address: 0x1000,
                     read_flag: true,
@@ -24,6 +25,7 @@ impl RuntimeMemoryImage {
                     execute_flag: false,
                 },
                 MemorySegment {
+                    name: None,
                     bytes: [0u8; 8].to_vec(),
                     base_address: 0x2000,
                     read_flag: true,
@@ -32,6 +34,7 @@ impl RuntimeMemoryImage {
                 },
                 // Contains the Hello World string at byte 3002.
                 MemorySegment {
+                    name: None,
                     bytes: [
                         0x01, 0x02, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c,
                         0x64, 0x00,
@@ -43,6 +46,7 @@ impl RuntimeMemoryImage {
                     execute_flag: false,
                 },
                 MemorySegment {
+                    name: None,
                     bytes: [0x02, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00].to_vec(),
                     base_address: 0x4000,
                     read_flag: true,
@@ -51,6 +55,7 @@ impl RuntimeMemoryImage {
                 },
                 // Contains strings: '/dev/sd%c%d' and 'cat %s'
                 MemorySegment {
+                    name: None,
                     bytes: [
                         0x2f, 0x64, 0x65, 0x76, 0x2f, 0x73, 0x64, 0x25, 0x63, 0x25, 0x64, 0x00,
                         0x63, 0x61, 0x74, 0x20, 0x25, 0x73, 0x00,
@@ -63,6 +68,7 @@ impl RuntimeMemoryImage {
                 },
                 // Contains string: 'cat %s %s %s %s' starting at the first byte.
                 MemorySegment {
+                    name: None,
                     bytes: [
                         0x63, 0x61, 0x74, 0x20, 0x25, 0x73, 0x20, 0x25, 0x73, 0x20, 0x25, 0x73,
                         0x20, 0x25, 0x73, 0x00,
@@ -75,6 +81,7 @@ impl RuntimeMemoryImage {
                 },
                 // Contains string: 'str1 str2 str3 str4'
                 MemorySegment {
+                    name: None,
                     bytes: [
                         0x73, 0x74, 0x72, 0x31, 0x20, 0x73, 0x74, 0x72, 0x32, 0x20, 0x73, 0x74,
                         0x72, 0x33, 0x20, 0x73, 0x74, 0x72, 0x34, 0x00,
@@ -187,6 +194,7 @@ impl Project {
             register_set: integer_register.iter().cloned().collect(),
             datatype_properties: DatatypeProperties::mock_x64(),
             runtime_memory_image: RuntimeMemoryImage::mock(),
+            code_references: vec![],
         }
     }
 
@@ -226,6 +234,7 @@ impl Project {
             register_set: integer_register.collect(),
             datatype_properties: DatatypeProperties::mock_arm32(),
             runtime_memory_image: RuntimeMemoryImage::mock(),
+            code_references: vec![],
         }
     }
 }

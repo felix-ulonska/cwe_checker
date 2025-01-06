@@ -22,3 +22,4 @@ pub use crate::ghidra_pcode::ir_passes::prelude;
 pub use crate::ghidra_pcode::ir_passes::{debug_assert_postconditions, run_ir_pass, IrPass};
 
 mod single_static_assigment;
+pub use single_static_assigment::*;
