@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use petgraph::visit::EdgeRef;
 
-use crate::{analysis::graph::{get_program_cfg, Node}, intermediate_representation::{Def, Expression, Project, Variable}, prelude::{Term, Tid}, utils::debug::IrForm};
+use crate::{analysis::graph::{get_program_cfg, Edge, Node}, intermediate_representation::{Def, Expression, Project, Variable}, prelude::{Term, Tid}, utils::debug::IrForm};
 
 use super::{prelude::{LogMessage, Program}, IrPass};
 
@@ -24,6 +24,8 @@ use super::{prelude::{LogMessage, Program}, IrPass};
 /// - Get all incoming edges to the block
 /// - Add at the start of the blocks each possible incoming edge to the phi functions
 /// 
+/// Supports: interprocedure calls, and interprocedure jumps (call/return). Might not support external calls
+/// correctly.
 pub struct SingleStaticAssigment {
     register_vars: Vec<Variable>,
 }
@@ -54,27 +56,55 @@ impl SingleStaticAssigment {
     }
 }
 
-fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap::<String, Vec<String>> {
+fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap::<String, HashSet::<String>> {
     let mut cfg = get_program_cfg(program);
     cfg.reverse();
+    let cfg_unreversed = get_program_cfg(program);
     // Saves the incoming edges for each block
-    let mut incoming_edge_for_each_block = HashMap::<String, Vec<String>>::new();
+    let mut incoming_edge_for_each_block = HashMap::<String, HashSet<String>>::new();
     for block in program.blocks() {
-        incoming_edge_for_each_block.insert(block.tid.to_string(), vec![]);
+        incoming_edge_for_each_block.insert(block.tid.to_string(), HashSet::<String>::new());
     }
 
+
     for node in cfg.node_indices(){
-        if let Node::BlkStart(_, _) = cfg[node] {
-            let edges = cfg.edges(node);
-            for edge in edges {
-                let target_node = edge.target();
-                if let Some(blk) = cfg[target_node].try_get_block(){
-                    let incoming_edges = incoming_edge_for_each_block
-                        .get_mut(&cfg[edge.source()].get_block().tid.to_string())
-                        .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
-                    incoming_edges.push(blk.tid.to_string());
+        match cfg[node] {
+            Node::BlkStart(_, _) => {
+                let edges = cfg.edges(node);
+                for edge in edges {
+                    let target_node = edge.target();
+                    if let Some(blk) = cfg[target_node].try_get_block(){
+                        let incoming_edges = incoming_edge_for_each_block
+                            .get_mut(&cfg[edge.source()].get_block().tid.to_string())
+                            .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
+                        incoming_edges.insert(blk.tid.to_string());
+                    }
                 }
             }
+            Node::CallSource { source, target } => {
+                let source = source.0.tid.clone();
+                let target = target.0.tid.clone();
+                let incoming_edges = incoming_edge_for_each_block
+                    .get_mut(&target.to_string())
+                    .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
+                incoming_edges.insert(source.to_string());
+            }
+            Node::CallReturn { return_, .. } => {
+                for edge in cfg_unreversed.edges(node) {
+                    println!("Edges CallReturn, {}", edge.weight());
+                    if let Edge::ReturnCombine(_) = edge.weight() {
+                        let source = return_.0.tid.clone();
+                        let target = cfg[edge.target()].get_block().tid.to_string();
+                        println!("Adding ret edge {}, {}", source, target);
+                        let incoming_edges = incoming_edge_for_each_block
+                            .get_mut(&target.to_string())
+                            .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
+                        incoming_edges.insert(source.to_string());
+                    }
+                }
+
+            }
+            _ => (),
         }
     }
 
@@ -196,7 +226,7 @@ fn rename_temp_variables(program: &mut Program){
 
 }
 
-fn fix_phi_functions(program: &mut Program, incoming_edge_for_each_block: HashMap::<String,Vec<String>>, active_var_at_end_of_block: HashMap<String, HashMap::<String, i64>>) {
+fn fix_phi_functions(program: &mut Program, incoming_edge_for_each_block: HashMap::<String,HashSet<String>>, active_var_at_end_of_block: HashMap<String, HashMap::<String, i64>>) {
     for block in program.blocks_mut() {
         for incoming_edge_name in &incoming_edge_for_each_block[&block.tid.to_string()] {
             for def in block.defs_mut() {
@@ -256,12 +286,132 @@ impl IrPass for SingleStaticAssigment {
 
     #[cfg(test)]
     mod tests {
+        use std::collections::{BTreeMap, BTreeSet};
+
         use itertools::Itertools;
         use project::SingleStaticAssigment;
 
     use crate::expr;
     use crate::{defs, intermediate_representation::*, run_ir_pass, utils::debug};
     use crate::ghidra_pcode::ir_passes::IrPass;
+
+    #[test]
+    fn test_calls_ssa() {
+        // took from mock_program
+        let call_term = Term {
+            tid: Tid::new("call".to_string()),
+            term: Jmp::Call {
+                target: Tid::new("sub2"),
+                return_: Some(Tid::new("sub1_blk2")),
+            },
+        };
+        let return_term = Term {
+            tid: Tid::new("return".to_string()),
+            term: Jmp::Return(expr!("0:8")), // The return term does not matter
+        };
+        let jmp = Jmp::Branch(Tid::new("sub1_blk1"));
+        let jmp_term = Term {
+            tid: Tid::new("jump"),
+            term: jmp,
+        };
+        let mut blk = Blk::default();
+        blk.defs = defs!["term1: RAX:8 = 0x1:8"];
+        blk.add_jumps(vec![call_term]);
+        let sub1_blk1 = Term {
+            tid: Tid::new("sub1_blk1"),
+            term: blk,
+        };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![jmp_term]);
+        let sub1_blk2 = Term {
+            tid: Tid::new("sub1_blk2"),
+            term: blk,
+        };
+        let sub1 = Term {
+            tid: Tid::new("sub1"),
+            term: Sub::new::<_, &str>("sub1", vec![sub1_blk1, sub1_blk2], None),
+        };
+        let cond_jump = Jmp::CBranch {
+            target: Tid::new("sub1_blk1"),
+            condition: expr!("0:1"),
+        };
+        let cond_jump_term = Term {
+            tid: Tid::new("cond_jump"),
+            term: cond_jump,
+        };
+        let jump_term_2 = Term {
+            tid: Tid::new("jump2"),
+            term: Jmp::Branch(Tid::new("sub2_blk2")),
+        };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![cond_jump_term, jump_term_2]);
+        let sub2_blk1 = Term {
+            tid: Tid::new("sub2_blk1"),
+            term: blk,
+        };
+        let mut blk = Blk::default();
+        blk.add_jumps(vec![return_term]);
+        let sub2_blk2 = Term {
+            tid: Tid::new("sub2_blk2"),
+            term: blk,
+        };
+        let sub2 = Term {
+            tid: Tid::new("sub2"),
+            term: Sub::new::<_, &str>("sub2", vec![sub2_blk1, sub2_blk2], None),
+        };
+        let program = Term {
+            tid: Tid::new("program"),
+            term: Program {
+                subs: BTreeMap::from_iter([(sub1.tid.clone(), sub1), (sub2.tid.clone(), sub2)]),
+                extern_symbols: BTreeMap::new(),
+                entry_points: BTreeSet::new(),
+                address_base_offset: 0,
+            },
+        };
+
+        let mut project = Project::mock_x64();
+        project.program = program;
+
+        for blk in project.program.blocks() {
+            println!("{}", blk);
+        }
+        println!("====POST====");
+        let mut logs = vec![];
+        run_ir_pass![
+            project.program,
+            project,
+            SingleStaticAssigment,
+            logs,
+            debug::Settings::default()
+        ];
+        for blk in project.program.blocks() {
+            println!("{}", blk);
+        }
+
+        assert_phi_function_content("phi_sub1_blk1_RAX", &project.program.term, "RAX_4,RAX_3".to_string());
+        assert_phi_function_content("phi_sub1_blk2_RAX", &project.program.term, "RAX_5".to_string());
+        assert_phi_function_content("phi_sub2_blk1_RAX", &project.program.term, "RAX_2".to_string());
+        assert_phi_function_content("phi_sub2_blk2_RAX", &project.program.term, "RAX_4".to_string());
+    }
+
+    fn assert_phi_function_content(phi_tid: &str, program: &Program, has_inputs: String) {
+        let has_inputs = has_inputs.split(",").collect_vec();
+        for blk in program.blocks() {
+            for def in blk.defs() {
+                if let Term { term: Def::Assign{ value: Expression::Phi(inputs), .. }, tid} = def {
+                    if phi_tid != tid.to_string() {
+                        continue;
+                    }
+                    let mut has_inputs = has_inputs.clone();
+                    has_inputs.sort();
+                    let inputs = inputs.iter().map(|v| v.name.clone()).sorted().collect_vec();
+                    assert!(inputs.iter().zip(&has_inputs).all(|(a, b)| a == b), "Missing input in Phi function {}", phi_tid);
+                    return;
+                }
+            }
+        }
+        assert!(false, "phi_tid {} did not exist", phi_tid);
+    }
 
     /// we built this code:
     /// x = 1; // blk1
@@ -340,9 +490,11 @@ impl IrPass for SingleStaticAssigment {
             logs,
             debug::Settings::default()
         ];
-
-        let blks = project.program.blocks().collect_vec();
-        blks[0];
-        //assert_eq!(project.program.blocks()].term.defs, defs![" "
+        assert_phi_function_content("phi_blk_1_RAX", &project.program.term, "".to_string());
+        assert_phi_function_content("phi_blk_1_RCX", &project.program.term, "".to_string());
+        assert_phi_function_content("phi_blk_2_RAX", &project.program.term, "RAX_2".to_string());
+        assert_phi_function_content("phi_blk_2_RCX", &project.program.term, "RCX_2".to_string());
+        assert_phi_function_content("phi_blk_3_RAX", &project.program.term, "RAX_2,RAX_4".to_string());
+        assert_phi_function_content("phi_blk_3_RCX", &project.program.term, "RCX_2,RCX_3".to_string());
     }
 }
