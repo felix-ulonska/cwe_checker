@@ -12,3 +12,4 @@ pub mod pointer_inference;
 pub mod string_abstraction;
 pub mod taint;
 pub mod vsa_results;
+pub mod indirect_call_recovery;

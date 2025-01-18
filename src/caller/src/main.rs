@@ -10,6 +10,7 @@ use anyhow::Error;
 use clap::{Parser, ValueEnum};
 
 use cwe_checker_lib::analysis::graph;
+use cwe_checker_lib::analysis::indirect_call_recovery::run_icall_recovery;
 use cwe_checker_lib::checkers::CweModule;
 use cwe_checker_lib::pipeline::{disassemble_binary, AnalysisResults};
 use cwe_checker_lib::utils::binary::BareMetalConfig;
@@ -21,6 +22,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::process::exit;
 
 mod cfg_stats;
 
@@ -75,6 +77,8 @@ pub enum CliDebugMode {
     Cfg,
     /// Result of the Pointer Inference computation.
     Pi,
+    /// Recovery of Indirect Calls
+    ICallRec,
 }
 
 impl From<&CliDebugMode> for debug::Stage {
@@ -111,6 +115,7 @@ impl From<&CliDebugMode> for debug::Stage {
             Cg => debug::Stage::CallGraph,
             Cfg => debug::Stage::ControlFlowGraph,
             Pi => debug::Stage::Pi,
+            ICallRec => debug::Stage::ICallRec,
         }
     }
 }
@@ -321,6 +326,10 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
         None
     };
     let analysis_results = analysis_results.with_pointer_inference(pi_analysis_results.as_ref());
+
+    // Compute BPA
+    run_icall_recovery(&project, &analysis_results, &debug_settings);
+
     // Compute string abstraction analysis if required
     let string_abstraction_results =
         if string_abstraction_needed {

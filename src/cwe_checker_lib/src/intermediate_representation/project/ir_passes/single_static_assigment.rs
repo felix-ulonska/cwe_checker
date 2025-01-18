@@ -91,11 +91,9 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap::<String, HashS
             }
             Node::CallReturn { return_, .. } => {
                 for edge in cfg_unreversed.edges(node) {
-                    println!("Edges CallReturn, {}", edge.weight());
                     if let Edge::ReturnCombine(_) = edge.weight() {
                         let source = return_.0.tid.clone();
                         let target = cfg[edge.target()].get_block().tid.to_string();
-                        println!("Adding ret edge {}, {}", source, target);
                         let incoming_edges = incoming_edge_for_each_block
                             .get_mut(&target.to_string())
                             .expect("Blk had no key in incoming_edge_for_each_block, should never happen");

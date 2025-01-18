@@ -139,13 +139,15 @@ impl WithLogs<Project> {
             debug_settings,
         ];
 
-        run_ir_pass![
-            self.program,
-            self,
-            SingleStaticAssigment,
-            logs,
-            debug_settings,
-        ];
+        if debug_settings.should_debug(debug::Stage::Ir(debug::IrForm::SingleStaticAssigment)) {
+            run_ir_pass![
+                self.program,
+                self,
+                SingleStaticAssigment,
+                logs,
+                debug_settings,
+            ];
+        }
 
         debug_assert_postconditions![self.program.term, (), IntraproceduralDeadBlockElimPass];
         debug_assert_postconditions![self.program.term, (), InputExpressionPropagationPass];
