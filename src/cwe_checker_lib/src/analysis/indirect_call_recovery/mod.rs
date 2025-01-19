@@ -21,7 +21,7 @@ pub fn run_icall_recovery(project: &Project, analysis_results: &AnalysisResults,
         debug_settings,
     ];
 
-    build_memory_blocks(program);
+    build_memory_blocks(&ssa_program);
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
         exit(1);

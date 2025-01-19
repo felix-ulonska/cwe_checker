@@ -282,8 +282,8 @@ impl IrPass for SingleStaticAssigment {
     }
 }
 
-    #[cfg(test)]
-    mod tests {
+#[cfg(test)]
+mod tests {
         use std::collections::{BTreeMap, BTreeSet};
 
         use itertools::Itertools;

@@ -22,7 +22,6 @@ use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::process::exit;
 
 mod cfg_stats;
 

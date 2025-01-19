@@ -195,6 +195,7 @@ pub mod parsing {
             r"^[[:ascii:]]+ \-{1} [[:ascii:]]+$",                                  // BinOp (IntSub)
             r"^-\([[:ascii:]]*\)$", // UnOp (IntNegate)
             r"^¬\([[:ascii:]]*\)$", // UnOp (BoolNegate)
+            r"^phi\(([[:ascii:]]|,)*\)$", // phi combination
         ])
         .unwrap();
         let result: Vec<usize> = set.matches(str.as_ref()).into_iter().collect();
@@ -235,6 +236,14 @@ pub mod parsing {
                     arg: Box::new(parse_expr(arg.trim())),
                 }
             }
+            6 => {
+                let args = str.as_ref().trim_start_matches("phi(").trim_end_matches(")");
+                if args.trim().len() == 0 {
+                    return Expression::Phi(vec![]);
+                }
+                let args_of_phi = args.split(",").map(|args| args.trim()).map(parse_variable).collect();
+                Expression::Phi(args_of_phi)
+            }
             _ => panic!(),
         }
     }
@@ -245,10 +254,10 @@ pub mod parsing {
     #[allow(dead_code)]
     pub fn parse_def<S: AsRef<str>>(str: S, tid_suffix: u8) -> Term<Def> {
         let set = RegexSet::new([
-            r"^[[:ascii:]]+: [[:alnum:]:]* = ", // Assign with tid
-            r"^[[:alnum:]:]* = ",               // Assign without tid
-            r"^[[:ascii:]]+: [[:alnum:]:]* := Load from [[:ascii:]:]*$", // Load with tid
-            r"^[[:alnum:]:]* := Load from [[:ascii:]:]*$", // Load without tid
+            r"^[[:ascii:]]+: [[:word:]:]* = ", // Assign with tid
+            r"^[[:word:]:]* = ",               // Assign without tid
+            r"^[[:ascii:]]+: [[:word:]:]* := Load from [[:ascii:]:]*$", // Load with tid
+            r"^[[:word:]:]* := Load from [[:ascii:]:]*$", // Load without tid
             r"^[[:ascii:]]+: Store at [[:ascii:]:]* := ", // Store with tid
             r"^Store at [[:ascii:]:]* := ",     // Store without tid
         ])
