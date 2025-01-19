@@ -62,9 +62,17 @@ impl<'a> StackAnalysis<'a> {
                 size,
                 arg,
             } => self.eval_recursive(arg).subpiece(*low_byte, *size),
-            Phi(input) => match input.as_slice() {
-                [input] => self.state.get_register(input),
-                _ => Data::new_top(ByteSize::new(0))
+            // If all inputs have the same value, we take the value, otherwise we get the top
+            // symbol
+            Phi(inputs) => {
+                let all_values_same = inputs.into_iter().map(|inp| self.state.get_register(inp))
+                    .collect_vec()
+                    .windows(2)
+                    .all(|val| val[0] == val[1]);
+                if inputs.len() == 0 || !all_values_same  {
+                    return Data::new_top(ByteSize::new(0));
+                }
+                self.state.get_register(&inputs[0])
             }
         }
     }
@@ -73,6 +81,7 @@ impl<'a> StackAnalysis<'a> {
         self.gen_value_set_for_block()
     }
 
+    /// Builds boundary candidatas set
     fn gen_value_set_for_block(&mut self) {
         let stack_reg = self.get_stack_reg();
 
@@ -124,9 +133,9 @@ impl Display for State {
                 Some((_target, value)) => write!(f, "RSP + {}", value.to_string())?,
                 None => write!(f, "unknown")?
             }
-            write!(f, "\n")?
+            write!(f, "\n")?;
         }
-        write!(f, "\n")
+        Ok(())
     }
 }
 
@@ -177,12 +186,14 @@ mod tests {
     fn test_stack_analysis() {
         let project = build_prog_with_block(defs![
             "term_1: RSP_1:8 = phi()",
-            "term_2: RSP_2:8 = RSP_1:8 + 0x08:8"
+            "term_1_1: RAX_1:8 = phi()",
+            "term_2: RSP_2:8 = RSP_1:8 + 0x08:8",
+            "term_3: RAX_1:8 = RSP_2:8 + 0x08:8"
         ]);
         build_stack_block(&project.program);
         let mut stack_analysis = StackAnalysis::new(&project.program.term, &project.program.term.subs.first_key_value().unwrap().1);
         stack_analysis.analyze_block();
-        assert!(stack_analysis.state.register_state.len() == 2);
+        assert!(stack_analysis.state.register_state.len() == 3);
         println!("{}", stack_analysis.state);
     }
 }
