@@ -1,26 +1,70 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::{HashMap, HashSet}, fmt::Display};
 
 use itertools::Itertools;
 
-use crate::{abstract_domain::{AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain}, analysis::graph::intraprocedural_cfg::IntraproceduralCfg, intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable}, prelude::{Bitvector, ByteSize, Term}};
+use crate::{abstract_domain::{AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec}, analysis::graph::intraprocedural_cfg::IntraproceduralCfg, intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable}, prelude::{Bitvector, ByteSize, Term, Tid}};
 
-/// Analysis for one Sub.
-pub struct StackAnalysis<'a> {
-    program: &'a Program,
-    function: &'a Term<Function>,
-    cfg: IntraproceduralCfg<'a>,
-    state: State,
+pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
+    let mut boundaries = StackBlockBoundaries::new();
+    for sub in &program.subs {
+        let mut analysis = StackAnalysis::new(sub.1);
+        analysis.analyze_block();
+        boundaries.add_analysis_result(&analysis);
+    }
+
+    boundaries
 }
 
-type Data = DataDomain::<BitvectorDomain>;
+pub struct StackBlockBoundaries {
+    /// Maps function to stack boundaries. Stack boundaries are in reference to rsp at start of
+    /// call
+    stack_boundaries: HashMap<Tid, Vec<i64>>
+}
+
+impl StackBlockBoundaries {
+    pub fn new() -> StackBlockBoundaries {
+        StackBlockBoundaries {
+            stack_boundaries: HashMap::new()
+        }
+    }
+
+    fn add_analysis_result(&mut self, analysis_result: &StackAnalysis) {
+        self.stack_boundaries.insert(
+            analysis_result.function.tid.clone(),
+            analysis_result.boundaries.iter().map(|boundary| boundary.get_if_unique_target().unwrap().1.try_to_offset().unwrap()).sorted().collect_vec()
+        );
+    }
+}
+
+impl Display for StackBlockBoundaries {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (function, boundaries) in &self.stack_boundaries {
+            write!(f, "Function: {}: ", function)?;
+            for boundary in boundaries {
+                write!(f, "{},", boundary)?;
+            }
+            writeln!(f, "")?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Analysis for one Sub.
+struct StackAnalysis<'a> {
+    function: &'a Term<Function>,
+    state: State,
+    boundaries: HashSet<BoundaryCanidate>,
+}
+
+type BoundaryCanidate = DataDomain::<BitvectorDomain>;
 
 impl<'a> StackAnalysis<'a> {
-    fn new(program: &'a Program, function: &'a Term<Function>) -> StackAnalysis<'a> {
+    pub fn new(function: &'a Term<Function>) -> StackAnalysis<'a> {
         return StackAnalysis {
-            program,
             function,
-            cfg: IntraproceduralCfg::new(program, function),
-            state: State { register_state: HashMap::new() }
+            state: State { register_state: HashMap::new() },
+            boundaries: HashSet::new()
         }
     }
 
@@ -38,7 +82,7 @@ impl<'a> StackAnalysis<'a> {
     }
 
     // Stolen from pointer interference
-    fn eval_recursive(&self, expression: &Expression) -> Data {
+    fn eval_recursive(&self, expression: &Expression) -> BoundaryCanidate {
         use Expression::*;
         match expression {
             Var(variable) => self.state.get_register(variable),
@@ -56,7 +100,7 @@ impl<'a> StackAnalysis<'a> {
             Unknown {
                 description: _,
                 size,
-            } => Data::new_top(*size),
+            } => BoundaryCanidate::new_top(*size),
             Subpiece {
                 low_byte,
                 size,
@@ -70,7 +114,7 @@ impl<'a> StackAnalysis<'a> {
                     .windows(2)
                     .all(|val| val[0] == val[1]);
                 if inputs.len() == 0 || !all_values_same  {
-                    return Data::new_top(ByteSize::new(0));
+                    return BoundaryCanidate::new_top(ByteSize::new(0));
                 }
                 self.state.get_register(&inputs[0])
             }
@@ -78,11 +122,41 @@ impl<'a> StackAnalysis<'a> {
     }
 
     pub fn analyze_block(&mut self) {
-        self.gen_value_set_for_block()
+        self.build_canidate_set();
+        self.prune_boundary_canidates();
+    }
+
+    pub fn get_boundaries(&mut self) -> HashSet<BoundaryCanidate> {
+        self.boundaries.clone()
+    }
+
+    /// Prune Boundary canidates. The form of the canidates are rsp_top + c with c beeing a
+    /// constant and rsp_top is the rsp at the start of the function
+    /// The reference paper gives 3 cases:
+    /// 1) c = 0 => Is always a boundary
+    /// 2) c > 0 => Boundary
+    /// 3) c < 0 => Boundary if stored in general purpose register or memory location.
+    fn prune_boundary_canidates(&mut self) {
+        let mut boundaries = HashMap::<Variable, BoundaryCanidate>::new();
+        for (variable, data) in &self.state.register_state {
+            // Stores in general purpose register, e.g. not RSP or RBP
+            let offset_to_rsp = data.get_if_unique_target().unwrap().1.try_to_offset().unwrap();
+            let is_case_1_or_2 = offset_to_rsp <= 0;
+            let is_case_3 = variable.is_physical_register() && !(variable.name.contains("RSP") || variable.name.contains("RBP"));
+            if is_case_1_or_2 || is_case_3 {
+                boundaries.insert(variable.clone(), data.clone());
+            }
+        }
+
+        // TODO inserted in memory location
+
+        for boundary in boundaries {
+            self.boundaries.insert(boundary.1);
+        }
     }
 
     /// Builds boundary candidatas set
-    fn gen_value_set_for_block(&mut self) {
+    fn build_canidate_set(&mut self) {
         let stack_reg = self.get_stack_reg();
 
         // This analysis is path unaware. It should not happen that register values pointing to the
@@ -92,19 +166,53 @@ impl<'a> StackAnalysis<'a> {
             self.function.blocks[0].tid.clone(),
             crate::abstract_domain::AbstractLocation::from_stack_position(&stack_reg, 0, ByteSize::new(0))
         );
-        let init_rsp = Data::from_target(abstract_stack_pointer, BitvectorDomain::Value(Bitvector::from_u64(0)));
-        self.state.add_register(stack_reg, init_rsp);
+        let init_rsp = BoundaryCanidate::from_target(abstract_stack_pointer, BitvectorDomain::Value(Bitvector::from_u64(0)));
+        self.state.change_register(stack_reg, init_rsp);
 
+        // Fixpoint recursion: Loop over all defs until setteled. Here can be optimization in order
+        // of execution and what parts gets re executed.
+        let mut changed = false;
+        for _i in 0..10 {
+            changed = self.analysis_pass();
+            if !changed {
+                break;
+            }
+        }
+        // TODO transmit error
+        if changed {
+            println!("Loop did not settle");
+        }
+    }
+
+    /// Iterate over all defs in project and search for usages
+    fn analysis_pass(&mut self) -> bool {
+        let mut changed = false;
         for blk in &self.function.blocks {
             for def in blk.defs() {
-                if let Term { tid: _, term: Def::Assign { var, value } } = def {
-                    let new_val = self.eval_recursive(value);
-                    if !new_val.get_relative_values().is_empty() {
-                        self.state.add_register(var.clone(), new_val);
+                match def {
+                    Term { tid: _, term: Def::Assign { var, value } } => {
+                        let new_val = self.eval_recursive(value);
+                        if !new_val.get_relative_values().is_empty() {
+                            changed |= self.state.change_register(var.clone(), new_val);
+                        }
                     }
+                    // Stack adress is saved to memory (case 3)
+                    // Might want to check which mem region it is saved to
+                    Term {tid: _, term: Def::Store { address, value }} => {
+                        let is_stack_addr = !self.eval_recursive(address).get_relative_values().is_empty();
+                        if !is_stack_addr {
+                            let new_val = self.eval_recursive(value);
+                            if !new_val.get_relative_values().is_empty() {
+                                self.boundaries.insert(new_val);
+                            }
+                        }
+                    }
+                    _ => (),
                 }
             }
         }
+        
+        changed
     }
 }
 
@@ -112,16 +220,20 @@ impl<'a> StackAnalysis<'a> {
 #[derive(Eq, PartialEq, Clone)]
 struct State {
     // TODO specific for architecture?
-    register_state: HashMap<Variable, Data>
+    register_state: HashMap<Variable, BoundaryCanidate>
 }
 
 impl State {
-    fn get_register(&self, variable: &Variable) -> Data {
-        self.register_state.get(variable).unwrap_or(&Data::new_top(ByteSize::new(0))).clone()
+    fn get_register(&self, variable: &Variable) -> BoundaryCanidate {
+        self.register_state.get(variable).unwrap_or(&BoundaryCanidate::new_top(ByteSize::new(0))).clone()
     }
 
-    fn add_register(&mut self, variable: Variable, value: Data) {
-        self.register_state.insert(variable, value);
+    /// Returns true, if something changed
+    fn change_register(&mut self, variable: Variable, value: BoundaryCanidate) -> bool {
+        match self.register_state.insert(variable, value.clone()) {
+            Some(old_data) => old_data != value,
+            None => true,
+        }
     }
 }
 
@@ -139,12 +251,7 @@ impl Display for State {
     }
 }
 
-pub fn build_stack_block(program: &Program) {
-    for sub in &program.subs {
-        let mut stack_analysis = StackAnalysis::new(program, &sub.1);
-        stack_analysis.analyze_block();
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -153,7 +260,7 @@ mod tests {
     use crate::{defs, expr, intermediate_representation::{self, Blk, Project}};
     use intermediate_representation::*;
 
-    use super::{build_stack_block, StackAnalysis};
+    use super::StackAnalysis;
 
     fn build_prog_with_block(defs: Vec<Term<Def>>) -> Project {
         let mut project = Project::mock_x64();
@@ -190,9 +297,9 @@ mod tests {
             "term_2: RSP_2:8 = RSP_1:8 + 0x08:8",
             "term_3: RAX_1:8 = RSP_2:8 + 0x08:8"
         ]);
-        build_stack_block(&project.program);
-        let mut stack_analysis = StackAnalysis::new(&project.program.term, &project.program.term.subs.first_key_value().unwrap().1);
+        let mut stack_analysis = StackAnalysis::new(&project.program.term.subs.first_key_value().unwrap().1);
         stack_analysis.analyze_block();
+        assert!(stack_analysis.state.register_state.len() == 3);
         assert!(stack_analysis.state.register_state.len() == 3);
         println!("{}", stack_analysis.state);
     }

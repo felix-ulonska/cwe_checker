@@ -8,8 +8,7 @@ pub mod memory_block_gen;
 use memory_block_gen::build_memory_blocks;
 
 /// Needs pointer interference
-pub fn run_icall_recovery(project: &Project, analysis_results: &AnalysisResults, debug_settings: &debug::Settings) {
-    println!("Lets go");
+pub fn run_icall_recovery(project: &Project, _analysis_results: &AnalysisResults, debug_settings: &debug::Settings) {
     let mut ssa_program = project.program.clone();
     let mut logs = Vec::new();
 
