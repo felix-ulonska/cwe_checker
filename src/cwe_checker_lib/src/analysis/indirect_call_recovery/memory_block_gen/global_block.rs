@@ -72,7 +72,7 @@ impl GlobalMemorySeperation {
 
 /// We changed the algorithm for global memory. We use the PI and then build a set where no
 /// overlapping address ranges.
-pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult<ValueDomain = DataDomain<IntervalDomain>>) {
+pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult<ValueDomain = DataDomain<IntervalDomain>>) -> GlobalMemorySeperation {
     let mut intervals = vec![];
     for sub in &program.subs {
         if sub.1.name == "main" {
@@ -88,19 +88,18 @@ pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult
                                     intervals.push(interval.clone());
                                     println!("\t: {}", interval);
                                 }
+                                // Global Pointer is not inherently useful.
                                 AbstractLocation::GlobalPointer( .. ) => { }
                                 _ => (),
                             }
                         }
-                    } else {
                     }
                 }
             }
         }
     }
-}
 
-fn detection_of_bounday_canidates(program: &Program) {
+    GlobalMemorySeperation::new(intervals)
 }
 
 #[cfg(test)]
