@@ -12,7 +12,7 @@ struct Interval {
 }
 
 /// Reprsents disjunct intervals.
-struct GlobalMemorySeperation {
+pub struct GlobalMemorySeperation {
     intervals: Vec<Interval>
 }
 
@@ -65,7 +65,8 @@ impl GlobalMemorySeperation {
                 return Some(interval.clone());
             }
         }
-        return None;
+
+        None
     }
 }
 
