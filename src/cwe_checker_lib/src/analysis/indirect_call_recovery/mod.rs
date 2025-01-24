@@ -8,7 +8,7 @@ pub mod memory_block_gen;
 use memory_block_gen::build_memory_blocks;
 
 /// Needs pointer interference
-pub fn run_icall_recovery(project: &Project, _analysis_results: &AnalysisResults, debug_settings: &debug::Settings) {
+pub fn run_icall_recovery(project: &Project, analysis_results: &AnalysisResults, debug_settings: &debug::Settings) {
     let mut ssa_program = project.program.clone();
     let mut logs = Vec::new();
 
@@ -20,9 +20,9 @@ pub fn run_icall_recovery(project: &Project, _analysis_results: &AnalysisResults
         debug_settings,
     ];
 
-    build_memory_blocks(&ssa_program);
+    build_memory_blocks(&ssa_program, &analysis_results);
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
-        exit(1);
+        exit(0);
     }
 }
