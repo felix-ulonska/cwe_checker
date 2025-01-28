@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, fmt::Display};
 
 use itertools::Itertools;
 
-use crate::{abstract_domain::{AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec}, analysis::graph::intraprocedural_cfg::IntraproceduralCfg, intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable}, prelude::{Bitvector, ByteSize, Term, Tid}};
+use crate::{abstract_domain::{AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec}, intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable}, prelude::{Bitvector, ByteSize, Term, Tid}};
 
 pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
     let mut boundaries = StackBlockBoundaries::new();
@@ -36,6 +36,7 @@ impl StackBlockBoundaries {
     }
 }
 
+// TODO: add jsonCompact Trait
 impl Display for StackBlockBoundaries {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (function, boundaries) in &self.stack_boundaries {
@@ -126,9 +127,9 @@ impl<'a> StackAnalysis<'a> {
         self.prune_boundary_canidates();
     }
 
-    pub fn get_boundaries(&mut self) -> HashSet<BoundaryCanidate> {
-        self.boundaries.clone()
-    }
+    //pub fn get_boundaries(&mut self) -> HashSet<BoundaryCanidate> {
+    //    self.boundaries.clone()
+    //}
 
     /// Prune Boundary canidates. The form of the canidates are rsp_top + c with c beeing a
     /// constant and rsp_top is the rsp at the start of the function

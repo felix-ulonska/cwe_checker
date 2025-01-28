@@ -1,12 +1,14 @@
 // Analysis of global memory, for speration into blocks.
 // We use pointer interference results for gaining knowledge about data
 
+use std::fmt::Display;
+
 use itertools::Itertools;
 
 use crate::{abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval}, analysis::vsa_results::VsaResult, intermediate_representation::Program};
 
 #[derive(Clone)]
-struct Interval {
+pub struct Interval {
   begin: i64,
   end: i64,
 }
@@ -16,7 +18,19 @@ pub struct GlobalMemorySeperation {
     intervals: Vec<Interval>
 }
 
+impl Display for GlobalMemorySeperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Global Mem:\n")?;
+        for Interval {begin, end} in &self.intervals {
+          write!(f, "\t Section: [{}, {}]", begin, end)?;
+        }
+        Ok(())
+    }
+}
+
 impl GlobalMemorySeperation {
+    // Parses the Vec<IntervalDomain> and constructs disjunct intervals with every overlapping
+    // interval.
     fn new(in_intervals: Vec<IntervalDomain>) -> GlobalMemorySeperation {
         // Idea, we iterate sorted over the intervals. We look behind. If the prev and current
         // element overlap, do not create new section.
@@ -76,28 +90,26 @@ impl GlobalMemorySeperation {
 pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult<ValueDomain = DataDomain<IntervalDomain>>) -> GlobalMemorySeperation {
     let mut intervals = vec![];
     for sub in &program.subs {
-        if sub.1.name == "main" {
-            for block in &sub.1.term.blocks {
-                //println!("Blk {}", block.tid);
-                for def in block.defs() {
-                    println!("{}", def);
-                    if let Some(address) = value_sets.eval_address_at_def(&def.tid) {
-                        if let Some((abstract_location, interval)) = address.get_if_unique_target() {
-                            println!("\t: {}; {}", abstract_location, interval);
-                            match abstract_location.get_location() {
-                                AbstractLocation::GlobalAddress { address: _, .. } => {
-                                    intervals.push(interval.clone());
-                                    println!("\t: {}", interval);
-                                }
-                                // Global Pointer is not inherently useful.
-                                AbstractLocation::GlobalPointer( .. ) => { }
-                                _ => (),
-                            }
-                        }
-                    }
-                }
-            }
-        }
+          for block in &sub.1.term.blocks {
+              //println!("Blk {}", block.tid);
+              for def in block.defs() {
+                  println!("{}", def);
+                  if let Some(address) = value_sets.eval_address_at_def(&def.tid) {
+                      if let Some((abstract_location, interval)) = address.get_if_unique_target() {
+                          println!("\t: {}; {}", abstract_location, interval);
+                          match abstract_location.get_location() {
+                              AbstractLocation::GlobalAddress { address: _, .. } => {
+                                  intervals.push(interval.clone());
+                                  println!("\t: {}", interval);
+                              }
+                              // Global Pointer is not inherently useful.
+                              AbstractLocation::GlobalPointer( .. ) => { }
+                              _ => (),
+                          }
+                      }
+                  }
+              }
+          }
     }
 
     GlobalMemorySeperation::new(intervals)
