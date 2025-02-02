@@ -327,7 +327,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     let analysis_results = analysis_results.with_pointer_inference(pi_analysis_results.as_ref());
 
     // Compute BPA
-    run_icall_recovery(&project, &analysis_results, &debug_settings);
+    run_icall_recovery(&project, &analysis_results, &debug_settings, &config["Memory"]);
 
     // Compute string abstraction analysis if required
     let string_abstraction_results =

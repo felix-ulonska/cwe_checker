@@ -1,21 +1,35 @@
 // Analysis of global memory, for speration into blocks.
 // We use pointer interference results for gaining knowledge about data
 
-use std::fmt::Display;
+use std::{collections::{HashMap, HashSet}, fmt::Display};
 
 use itertools::Itertools;
 
-use crate::{abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval}, analysis::vsa_results::VsaResult, intermediate_representation::Program};
+use crate::{abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval}, analysis::vsa_results::VsaResult, intermediate_representation::{Def, Program}, prelude::{Term, Tid}};
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Interval {
-  begin: i64,
-  end: i64,
+    begin: i64,
+    end: i64,
+}
+
+impl Interval {
+    pub fn contains(&self, other: &Interval) -> bool {
+        self.begin <= other.begin && other.end <= self.end
+    }  
 }
 
 /// Reprsents disjunct intervals.
 pub struct GlobalMemorySeperation {
-    intervals: Vec<Interval>
+    intervals: Vec<Interval>,
+    map_def_to_interval: HashMap<Tid, Interval>,
+}
+
+impl GlobalMemorySeperation {
+    fn get_interval_for_def(&self, def: Term<Def>) -> Option<Interval> {
+        self.map_def_to_interval.get(&def.tid).cloned()
+
+    }
 }
 
 impl Display for GlobalMemorySeperation {
@@ -28,17 +42,18 @@ impl Display for GlobalMemorySeperation {
     }
 }
 
+/// All Intervals are unique by begin
 impl GlobalMemorySeperation {
     // Parses the Vec<IntervalDomain> and constructs disjunct intervals with every overlapping
     // interval.
-    fn new(in_intervals: Vec<IntervalDomain>) -> GlobalMemorySeperation {
+    fn new(in_intervals: Vec<(Tid, IntervalDomain)>) -> GlobalMemorySeperation {
         // Idea, we iterate sorted over the intervals. We look behind. If the prev and current
         // element overlap, do not create new section.
         let mut intervals = vec![]; 
 
         let mut new_interval_canidate: Option<Interval> = None;
         
-        let intervals_sorted_by_start = in_intervals.iter().map(|interval| interval.try_to_offset_interval().unwrap()).sorted_by_key(|x| x.0).collect_vec();
+        let intervals_sorted_by_start = in_intervals.iter().map(|interval| interval.1.try_to_offset_interval().unwrap()).sorted_by_key(|x| x.0).collect_vec();
         for (begin, end) in intervals_sorted_by_start {
             match new_interval_canidate {
                 // Case: new_interval_canidate and current to add interval do not overlap
@@ -66,9 +81,28 @@ impl GlobalMemorySeperation {
             intervals.push(new_interval);
         }
 
-        GlobalMemorySeperation {
-            intervals
+        let mut map_def_to_interval = HashMap::<Tid, Interval>::new();
+
+        for (tid, interval) in in_intervals {
+            let interval = interval.try_to_offset_interval().unwrap();
+            let interval = Interval { begin: interval.0, end: interval.1 };
+            for test_interval in &intervals {
+                if test_interval.contains(&interval) {
+                    map_def_to_interval.insert(tid, interval);
+                    break;
+                }
+            }
         }
+
+        GlobalMemorySeperation {
+            intervals,
+            map_def_to_interval
+        }
+    }
+
+    /// Returns interval, if an interval is mapped to def
+    pub fn get_interval_of_def(&self, def: Term<Def>) -> Option<Interval> {
+        self.map_def_to_interval.get(&def.tid).cloned()
     }
 
     /// [index] is the key. Will return the interval which has index within (begin, end)
@@ -99,7 +133,7 @@ pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult
                           println!("\t: {}; {}", abstract_location, interval);
                           match abstract_location.get_location() {
                               AbstractLocation::GlobalAddress { address: _, .. } => {
-                                  intervals.push(interval.clone());
+                                  intervals.push((def.tid.clone(), interval.clone()));
                                   println!("\t: {}", interval);
                               }
                               // Global Pointer is not inherently useful.
@@ -119,16 +153,16 @@ pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult
 mod tests {
     use apint::ApInt;
 
-    use crate::abstract_domain::{self, IntervalDomain};
+    use crate::{abstract_domain::{self, IntervalDomain}, prelude::Tid};
 
     use super::GlobalMemorySeperation;
 
-    fn build_interval(begin: i64, end: i64) -> abstract_domain::IntervalDomain {
-        IntervalDomain::from(abstract_domain::Interval {
+    fn build_interval(begin: i64, end: i64) -> (Tid, abstract_domain::IntervalDomain) {
+        (Tid::new("foo"), IntervalDomain::from(abstract_domain::Interval {
             start: ApInt::from_i64(begin),
             end: ApInt::from_i64(end),
             stride: 0
-        })
+        }))
     }
 
     #[test]
