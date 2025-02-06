@@ -15,24 +15,82 @@ pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
     boundaries
 }
 
+#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+pub struct StackBlock {
+    pub func_tid: Tid,
+    /// Relativ to $rsp. If i64.min, it is the smallest element
+    pub min: i64,
+    /// Relativ to $rsp. If i64.max, it is the last element
+    pub max: i64,
+}
+
+#[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct StackBlockBoundaries {
     /// Maps function to stack boundaries. Stack boundaries are in reference to rsp at start of
     /// call
-    stack_boundaries: HashMap<Tid, Vec<i64>>
+    stack_boundaries: HashMap<Tid, Vec<i64>>,
+
+    pub map_register_to_stack: HashMap<Variable, StackBlock>
 }
 
 impl StackBlockBoundaries {
     pub fn new() -> StackBlockBoundaries {
         StackBlockBoundaries {
-            stack_boundaries: HashMap::new()
+            stack_boundaries: HashMap::new(),
+            map_register_to_stack: HashMap::new()
         }
     }
 
+    /// Gets stack block for register
+    fn get_stack_block_for_reg(&self, var: &Variable) -> Option<&StackBlock> {
+        self.map_register_to_stack.get(var)
+    }
+
     fn add_analysis_result(&mut self, analysis_result: &StackAnalysis) {
+        let boundaries_storted = analysis_result.boundaries.iter().map(|boundary| boundary.get_if_unique_target().unwrap().1.try_to_offset().unwrap()).sorted().collect_vec();
         self.stack_boundaries.insert(
             analysis_result.function.tid.clone(),
-            analysis_result.boundaries.iter().map(|boundary| boundary.get_if_unique_target().unwrap().1.try_to_offset().unwrap()).sorted().collect_vec()
+            boundaries_storted.clone()
         );
+
+        let mut stack_blocks = vec![];
+
+        let mut curr_stack_block = None;
+
+        // Build boundary blocks
+        for boundary in boundaries_storted {
+            if let None = curr_stack_block {
+                curr_stack_block = Some(StackBlock {
+                    func_tid: analysis_result.function.tid.clone(),
+                    min: i64::MIN,
+                    max: boundary
+                });
+                continue;
+            } 
+
+            if let Some(mut stack_block) = curr_stack_block {
+                stack_block.max = boundary;
+                stack_blocks.push(stack_block);
+            }
+            curr_stack_block = Some(StackBlock {
+                func_tid: analysis_result.function.tid.clone(),
+                min: boundary + 1,
+                max: i64::MAX
+            })
+        }
+
+        if let Some(stack_block) = curr_stack_block {
+            stack_blocks.push(stack_block);
+        }
+
+        for (var, state) in &analysis_result.state.register_state {
+            for stack_block in &stack_blocks {
+                let val = state.try_to_offset().unwrap();
+                if stack_block.min <= val && stack_block.max >= val {
+                    self.map_register_to_stack.insert(var.clone(), stack_block.clone());
+                }
+            }
+        }
     }
 }
 

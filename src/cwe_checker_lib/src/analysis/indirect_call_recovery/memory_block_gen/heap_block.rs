@@ -4,14 +4,16 @@ use itertools::Itertools;
 
 use crate::{analysis::pointer_inference::Config, intermediate_representation::{Def, Expression, Jmp, Program, Variable}, prelude::Term};
 
+#[derive(Clone, Eq, Hash, PartialEq, Default, Debug)]
 pub struct HeapBlock {
     /// TID is the calling instruction
-    id: String,
+    pub id: String,
 }
 
+#[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct HeapAnalysis {
     /// SSA register mapped to heapID
-    register_with_heap: HashMap<Variable, HeapBlock>,
+    pub register_with_heap: HashMap<Variable, HeapBlock>,
 }
 
 /// We changed the algorithm for global memory. We use the PI and then build a set where no

@@ -74,6 +74,7 @@
           rustc
           cargo
           cwe-ghidra-path-fix
+          rustfmt
         ];
         shellHook = ''
         export CWE_CHECKER_CONFIGS_PATH=${cwe-checker-configs} \
