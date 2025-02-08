@@ -1,8 +1,17 @@
-use std::{collections::{HashMap, HashSet}, fmt::Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use itertools::Itertools;
 
-use crate::{abstract_domain::{AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec}, intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable}, prelude::{Bitvector, ByteSize, Term, Tid}};
+use crate::{
+    abstract_domain::{
+        AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec,
+    },
+    intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable},
+    prelude::{Bitvector, ByteSize, Term, Tid},
+};
 
 pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
     let mut boundaries = StackBlockBoundaries::new();
@@ -30,14 +39,14 @@ pub struct StackBlockBoundaries {
     /// call
     stack_boundaries: HashMap<Tid, Vec<i64>>,
 
-    pub map_register_to_stack: HashMap<Variable, StackBlock>
+    pub map_register_to_stack: HashMap<Variable, StackBlock>,
 }
 
 impl StackBlockBoundaries {
     pub fn new() -> StackBlockBoundaries {
         StackBlockBoundaries {
             stack_boundaries: HashMap::new(),
-            map_register_to_stack: HashMap::new()
+            map_register_to_stack: HashMap::new(),
         }
     }
 
@@ -47,10 +56,22 @@ impl StackBlockBoundaries {
     }
 
     fn add_analysis_result(&mut self, analysis_result: &StackAnalysis) {
-        let boundaries_storted = analysis_result.boundaries.iter().map(|boundary| boundary.get_if_unique_target().unwrap().1.try_to_offset().unwrap()).sorted().collect_vec();
+        let boundaries_storted = analysis_result
+            .boundaries
+            .iter()
+            .map(|boundary| {
+                boundary
+                    .get_if_unique_target()
+                    .unwrap()
+                    .1
+                    .try_to_offset()
+                    .unwrap()
+            })
+            .sorted()
+            .collect_vec();
         self.stack_boundaries.insert(
             analysis_result.function.tid.clone(),
-            boundaries_storted.clone()
+            boundaries_storted.clone(),
         );
 
         let mut stack_blocks = vec![];
@@ -63,10 +84,10 @@ impl StackBlockBoundaries {
                 curr_stack_block = Some(StackBlock {
                     func_tid: analysis_result.function.tid.clone(),
                     min: i64::MIN,
-                    max: boundary
+                    max: boundary,
                 });
                 continue;
-            } 
+            }
 
             if let Some(mut stack_block) = curr_stack_block {
                 stack_block.max = boundary;
@@ -75,7 +96,7 @@ impl StackBlockBoundaries {
             curr_stack_block = Some(StackBlock {
                 func_tid: analysis_result.function.tid.clone(),
                 min: boundary + 1,
-                max: i64::MAX
+                max: i64::MAX,
             })
         }
 
@@ -85,9 +106,12 @@ impl StackBlockBoundaries {
 
         for (var, state) in &analysis_result.state.register_state {
             for stack_block in &stack_blocks {
-                let val = state.try_to_offset().unwrap();
+                let Ok(val) = state.try_to_offset() else {
+                    continue;
+                };
                 if stack_block.min <= val && stack_block.max >= val {
-                    self.map_register_to_stack.insert(var.clone(), stack_block.clone());
+                    self.map_register_to_stack
+                        .insert(var.clone(), stack_block.clone());
                 }
             }
         }
@@ -116,21 +140,23 @@ struct StackAnalysis<'a> {
     boundaries: HashSet<BoundaryCanidate>,
 }
 
-type BoundaryCanidate = DataDomain::<BitvectorDomain>;
+type BoundaryCanidate = DataDomain<BitvectorDomain>;
 
 impl<'a> StackAnalysis<'a> {
     pub fn new(function: &'a Term<Function>) -> StackAnalysis<'a> {
         return StackAnalysis {
             function,
-            state: State { register_state: HashMap::new() },
-            boundaries: HashSet::new()
-        }
+            state: State {
+                register_state: HashMap::new(),
+            },
+            boundaries: HashSet::new(),
+        };
     }
 
     fn get_stack_reg(&self) -> Variable {
         let blocks = &self.function.blocks;
         for def in blocks[0].defs() {
-            if let Def::Assign{var, ..} = &def.term {
+            if let Def::Assign { var, .. } = &def.term {
                 if var.name.split("_").collect_vec()[0] == "RSP" {
                     return var.clone();
                 }
@@ -168,11 +194,13 @@ impl<'a> StackAnalysis<'a> {
             // If all inputs have the same value, we take the value, otherwise we get the top
             // symbol
             Phi(inputs) => {
-                let all_values_same = inputs.into_iter().map(|inp| self.state.get_register(inp))
+                let all_values_same = inputs
+                    .into_iter()
+                    .map(|inp| self.state.get_register(inp))
                     .collect_vec()
                     .windows(2)
                     .all(|val| val[0] == val[1]);
-                if inputs.len() == 0 || !all_values_same  {
+                if inputs.len() == 0 || !all_values_same {
                     return BoundaryCanidate::new_top(ByteSize::new(0));
                 }
                 self.state.get_register(&inputs[0])
@@ -199,9 +227,15 @@ impl<'a> StackAnalysis<'a> {
         let mut boundaries = HashMap::<Variable, BoundaryCanidate>::new();
         for (variable, data) in &self.state.register_state {
             // Stores in general purpose register, e.g. not RSP or RBP
-            let offset_to_rsp = data.get_if_unique_target().unwrap().1.try_to_offset().unwrap();
+            let offset_to_rsp = data
+                .get_if_unique_target()
+                .unwrap()
+                .1
+                .try_to_offset()
+                .unwrap();
             let is_case_1_or_2 = offset_to_rsp <= 0;
-            let is_case_3 = variable.is_physical_register() && !(variable.name.contains("RSP") || variable.name.contains("RBP"));
+            let is_case_3 = variable.is_physical_register()
+                && !(variable.name.contains("RSP") || variable.name.contains("RBP"));
             if is_case_1_or_2 || is_case_3 {
                 boundaries.insert(variable.clone(), data.clone());
             }
@@ -219,13 +253,20 @@ impl<'a> StackAnalysis<'a> {
         let stack_reg = self.get_stack_reg();
 
         // This analysis is path unaware. It should not happen that register values pointing to the
-        // stack are manipulated differently and are still base adresses 
+        // stack are manipulated differently and are still base adresses
         // Pointing to stack pointer
         let abstract_stack_pointer = AbstractIdentifier::new(
             self.function.blocks[0].tid.clone(),
-            crate::abstract_domain::AbstractLocation::from_stack_position(&stack_reg, 0, ByteSize::new(0))
+            crate::abstract_domain::AbstractLocation::from_stack_position(
+                &stack_reg,
+                0,
+                ByteSize::new(0),
+            ),
         );
-        let init_rsp = BoundaryCanidate::from_target(abstract_stack_pointer, BitvectorDomain::Value(Bitvector::from_u64(0)));
+        let init_rsp = BoundaryCanidate::from_target(
+            abstract_stack_pointer,
+            BitvectorDomain::Value(Bitvector::from_u64(0)),
+        );
         self.state.change_register(stack_reg, init_rsp);
 
         // Fixpoint recursion: Loop over all defs until setteled. Here can be optimization in order
@@ -249,7 +290,10 @@ impl<'a> StackAnalysis<'a> {
         for blk in &self.function.blocks {
             for def in blk.defs() {
                 match def {
-                    Term { tid: _, term: Def::Assign { var, value } } => {
+                    Term {
+                        tid: _,
+                        term: Def::Assign { var, value },
+                    } => {
                         let new_val = self.eval_recursive(value);
                         if !new_val.get_relative_values().is_empty() {
                             changed |= self.state.change_register(var.clone(), new_val);
@@ -257,8 +301,14 @@ impl<'a> StackAnalysis<'a> {
                     }
                     // Stack adress is saved to memory (case 3)
                     // Might want to check which mem region it is saved to
-                    Term {tid: _, term: Def::Store { address, value }} => {
-                        let is_stack_addr = !self.eval_recursive(address).get_relative_values().is_empty();
+                    Term {
+                        tid: _,
+                        term: Def::Store { address, value },
+                    } => {
+                        let is_stack_addr = !self
+                            .eval_recursive(address)
+                            .get_relative_values()
+                            .is_empty();
                         if !is_stack_addr {
                             let new_val = self.eval_recursive(value);
                             if !new_val.get_relative_values().is_empty() {
@@ -270,21 +320,23 @@ impl<'a> StackAnalysis<'a> {
                 }
             }
         }
-        
+
         changed
     }
 }
 
-
 #[derive(Eq, PartialEq, Clone)]
 struct State {
     // TODO specific for architecture?
-    register_state: HashMap<Variable, BoundaryCanidate>
+    register_state: HashMap<Variable, BoundaryCanidate>,
 }
 
 impl State {
     fn get_register(&self, variable: &Variable) -> BoundaryCanidate {
-        self.register_state.get(variable).unwrap_or(&BoundaryCanidate::new_top(ByteSize::new(0))).clone()
+        self.register_state
+            .get(variable)
+            .unwrap_or(&BoundaryCanidate::new_top(ByteSize::new(0)))
+            .clone()
     }
 
     /// Returns true, if something changed
@@ -302,7 +354,7 @@ impl Display for State {
             write!(f, "{}=", var)?;
             match data.get_if_unique_target() {
                 Some((_target, value)) => write!(f, "RSP + {}", value.to_string())?,
-                None => write!(f, "unknown")?
+                None => write!(f, "unknown")?,
             }
             write!(f, "\n")?;
         }
@@ -310,13 +362,14 @@ impl Display for State {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use crate::{defs, expr, intermediate_representation::{self, Blk, Project}};
+    use crate::{
+        defs, expr,
+        intermediate_representation::{self, Blk, Project},
+    };
     use intermediate_representation::*;
 
     use super::StackAnalysis;
@@ -327,9 +380,12 @@ mod tests {
         blk1.defs = defs;
         blk1.add_jumps(vec![Term {
             term: Jmp::Return(expr!["0x00:8"]),
-            tid: Tid::new("jmp")
+            tid: Tid::new("jmp"),
         }]);
-        let blk1 = Term { tid: Tid::new("blk1"), term: blk1 };
+        let blk1 = Term {
+            tid: Tid::new("blk1"),
+            term: blk1,
+        };
         let sub1 = Term {
             tid: Tid::new("sub1"),
             term: Sub::new::<_, &str>("sub1", vec![blk1], None),
@@ -356,7 +412,8 @@ mod tests {
             "term_2: RSP_2:8 = RSP_1:8 + 0x08:8",
             "term_3: RAX_1:8 = RSP_2:8 + 0x08:8"
         ]);
-        let mut stack_analysis = StackAnalysis::new(&project.program.term.subs.first_key_value().unwrap().1);
+        let mut stack_analysis =
+            StackAnalysis::new(&project.program.term.subs.first_key_value().unwrap().1);
         stack_analysis.analyze_block();
         assert!(stack_analysis.state.register_state.len() == 3);
         assert!(stack_analysis.state.register_state.len() == 3);

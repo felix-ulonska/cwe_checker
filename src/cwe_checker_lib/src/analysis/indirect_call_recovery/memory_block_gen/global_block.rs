@@ -1,11 +1,19 @@
 // Analysis of global memory, for speration into blocks.
 // We use pointer interference results for gaining knowledge about data
 
-use std::{collections::{HashMap, HashSet}, fmt::Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use itertools::Itertools;
 
-use crate::{abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval}, analysis::vsa_results::VsaResult, intermediate_representation::{Def, Program}, prelude::{Term, Tid}};
+use crate::{
+    abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval},
+    analysis::vsa_results::VsaResult,
+    intermediate_representation::{Def, Program},
+    prelude::{Term, Tid},
+};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Interval {
@@ -16,7 +24,7 @@ pub struct Interval {
 impl Interval {
     pub fn contains(&self, other: &Interval) -> bool {
         self.begin <= other.begin && other.end <= self.end
-    }  
+    }
 }
 
 /// Reprsents disjunct intervals.
@@ -28,15 +36,14 @@ pub struct GlobalMemorySeperation {
 impl GlobalMemorySeperation {
     fn get_interval_for_def(&self, def: Term<Def>) -> Option<Interval> {
         self.map_def_to_interval.get(&def.tid).cloned()
-
     }
 }
 
 impl Display for GlobalMemorySeperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Global Mem:\n")?;
-        for Interval {begin, end} in &self.intervals {
-          write!(f, "\t Section: [{}, {}]", begin, end)?;
+        for Interval { begin, end } in &self.intervals {
+            write!(f, "\t Section: [{}, {}]", begin, end)?;
         }
         Ok(())
     }
@@ -49,35 +56,38 @@ impl GlobalMemorySeperation {
     fn new(in_intervals: Vec<(Tid, IntervalDomain)>) -> GlobalMemorySeperation {
         // Idea, we iterate sorted over the intervals. We look behind. If the prev and current
         // element overlap, do not create new section.
-        let mut intervals = vec![]; 
+        let mut intervals = vec![];
 
         let mut new_interval_canidate: Option<Interval> = None;
-        
-        let intervals_sorted_by_start = in_intervals.iter().map(|interval| interval.1.try_to_offset_interval().unwrap()).sorted_by_key(|x| x.0).collect_vec();
+
+        let intervals_sorted_by_start = in_intervals
+            .iter()
+            .map(|interval| interval.1.try_to_offset_interval().unwrap())
+            .sorted_by_key(|x| x.0)
+            .collect_vec();
         for (begin, end) in intervals_sorted_by_start {
             match new_interval_canidate {
                 // Case: new_interval_canidate and current to add interval do not overlap
-                Some(Interval { begin: existing_begin, end: existing_end}) if existing_end < begin => {
-                    intervals.push(Interval { 
+                Some(Interval {
+                    begin: existing_begin,
+                    end: existing_end,
+                }) if existing_end < begin => {
+                    intervals.push(Interval {
                         begin: existing_begin,
-                        end: existing_end
+                        end: existing_end,
                     });
                     new_interval_canidate = Some(Interval { begin, end });
                 }
                 // Case 2: new_interval_canidate and current interval overlap => extend interval
-                Some(ref mut existing_interval) => { 
+                Some(ref mut existing_interval) => {
                     existing_interval.end = end;
                 }
                 // Case 3: We are in the first iteration, set new_interval_canidate
-                None => {
-                    new_interval_canidate = Some(Interval {
-                        begin, end
-                    }
-                )}
-            } 
+                None => new_interval_canidate = Some(Interval { begin, end }),
+            }
         }
         // We are done, we need to add the last canidate
-        if let Some(new_interval) = new_interval_canidate { 
+        if let Some(new_interval) = new_interval_canidate {
             intervals.push(new_interval);
         }
 
@@ -85,7 +95,10 @@ impl GlobalMemorySeperation {
 
         for (tid, interval) in in_intervals {
             let interval = interval.try_to_offset_interval().unwrap();
-            let interval = Interval { begin: interval.0, end: interval.1 };
+            let interval = Interval {
+                begin: interval.0,
+                end: interval.1,
+            };
             for test_interval in &intervals {
                 if test_interval.contains(&interval) {
                     map_def_to_interval.insert(tid, interval);
@@ -96,7 +109,7 @@ impl GlobalMemorySeperation {
 
         GlobalMemorySeperation {
             intervals,
-            map_def_to_interval
+            map_def_to_interval,
         }
     }
 
@@ -108,7 +121,7 @@ impl GlobalMemorySeperation {
     /// [index] is the key. Will return the interval which has index within (begin, end)
     pub fn get_interval(&self, index: i64) -> Option<Interval> {
         // TODO: Do fancy bin search here:
-        for interval in &self.intervals { 
+        for interval in &self.intervals {
             if interval.begin <= index && interval.end >= index {
                 return Some(interval.clone());
             }
@@ -118,32 +131,30 @@ impl GlobalMemorySeperation {
     }
 }
 
-
 /// We changed the algorithm for global memory. We use the PI and then build a set where no
 /// overlapping address ranges.
-pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult<ValueDomain = DataDomain<IntervalDomain>>) -> GlobalMemorySeperation {
+pub fn build_global_memory_blocks(
+    program: &Program,
+    value_sets: &impl VsaResult<ValueDomain = DataDomain<IntervalDomain>>,
+) -> GlobalMemorySeperation {
     let mut intervals = vec![];
     for sub in &program.subs {
-          for block in &sub.1.term.blocks {
-              //println!("Blk {}", block.tid);
-              for def in block.defs() {
-                  println!("{}", def);
-                  if let Some(address) = value_sets.eval_address_at_def(&def.tid) {
-                      if let Some((abstract_location, interval)) = address.get_if_unique_target() {
-                          println!("\t: {}; {}", abstract_location, interval);
-                          match abstract_location.get_location() {
-                              AbstractLocation::GlobalAddress { address: _, .. } => {
-                                  intervals.push((def.tid.clone(), interval.clone()));
-                                  println!("\t: {}", interval);
-                              }
-                              // Global Pointer is not inherently useful.
-                              AbstractLocation::GlobalPointer( .. ) => { }
-                              _ => (),
-                          }
-                      }
-                  }
-              }
-          }
+        for block in &sub.1.term.blocks {
+            for def in block.defs() {
+                if let Some(address) = value_sets.eval_address_at_def(&def.tid) {
+                    if let Some((abstract_location, interval)) = address.get_if_unique_target() {
+                        match abstract_location.get_location() {
+                            AbstractLocation::GlobalAddress { address: _, .. } => {
+                                intervals.push((def.tid.clone(), interval.clone()));
+                            }
+                            // Global Pointer is not inherently useful.
+                            AbstractLocation::GlobalPointer(..) => {}
+                            _ => (),
+                        }
+                    }
+                }
+            }
+        }
     }
 
     GlobalMemorySeperation::new(intervals)
@@ -153,16 +164,22 @@ pub fn build_global_memory_blocks(program: &Program, value_sets: &impl VsaResult
 mod tests {
     use apint::ApInt;
 
-    use crate::{abstract_domain::{self, IntervalDomain}, prelude::Tid};
+    use crate::{
+        abstract_domain::{self, IntervalDomain},
+        prelude::Tid,
+    };
 
     use super::GlobalMemorySeperation;
 
     fn build_interval(begin: i64, end: i64) -> (Tid, abstract_domain::IntervalDomain) {
-        (Tid::new("foo"), IntervalDomain::from(abstract_domain::Interval {
-            start: ApInt::from_i64(begin),
-            end: ApInt::from_i64(end),
-            stride: 0
-        }))
+        (
+            Tid::new("foo"),
+            IntervalDomain::from(abstract_domain::Interval {
+                start: ApInt::from_i64(begin),
+                end: ApInt::from_i64(end),
+                stride: 0,
+            }),
+        )
     }
 
     #[test]

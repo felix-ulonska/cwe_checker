@@ -27,6 +27,7 @@ pub fn run_icall_recovery(
     debug_settings: &debug::Settings,
     config: &serde_json::Value,
 ) {
+    println!("Starting SSA");
     let mut ssa_program = project.program.clone();
     let mut logs = Vec::new();
     let config: Config = serde_json::from_value(config.clone()).unwrap();
@@ -39,9 +40,12 @@ pub fn run_icall_recovery(
         debug_settings,
     ];
 
+    println!("Building Block mem");
     let block_memory_model = build_memory_blocks(&ssa_program, &analysis_results, &config);
+    println!("Get AT funcs");
     let at_functions = get_at_functions(project);
 
+    println!("Start Value Tracking");
     let value_tracking = ValueTracking::new(&ssa_program, &block_memory_model, &at_functions);
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
