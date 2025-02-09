@@ -14,7 +14,9 @@ use itertools::Itertools;
 
 use super::{
     function_taken::AtFunction,
-    memory_block_gen::{global_block::Interval, heap_block::HeapBlock, stack_block::StackBlock, BlockMemoryModel},
+    memory_block_gen::{
+        global_block::Interval, heap_block::HeapBlock, stack_block::StackBlock, BlockMemoryModel,
+    },
 };
 
 type Symbol = Rc<String>;
@@ -93,6 +95,7 @@ ascent! {
     vset(Exp::Deref(val.clone()), content) <--
         aloc_val(?Loc::Reg(val), ?Exp::Mloc(mloc)),
         aloc_val(Loc::Mloc(mloc.clone()), content);
+    vset(Exp::Union(exp1, exp2), content) <-- vset(exp1, content), vset(exp2, content2) ;
     // TODO: missing &func
 
     //aloc_val(loc, val) <-- aloc_val(loc, val) if let Loc::Reg(reg) = loc;
@@ -201,9 +204,7 @@ impl ValueTracking<'_> {
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and
-    pub fn run_value_tracking(
-        &self,
-    ) {
+    pub fn run_value_tracking(&self) {
         let mut prog = AscentProgram::default();
 
         prog.assign_reg = vec![];
@@ -217,7 +218,8 @@ impl ValueTracking<'_> {
                 match &def.term {
                     // AssignReg
                     Def::Load { var, address } => {
-                        if let Some(interval) = self.block_memory.global.get_interval_of_def(def.clone())
+                        if let Some(interval) =
+                            self.block_memory.global.get_interval_of_def(def.clone())
                         {
                             prog.assign_reg.push((
                                 Reg {
@@ -261,7 +263,8 @@ impl ValueTracking<'_> {
                     }
                     // AssignMloc
                     Def::Store { address, value } => {
-                        if let Some(interval) = self.block_memory.global.get_interval_of_def(def.clone())
+                        if let Some(interval) =
+                            self.block_memory.global.get_interval_of_def(def.clone())
                         {
                             prog.assign_mloc.push((
                                 Mloc::Gblk(Gblk(interval.clone())),
@@ -314,7 +317,6 @@ impl ValueTracking<'_> {
             }
         }
 
-
         // inject heap values:
         //      Orignal: target_reg <- &heap
         // Represent as:
@@ -327,12 +329,21 @@ impl ValueTracking<'_> {
                 size: heap_target_var.size,
             };
             prog.assign_reg.push((
-                    Reg { var: Arc::new(temp_var.clone()) },
-                    Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone()))))
-                ));
-            prog.phi.push((Reg { var: Arc::new(heap_target_var.clone()) }, Reg { var: Arc::new(temp_var.clone()) }))
+                Reg {
+                    var: Arc::new(temp_var.clone()),
+                },
+                Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
+            ));
+            prog.phi.push((
+                Reg {
+                    var: Arc::new(heap_target_var.clone()),
+                },
+                Reg {
+                    var: Arc::new(temp_var.clone()),
+                },
+            ))
         }
-        
+
         // similar to heap, do stack
         //      Orignal: target_reg <- &heap
         // Represent as:
@@ -340,15 +351,27 @@ impl ValueTracking<'_> {
         //      Add phi(target_reg, temp_var)
         for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
             let temp_var = Variable {
-                name: format!("temp_stack_{}_{}_{}", stack_blk.func_tid, stack_blk.min, stack_blk.max),
+                name: format!(
+                    "temp_stack_{}_{}_{}",
+                    stack_blk.func_tid, stack_blk.min, stack_blk.max
+                ),
                 is_temp: true,
                 size: stack_target_var.size,
             };
             prog.assign_reg.push((
-                    Reg { var: Arc::new(temp_var.clone()) },
-                    Exp::RefMLoc(Mloc::Sblk(Sblk(Arc::new(stack_blk.clone()))))
-                ));
-            prog.phi.push((Reg { var: Arc::new(stack_target_var.clone()) }, Reg { var: Arc::new(temp_var.clone()) }))
+                Reg {
+                    var: Arc::new(temp_var.clone()),
+                },
+                Exp::RefMLoc(Mloc::Sblk(Sblk(Arc::new(stack_blk.clone())))),
+            ));
+            prog.phi.push((
+                Reg {
+                    var: Arc::new(stack_target_var.clone()),
+                },
+                Reg {
+                    var: Arc::new(temp_var.clone()),
+                },
+            ))
         }
 
         prog.run();
