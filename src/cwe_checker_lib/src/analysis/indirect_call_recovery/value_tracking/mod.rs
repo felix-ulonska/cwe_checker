@@ -79,6 +79,16 @@ pub enum Exp {
     Union(Arc<Exp>, Arc<Exp>),
 }
 
+impl Exp {
+    fn to_iter(&self) -> Vec<Exp> {
+        if let Exp::Union(exp1, exp2) = self {
+            [exp1.to_iter(), exp2.to_iter()].concat()
+        } else {
+            vec![self.clone()]
+        }
+    }
+}
+
 ascent! {
     relation assign_reg(Reg, Exp);
     relation assign_mloc(Mloc, Exp);
@@ -89,14 +99,6 @@ ascent! {
     relation aloc_val(Loc, Exp);
 
     relation vset(Exp, Exp);
-
-    vset(Exp::Mloc(val.clone()), content) <-- aloc_val(?Loc::Mloc(val), content);
-    vset(Exp::Reg(val.clone()), content) <-- aloc_val(?Loc::Reg(val), content);
-    vset(Exp::Deref(val.clone()), content) <--
-        aloc_val(?Loc::Reg(val), ?Exp::Mloc(mloc)),
-        aloc_val(Loc::Mloc(mloc.clone()), content);
-    vset(Exp::Union(exp1, exp2), content) <-- vset(exp1, content), vset(exp2, content2) ;
-    // TODO: missing &func
 
     //aloc_val(loc, val) <-- aloc_val(loc, val) if let Loc::Reg(reg) = loc;
     // AddrMloc and
@@ -112,7 +114,34 @@ ascent! {
         assign_reg(ireg, ?Exp::Deref(src_reg)),
         aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
         aloc_val(Loc::Mloc(mloc.clone()), val);
-    // AltMloc TODO
+    // AltFunc TODO
+    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func)) <--
+        assign_reg(ireg, union),
+        if let Exp::Union(exp1, exp2) = union,
+        for exp in union.to_iter(),
+        if let Exp::RefFunc(func) = exp;
+
+    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func.clone())) <--
+        assign_reg(ireg, union),
+        if let Exp::Union(exp1, exp2) = union,
+        for exp in union.to_iter(),
+        if let Exp::Reg(mloc) = exp,
+        aloc_val(Loc::Reg(mloc), ?Exp::RefFunc(func));
+
+    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func.clone())) <--
+        assign_reg(ireg, union),
+        if let Exp::Union(exp1, exp2) = union,
+        for exp in union.to_iter(),
+        if let Exp::Mloc(mloc) = exp,
+        aloc_val(Loc::Mloc(mloc), ?Exp::RefFunc(func));
+
+    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func.clone())) <--
+        assign_reg(ireg, union),
+        if let Exp::Union(exp1, exp2) = union,
+        for exp in union.to_iter(),
+        if let Exp::Deref(reg) = exp,
+        aloc_val(Loc::Reg(reg), ?Exp::RefMLoc(mloc)),
+        aloc_val(Loc::Mloc(mloc.clone()), ?Exp::RefFunc(func));
 
     // Phi
     aloc_val(Loc::Reg(ireg.clone()), val) <-- phi(ireg, sreg), aloc_val(Loc::Reg(sreg.clone()), val);
