@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    intermediate_representation::{Def, Expression, Program, Variable},
-    prelude::{Bitvector, ByteSize},
+    intermediate_representation::{Def, Expression, Jmp, Program, Variable},
+    prelude::{Bitvector, ByteSize, Term, Tid},
 };
 
 use ascent::ascent;
@@ -89,6 +89,46 @@ impl Exp {
     }
 }
 
+impl From<Exp> for Loc {
+    fn from(value: Exp) -> Self {
+        match value {
+            Exp::Reg(reg) => Loc::Reg(reg),
+            Exp::Mloc(mloc) => Loc::Mloc(mloc),
+            _ => todo!(),
+        }
+    }
+}
+
+impl From<Reg> for Loc {
+    fn from(value: Reg) -> Self {
+        Loc::Reg(value)
+    }
+}
+impl From<&Reg> for Loc {
+    fn from(value: &Reg) -> Self {
+        Loc::Reg(value.clone())
+    }
+}
+impl From<Mloc> for Loc {
+    fn from(value: Mloc) -> Self {
+        Loc::Mloc(value)
+    }
+}
+impl From<&Mloc> for Loc {
+    fn from(value: &Mloc) -> Self {
+        Loc::Mloc(value.clone())
+    }
+}
+
+macro_rules! aloc_val_with_vset {
+    ($vset_macro:ident) => {
+        aloc_val(ireg.into(), val) <--
+            assign_reg(ireg, union),
+            if let Exp::Union(exp1, exp2) = union,
+            $vset_macro!(val, union);
+    };
+}
+
 ascent! {
     relation assign_reg(Reg, Exp);
     relation assign_mloc(Mloc, Exp);
@@ -96,52 +136,100 @@ ascent! {
     relation undeterministic_assign(Reg, Mloc, Exp);
     relation phi(Reg, Reg);
 
+    relation assign(Loc, Exp);
+
+    // Assign is a helper relation: Models if an exp can be assigned to an mloc
+    // assign_reg
+    assign(reg.into(), exp) <-- assign_reg(reg, exp);
+    // assign_mloc: change for rules
+    assign(mloc.into(), exp) <-- assign_mloc(mloc, exp);
+    assign(mloc.into(), exp) <-- assing_deref_reg(reg, exp), aloc_val(Loc::Reg(reg.clone()), ?Exp::RefMLoc(mloc));
+
     relation aloc_val(Loc, Exp);
 
     relation vset(Exp, Exp);
 
-    //aloc_val(loc, val) <-- aloc_val(loc, val) if let Loc::Reg(reg) = loc;
-    // AddrMloc and
-    aloc_val(Loc::Reg(ireg.clone()), Exp::Mloc(exp.clone())) <-- assign_reg(ireg, ?Exp::Mloc(exp));
-    // AddrFunc
-    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(exp.clone())) <-- assign_reg(ireg, ?Exp::RefFunc(exp));
-    // IReg
-    aloc_val(Loc::Reg(ireg.clone()), val) <-- assign_reg(ireg, exp), aloc_val(Loc::Reg(ireg.clone()), val);
-    // MLoc
-    aloc_val(Loc::Mloc(mloc.clone()), val) <-- assign_mloc(mloc, exp), aloc_val(Loc::Mloc(mloc.clone()), val);
-    // DIreg
-    aloc_val(Loc::Reg(ireg.clone()), val) <--
-        assign_reg(ireg, ?Exp::Deref(src_reg)),
-        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
-        aloc_val(Loc::Mloc(mloc.clone()), val);
-    // AltFunc TODO
-    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func)) <--
-        assign_reg(ireg, union),
-        if let Exp::Union(exp1, exp2) = union,
-        for exp in union.to_iter(),
-        if let Exp::RefFunc(func) = exp;
+    macro vset_mloc_func($v: ident, $exp: ident) {
+        for $v in $exp.to_iter(),
+        if let Exp::RefFunc(_) | Exp::RefMLoc(_) = $v,
+    }
 
-    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func.clone())) <--
-        assign_reg(ireg, union),
-        if let Exp::Union(exp1, exp2) = union,
-        for exp in union.to_iter(),
-        if let Exp::Reg(mloc) = exp,
-        aloc_val(Loc::Reg(mloc), ?Exp::RefFunc(func));
+    macro vset_ireg($v: ident, $exp: ident) {
+        for exp in $exp.to_iter(),
+        if let Exp::Reg(reg) = exp,
+        aloc_val(Loc::Reg(reg), $v)
+    }
 
-    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func.clone())) <--
-        assign_reg(ireg, union),
-        if let Exp::Union(exp1, exp2) = union,
-        for exp in union.to_iter(),
+    macro vset_mloc($v: ident, $exp: ident) {
+        for exp in $exp.to_iter(),
         if let Exp::Mloc(mloc) = exp,
-        aloc_val(Loc::Mloc(mloc), ?Exp::RefFunc(func));
+        aloc_val(Loc::Mloc(mloc), $v)
+    }
 
-    aloc_val(Loc::Reg(ireg.clone()), Exp::RefFunc(func.clone())) <--
-        assign_reg(ireg, union),
-        if let Exp::Union(exp1, exp2) = union,
-        for exp in union.to_iter(),
+    macro vset_deref_ireg($v: ident, $exp: ident) {
+        for exp in $exp.to_iter(),
         if let Exp::Deref(reg) = exp,
         aloc_val(Loc::Reg(reg), ?Exp::RefMLoc(mloc)),
-        aloc_val(Loc::Mloc(mloc.clone()), ?Exp::RefFunc(func));
+        aloc_val(Loc::Mloc(mloc.clone()), $v)
+    }
+
+    // AddrMloc and AddrFunc
+    aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::Mloc(_) | Exp::RefFunc(_)));
+    // IReg and Mloc
+    aloc_val(loc, val) <-- assign(loc, exp), aloc_val(loc, val);
+    // DIreg
+    aloc_val(loc, val) <--
+        assign(loc, ?Exp::Deref(src_reg)),
+        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
+        aloc_val(Loc::Mloc(mloc.clone()), val);
+
+    aloc_val(loc, v) <--
+        assign(loc, union),
+        if let Exp::Union(exp1, exp2) = union,
+        vset_mloc_func!(v, union);
+
+    // Vset(ireg)
+    aloc_val(loc, v) <--
+        assign(loc, union),
+        if let Exp::Union(exp1, exp2) = union,
+        vset_ireg!(v, union);
+
+    // Vset(mloc)
+    aloc_val(loc, v) <--
+        assign(loc, union),
+        if let Exp::Union(exp1, exp2) = union,
+        vset_mloc!(v, union);
+
+    // Vset(*ireg)
+    aloc_val(loc, v) <--
+        assign(loc, union),
+        if let Exp::Union(exp1, exp2) = union,
+        vset_deref_ireg!(v, union);
+
+    // UpdMloc
+    // Vset(&mloc) and Vset(&func)
+    aloc_val(mloc.into(), v) <--
+        assing_deref_reg(ireg, exp),
+        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
+        vset_mloc_func!(v, exp);
+
+    // Vset(ireg)
+    aloc_val(Loc::Mloc(mloc.clone()), val) <--
+        assing_deref_reg(ireg, exp),
+        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
+        vset_ireg!(val, exp);
+
+    // Vset(mloc)
+    aloc_val(Loc::Mloc(mloc.clone()), val) <--
+        assing_deref_reg(ireg, exp),
+        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
+        vset_mloc!(val, exp);
+
+    // Vset(*ireg)
+    aloc_val(Loc::Mloc(mloc.clone()), val) <--
+        assing_deref_reg(ireg, exp),
+        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
+        vset_deref_ireg!(val, exp);
 
     // Phi
     aloc_val(Loc::Reg(ireg.clone()), val) <-- phi(ireg, sreg), aloc_val(Loc::Reg(sreg.clone()), val);
@@ -404,5 +492,26 @@ impl ValueTracking<'_> {
         }
 
         prog.run();
+
+        let mut map = HashMap::<Variable, Vec<Tid>>::new();
+        for (loc, expr) in prog.aloc_val {
+            if let Exp::RefFunc(func) = expr {
+                if let Loc::Reg(reg) = loc {
+                    let vec = map
+                        .get(&reg.var)
+                    //map.insert(reg.var.clone(), func);
+                }
+            }
+        }
+
+        for icall in self.program.jmps().filter(|jmp| jmp.is_indirect_call()) {
+            if let Term {
+                term: Jmp::CallInd { target, return_ },
+                tid,
+            } = &icall
+            {
+                for input_var in target.input_vars() {}
+            }
+        }
     }
 }
