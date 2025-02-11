@@ -6,14 +6,13 @@ use crate::{
     ghidra_pcode::ir_passes::IrPass,
     intermediate_representation::{ir_passes::SingleStaticAssigment, Project},
     prelude::AnalysisResults,
-    run_ir_pass,
     utils::debug,
 };
 
 pub mod memory_block_gen;
 use function_taken::get_at_functions;
 use memory_block_gen::build_memory_blocks;
-use value_tracking::ValueTracking;
+use value_tracking::convert_to_ascent_prog::ValueTracking;
 
 use super::pointer_inference::Config;
 
@@ -40,12 +39,14 @@ pub fn run_icall_recovery(
     let at_functions = get_at_functions(project);
 
     println!("Start Value Tracking");
-    let value_tracking = ValueTracking::new(
+    let mut value_tracking = ValueTracking::new(
         &ssa_program,
         &block_memory_model,
         &at_functions,
         &pass.active_var_at_end_of_block,
     );
+
+    value_tracking.run_value_tracking();
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
         exit(0);

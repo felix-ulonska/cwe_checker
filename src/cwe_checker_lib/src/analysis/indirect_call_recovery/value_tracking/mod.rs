@@ -1,5 +1,8 @@
+pub mod convert_to_ascent_prog;
+
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     rc::Rc,
     sync::Arc,
 };
@@ -26,17 +29,36 @@ type Symbol = Rc<String>;
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Blk(Arc<Tid>);
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Mblk(Symbol);
+impl Display for Blk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Blk({})", self.0)
+    }
+}
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Sblk(Arc<StackBlock>);
+impl Display for Sblk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Hblk(Arc<HeapBlock>);
+impl Display for Hblk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Hblk({})", self.0.id)
+    }
+}
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Gblk(Interval);
+
+impl Display for Gblk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Gblk({})", self.0)
+    }
+}
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Reg {
@@ -46,9 +68,18 @@ pub struct Reg {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Mloc {
     Gblk(Gblk),
-    Mblk(Mblk),
     Sblk(Sblk),
     Hblk(Hblk),
+}
+
+impl Display for Mloc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Mloc::Gblk(gblk) => write!(f, "{}", gblk),
+            Mloc::Sblk(stack) => write!(f, "{}", stack),
+            Mloc::Hblk(hblk) => write!(f, "{}", hblk),
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -66,6 +97,20 @@ pub enum Exp {
     RefMLoc(Mloc),
     RefFunc(AtFunction),
     Union(Arc<Exp>, Arc<Exp>),
+}
+
+impl Display for Exp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Exp::Empty => write!(f, "Empty"),
+            Exp::Reg(reg) => write!(f, "{}", reg.var.name),
+            Exp::Mloc(mloc) => write!(f, "{}", mloc),
+            Exp::Deref(deref) => write!(f, "*{}", deref.var.name),
+            Exp::RefMLoc(ref_mloc) => write!(f, "&{}", ref_mloc),
+            Exp::RefFunc(ref_func) => write!(f, "&{}", ref_func),
+            Exp::Union(exp1, exp2) => write!(f, "{} U {}", exp1, exp2),
+        }
+    }
 }
 
 impl Exp {
@@ -134,6 +179,8 @@ ascent! {
     relation atfunc_to_block(AtFunction, Blk);
     // What regs are used for function call
     relation used_func_call(Reg, Blk);
+
+    relation func_call_targets(Blk, AtFunction);
 
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg
@@ -228,6 +275,11 @@ ascent! {
     // Phi
     aloc_val(Loc::Reg(ireg.clone()), val) <-- phi(ireg, sreg, _), aloc_val(Loc::Reg(sreg.clone()), val);
 
+    func_call_targets(blk, func) <--
+        aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),
+        used_func_call(ireg, blk);
+
+
     // If, func to callsite, then create phi instruction
     phi(target, ireg, blk) <--
         aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),
@@ -249,6 +301,10 @@ fn build_union_of_vars(vars: &Vec<&Variable>) -> Exp {
         })
         .collect_vec();
 
+    if exps.len() == 0 {
+        return Exp::Empty;
+    }
+
     // Terminates as each iter, 2 pops and 1 add.
     while exps.len() > 1 {
         let exp_first = exps.pop().unwrap();
@@ -257,302 +313,5 @@ fn build_union_of_vars(vars: &Vec<&Variable>) -> Exp {
     }
 
     exps.pop()
-        .expect("The function should not be called with no input var")
-}
-
-pub struct ValueTracking<'a> {
-    program: &'a Program,
-    block_memory: &'a BlockMemoryModel,
-    at_functions: &'a HashSet<AtFunction>,
-    at_functions_by_addr: HashMap<u64, AtFunction>,
-    active_var_at_end_of_block: &'a VarsAtEndOfBlock,
-}
-
-impl ValueTracking<'_> {
-    /// Parse a const addr to exp
-    fn parse_const(&self, bitvector: &Bitvector) -> Exp {
-        let Ok(val) = bitvector.try_to_u64() else {
-            return Exp::Empty;
-        };
-
-        if let Some(at_function) = self.at_functions_by_addr.get(&val) {
-            return Exp::RefFunc(at_function.clone());
-        }
-
-        if let Some(interval) = self.block_memory.global.get_interval(val as i64) {
-            return Exp::Mloc(Mloc::Gblk(Gblk(interval.clone())));
-        }
-
-        Exp::Empty
-    }
-
-    fn expression_to_value_tracking(&self, exp: &Expression) -> Exp {
-        match exp {
-            Expression::Var(var) => Exp::Reg(Reg {
-                var: var.clone().into(),
-            }),
-            // TODO add infer for function pointer and global pointer
-            Expression::Const(bitvector) => self.parse_const(bitvector),
-            Expression::BinOp { lhs, rhs, .. } => Exp::Union(
-                Arc::new(self.expression_to_value_tracking(&*lhs)),
-                Arc::new(self.expression_to_value_tracking(&*rhs)),
-            ),
-            Expression::UnOp { arg, .. }
-            | Expression::Cast { arg, .. }
-            | Expression::Subpiece { arg, .. } => self.expression_to_value_tracking(&*arg),
-            Expression::Unknown { .. } => panic!(),
-            Expression::Phi(vars) => build_union_of_vars(&vars.iter().collect()),
-        }
-    }
-
-    pub fn new<'a>(
-        program: &'a Program,
-        block_memory: &'a BlockMemoryModel,
-        at_functions: &'a HashSet<AtFunction>,
-        active_var_at_end_of_block: &'a VarsAtEndOfBlock,
-    ) -> ValueTracking<'a> {
-        let mut at_functions_by_addr = HashMap::new();
-        for func in at_functions {
-            at_functions_by_addr.insert(func.first_instruction, func.clone());
-        }
-
-        ValueTracking {
-            program,
-            block_memory,
-            at_functions,
-            at_functions_by_addr,
-            active_var_at_end_of_block,
-        }
-    }
-
-    // We need to mantain a mapping of tid to int ids. We need to have copabale things, and
-    pub fn run_value_tracking(&self) {
-        let mut prog = AscentProgram::default();
-
-        prog.assign_reg = vec![];
-        prog.assign_mloc = vec![];
-        prog.assing_deref_reg = vec![];
-        prog.undeterministic_assign = vec![];
-
-        for blk in self.program.blocks() {
-            for def in blk.defs() {
-                let _tid = def.tid.clone();
-                match &def.term {
-                    // AssignReg
-                    Def::Load { var, address } => {
-                        if let Some(interval) =
-                            self.block_memory.global.get_interval_of_def(def.clone())
-                        {
-                            let var = Arc::new(var.clone());
-                            prog.assign_reg.push((
-                                Reg { var: var.clone() },
-                                Exp::Mloc(Mloc::Gblk(Gblk(interval.clone()))),
-                            ));
-                            prog.reg_to_block
-                                .push((Reg { var: var.clone() }, Blk(Arc::new(blk.tid.clone()))));
-                            continue;
-                        }
-
-                        let inputs_vars = address.input_vars();
-                        if inputs_vars.len() == 1 {
-                            prog.assign_reg.push((
-                                Reg {
-                                    var: Arc::new(var.clone()),
-                                },
-                                Exp::Reg(Reg {
-                                    var: Arc::new(inputs_vars[0].clone()),
-                                }),
-                            ));
-                        } else if inputs_vars.len() > 1 {
-                            // Build temp variable which includes all possible inputs
-                            let temp_var = Arc::new(Variable {
-                                name: format!("tempSrcAddrFor{}", var.name),
-                                size: var.size,
-                                is_temp: true,
-                            });
-                            prog.assign_reg.push((
-                                Reg {
-                                    var: temp_var.clone(),
-                                },
-                                build_union_of_vars(&inputs_vars),
-                            ));
-                            prog.assign_reg.push((
-                                Reg {
-                                    var: Arc::new(var.clone()),
-                                },
-                                Exp::Reg(Reg { var: temp_var }),
-                            ));
-                        }
-                    }
-                    // AssignMloc
-                    Def::Store { address, value } => {
-                        if let Some(interval) =
-                            self.block_memory.global.get_interval_of_def(def.clone())
-                        {
-                            prog.assign_mloc.push((
-                                Mloc::Gblk(Gblk(interval.clone())),
-                                self.expression_to_value_tracking(&value),
-                            ));
-                            continue;
-                        }
-
-                        // TODO: refactor code dupl
-                        let input_vars = address.input_vars();
-                        if input_vars.len() == 1 {
-                            prog.assing_deref_reg.push((
-                                Reg {
-                                    var: Arc::new(input_vars[0].clone()),
-                                },
-                                Exp::Reg(Reg {
-                                    var: Arc::new(input_vars[0].clone()),
-                                }),
-                            ));
-                        } else if input_vars.len() > 1 {
-                            // Build temp variable which includes all possible inputs
-                            let temp_var = Arc::new(Variable {
-                                name: format!("tempSrcAddrFor{}", def.tid),
-                                // TODO
-                                size: ByteSize::new(8), // var.size,
-                                is_temp: true,
-                            });
-                            prog.assign_reg.push((
-                                Reg {
-                                    var: temp_var.clone(),
-                                },
-                                build_union_of_vars(&input_vars),
-                            ));
-                            prog.assing_deref_reg.push((
-                                Reg {
-                                    var: temp_var.clone(),
-                                },
-                                self.expression_to_value_tracking(&value),
-                            ));
-                        }
-                    }
-                    // AssignReg
-                    Def::Assign { var, value } => {
-                        prog.reg_to_block.push((
-                            Reg {
-                                var: Arc::new(var.clone()),
-                            },
-                            Blk(Arc::new(blk.tid.clone())),
-                        ));
-                        prog.assign_reg.push((
-                            Reg {
-                                var: Arc::new(var.clone()),
-                            },
-                            self.expression_to_value_tracking(&value),
-                        ))
-                    }
-                }
-            }
-        }
-
-        for blk in self.program.blocks() {
-            for jmp in blk.jmps() {
-                if !jmp.is_indirect_call() {
-                    continue;
-                }
-
-                if let Jmp::CallInd { target, .. } = &jmp.term {
-                    for input_var in target.input_vars() {
-                        prog.used_func_call.push((
-                            Reg {
-                                var: Arc::new(input_var.clone()),
-                            },
-                            Blk(Arc::new(blk.tid.clone())),
-                        ));
-                    }
-                }
-            }
-        }
-
-        for (blk, active_vars) in self.active_var_at_end_of_block {
-            for var in active_vars {
-                prog.reg_to_block.push((
-                    Reg {
-                        var: Arc::new(var.clone()),
-                    },
-                    Blk(blk.clone().into()),
-                ))
-            }
-        }
-
-        for atfunction in self.at_functions {
-            prog.atfunc_to_block
-                .push((atfunction.clone(), Blk(atfunction.tid.clone().into())));
-        }
-
-        // inject heap values:
-        //      Orignal: target_reg <- &heap
-        // Represent as:
-        //      Add temp_var <- &Mloc(heap)
-        //      Add phi(target_reg, temp_var)
-        for (heap_target_var, heap_blk) in &self.block_memory.heap.register_with_heap {
-            let temp_var = Variable {
-                name: format!("temp_heap_{}", heap_blk.id),
-                is_temp: true,
-                size: heap_target_var.size,
-            };
-            prog.aloc_val.push((
-                Loc::Reg(Reg {
-                    var: Arc::new(temp_var.clone()),
-                }),
-                Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
-            ));
-        }
-
-        // similar to heap, do stack
-        //      Orignal: target_reg <- &heap
-        // Represent as:
-        //      Add temp_var <- &Mloc(heap)
-        //      Add phi(target_reg, temp_var)
-        for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
-            let temp_var = Variable {
-                name: format!(
-                    "temp_stack_{}_{}_{}",
-                    stack_blk.func_tid, stack_blk.min, stack_blk.max
-                ),
-                is_temp: true,
-                size: stack_target_var.size,
-            };
-            prog.assign_reg.push((
-                Reg {
-                    var: Arc::new(temp_var.clone()),
-                },
-                Exp::RefMLoc(Mloc::Sblk(Sblk(Arc::new(stack_blk.clone())))),
-            ));
-            prog.phi.push((
-                Reg {
-                    var: Arc::new(stack_target_var.clone()),
-                },
-                Reg {
-                    var: Arc::new(temp_var.clone()),
-                },
-                Blk(Arc::new(stack_blk.func_tid.clone())),
-            ));
-        }
-
-        prog.run();
-
-        let mut map = HashMap::<Variable, Vec<Tid>>::new();
-        for (loc, expr) in prog.aloc_val {
-            if let Exp::RefFunc(func) = expr {
-                if let Loc::Reg(reg) = loc {
-                    let vec = map.get(&reg.var);
-                    //map.insert(reg.var.clone(), func);
-                }
-            }
-        }
-
-        for icall in self.program.jmps().filter(|jmp| jmp.is_indirect_call()) {
-            if let Term {
-                term: Jmp::CallInd { target, return_ },
-                tid,
-            } = &icall
-            {
-                for input_var in target.input_vars() {}
-            }
-        }
-    }
+        .expect("A vlaue should exist, the check is right bevor this line")
 }

@@ -21,6 +21,12 @@ pub struct Interval {
     end: i64,
 }
 
+impl Display for Interval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}]@GLOBAL", self.begin, self.end)
+    }
+}
+
 impl Interval {
     pub fn contains(&self, other: &Interval) -> bool {
         self.begin <= other.begin && other.end <= self.end

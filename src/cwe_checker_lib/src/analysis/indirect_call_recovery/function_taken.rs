@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use crate::{intermediate_representation::Project, prelude::Tid};
 
@@ -6,6 +9,12 @@ use crate::{intermediate_representation::Project, prelude::Tid};
 pub struct AtFunction {
     pub tid: Tid,
     pub first_instruction: u64,
+}
+
+impl Display for AtFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AtFunction: {}", self.tid)
+    }
 }
 
 /// Get all adress taken functions.
