@@ -29,16 +29,10 @@ pub fn run_icall_recovery(
 ) {
     println!("Starting SSA");
     let mut ssa_program = project.program.clone();
-    let mut logs = Vec::new();
-    let config: Config = serde_json::from_value(config.clone()).unwrap();
 
-    run_ir_pass![
-        ssa_program,
-        project,
-        SingleStaticAssigment,
-        logs,
-        debug_settings,
-    ];
+    let config: Config = serde_json::from_value(config.clone()).unwrap();
+    let mut pass = <SingleStaticAssigment>::new(&project);
+    pass.run(&mut ssa_program);
 
     println!("Building Block mem");
     let block_memory_model = build_memory_blocks(&ssa_program, &analysis_results, &config);
@@ -46,7 +40,12 @@ pub fn run_icall_recovery(
     let at_functions = get_at_functions(project);
 
     println!("Start Value Tracking");
-    let value_tracking = ValueTracking::new(&ssa_program, &block_memory_model, &at_functions);
+    let value_tracking = ValueTracking::new(
+        &ssa_program,
+        &block_memory_model,
+        &at_functions,
+        &pass.active_var_at_end_of_block,
+    );
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
         exit(0);

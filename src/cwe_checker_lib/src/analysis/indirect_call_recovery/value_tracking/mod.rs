@@ -5,7 +5,9 @@ use std::{
 };
 
 use crate::{
-    intermediate_representation::{Def, Expression, Jmp, Program, Variable},
+    intermediate_representation::{
+        ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program, Variable,
+    },
     prelude::{Bitvector, ByteSize, Term, Tid},
 };
 
@@ -22,20 +24,7 @@ use super::{
 type Symbol = Rc<String>;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Read(Symbol);
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Write(Symbol);
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Jump(Symbol);
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub enum Instr {
-    Read(Read),
-    Write(Write),
-    Jump(Jump),
-}
+pub struct Blk(Arc<Tid>);
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Mblk(Symbol);
@@ -134,9 +123,17 @@ ascent! {
     relation assign_mloc(Mloc, Exp);
     relation assing_deref_reg(Reg, Exp);
     relation undeterministic_assign(Reg, Mloc, Exp);
-    relation phi(Reg, Reg);
-
+    relation phi(Reg, Reg, Blk);
     relation assign(Loc, Exp);
+    relation aloc_val(Loc, Exp);
+
+    // To construct the new phi functions after adding an edge
+    // Active vars at end of block
+    relation reg_to_block(Reg, Blk);
+    // The target of an atfunction
+    relation atfunc_to_block(AtFunction, Blk);
+    // What regs are used for function call
+    relation used_func_call(Reg, Blk);
 
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg
@@ -145,9 +142,6 @@ ascent! {
     assign(mloc.into(), exp) <-- assign_mloc(mloc, exp);
     assign(mloc.into(), exp) <-- assing_deref_reg(reg, exp), aloc_val(Loc::Reg(reg.clone()), ?Exp::RefMLoc(mloc));
 
-    relation aloc_val(Loc, Exp);
-
-    relation vset(Exp, Exp);
 
     macro vset_mloc_func($v: ident, $exp: ident) {
         for $v in $exp.to_iter(),
@@ -232,7 +226,15 @@ ascent! {
         vset_deref_ireg!(val, exp);
 
     // Phi
-    aloc_val(Loc::Reg(ireg.clone()), val) <-- phi(ireg, sreg), aloc_val(Loc::Reg(sreg.clone()), val);
+    aloc_val(Loc::Reg(ireg.clone()), val) <-- phi(ireg, sreg, _), aloc_val(Loc::Reg(sreg.clone()), val);
+
+    // If, func to callsite, then create phi instruction
+    phi(target, ireg, blk) <--
+        aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),
+        used_func_call(ireg, blk),
+        phi(target, source, blk),
+        let base_reg = ireg.var.name.split("_").collect_vec()[0],
+        if target.var.name.split("_").collect_vec()[0] == base_reg;
 }
 
 /// Converts an Vec<Variable> to Tree like Exp expressions where the expressions is a union of all
@@ -263,6 +265,7 @@ pub struct ValueTracking<'a> {
     block_memory: &'a BlockMemoryModel,
     at_functions: &'a HashSet<AtFunction>,
     at_functions_by_addr: HashMap<u64, AtFunction>,
+    active_var_at_end_of_block: &'a VarsAtEndOfBlock,
 }
 
 impl ValueTracking<'_> {
@@ -306,6 +309,7 @@ impl ValueTracking<'_> {
         program: &'a Program,
         block_memory: &'a BlockMemoryModel,
         at_functions: &'a HashSet<AtFunction>,
+        active_var_at_end_of_block: &'a VarsAtEndOfBlock,
     ) -> ValueTracking<'a> {
         let mut at_functions_by_addr = HashMap::new();
         for func in at_functions {
@@ -317,6 +321,7 @@ impl ValueTracking<'_> {
             block_memory,
             at_functions,
             at_functions_by_addr,
+            active_var_at_end_of_block,
         }
     }
 
@@ -338,12 +343,13 @@ impl ValueTracking<'_> {
                         if let Some(interval) =
                             self.block_memory.global.get_interval_of_def(def.clone())
                         {
+                            let var = Arc::new(var.clone());
                             prog.assign_reg.push((
-                                Reg {
-                                    var: Arc::new(var.clone()),
-                                },
+                                Reg { var: var.clone() },
                                 Exp::Mloc(Mloc::Gblk(Gblk(interval.clone()))),
                             ));
+                            prog.reg_to_block
+                                .push((Reg { var: var.clone() }, Blk(Arc::new(blk.tid.clone()))));
                             continue;
                         }
 
@@ -424,14 +430,57 @@ impl ValueTracking<'_> {
                         }
                     }
                     // AssignReg
-                    Def::Assign { var, value } => prog.assign_reg.push((
-                        Reg {
-                            var: Arc::new(var.clone()),
-                        },
-                        self.expression_to_value_tracking(&value),
-                    )),
+                    Def::Assign { var, value } => {
+                        prog.reg_to_block.push((
+                            Reg {
+                                var: Arc::new(var.clone()),
+                            },
+                            Blk(Arc::new(blk.tid.clone())),
+                        ));
+                        prog.assign_reg.push((
+                            Reg {
+                                var: Arc::new(var.clone()),
+                            },
+                            self.expression_to_value_tracking(&value),
+                        ))
+                    }
                 }
             }
+        }
+
+        for blk in self.program.blocks() {
+            for jmp in blk.jmps() {
+                if !jmp.is_indirect_call() {
+                    continue;
+                }
+
+                if let Jmp::CallInd { target, .. } = &jmp.term {
+                    for input_var in target.input_vars() {
+                        prog.used_func_call.push((
+                            Reg {
+                                var: Arc::new(input_var.clone()),
+                            },
+                            Blk(Arc::new(blk.tid.clone())),
+                        ));
+                    }
+                }
+            }
+        }
+
+        for (blk, active_vars) in self.active_var_at_end_of_block {
+            for var in active_vars {
+                prog.reg_to_block.push((
+                    Reg {
+                        var: Arc::new(var.clone()),
+                    },
+                    Blk(blk.clone().into()),
+                ))
+            }
+        }
+
+        for atfunction in self.at_functions {
+            prog.atfunc_to_block
+                .push((atfunction.clone(), Blk(atfunction.tid.clone().into())));
         }
 
         // inject heap values:
@@ -445,20 +494,12 @@ impl ValueTracking<'_> {
                 is_temp: true,
                 size: heap_target_var.size,
             };
-            prog.assign_reg.push((
-                Reg {
+            prog.aloc_val.push((
+                Loc::Reg(Reg {
                     var: Arc::new(temp_var.clone()),
-                },
+                }),
                 Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
             ));
-            prog.phi.push((
-                Reg {
-                    var: Arc::new(heap_target_var.clone()),
-                },
-                Reg {
-                    var: Arc::new(temp_var.clone()),
-                },
-            ))
         }
 
         // similar to heap, do stack
@@ -488,7 +529,8 @@ impl ValueTracking<'_> {
                 Reg {
                     var: Arc::new(temp_var.clone()),
                 },
-            ))
+                Blk(Arc::new(stack_blk.func_tid.clone())),
+            ));
         }
 
         prog.run();
@@ -497,8 +539,7 @@ impl ValueTracking<'_> {
         for (loc, expr) in prog.aloc_val {
             if let Exp::RefFunc(func) = expr {
                 if let Loc::Reg(reg) = loc {
-                    let vec = map
-                        .get(&reg.var)
+                    let vec = map.get(&reg.var);
                     //map.insert(reg.var.clone(), func);
                 }
             }
