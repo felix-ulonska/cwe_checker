@@ -105,11 +105,14 @@ impl StackBlockBoundaries {
         }
 
         for (var, state) in &analysis_result.state.register_state {
+            let Some(target) = state.get_if_unique_target() else {
+                continue;
+            };
+            let Ok(offset) = target.1.try_to_offset() else {
+                continue;
+            };
             for stack_block in &stack_blocks {
-                let Ok(val) = state.try_to_offset() else {
-                    continue;
-                };
-                if stack_block.min <= val && stack_block.max >= val {
+                if stack_block.min <= offset && stack_block.max >= offset {
                     self.map_register_to_stack
                         .insert(var.clone(), stack_block.clone());
                 }

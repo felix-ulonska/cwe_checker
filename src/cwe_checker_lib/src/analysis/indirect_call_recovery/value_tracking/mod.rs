@@ -1,30 +1,16 @@
 pub mod convert_to_ascent_prog;
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{fmt::Display, rc::Rc, sync::Arc};
 
-use crate::{
-    intermediate_representation::{
-        ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program, Variable,
-    },
-    prelude::{Bitvector, ByteSize, Term, Tid},
-};
+use crate::{intermediate_representation::Variable, prelude::Tid};
 
 use ascent::ascent;
 use itertools::Itertools;
 
 use super::{
     function_taken::AtFunction,
-    memory_block_gen::{
-        global_block::Interval, heap_block::HeapBlock, stack_block::StackBlock, BlockMemoryModel,
-    },
+    memory_block_gen::{global_block::Interval, heap_block::HeapBlock, stack_block::StackBlock},
 };
-
-type Symbol = Rc<String>;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Blk(Arc<Tid>);
@@ -39,7 +25,17 @@ impl Display for Blk {
 pub struct Sblk(Arc<StackBlock>);
 impl Display for Sblk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        let min_str = if self.0.min == i64::MIN {
+            "-inf"
+        } else {
+            &self.0.min.to_string()
+        };
+        let max_str = if self.0.min == i64::MIN {
+            "+inf"
+        } else {
+            &self.0.max.to_string()
+        };
+        write!(f, "Sblk({}:[{}, {}])", self.0.func_tid, min_str, max_str)
     }
 }
 
@@ -154,15 +150,6 @@ impl From<&Mloc> for Loc {
     }
 }
 
-macro_rules! aloc_val_with_vset {
-    ($vset_macro:ident) => {
-        aloc_val(ireg.into(), val) <--
-            assign_reg(ireg, union),
-            if let Exp::Union(exp1, exp2) = union,
-            $vset_macro!(val, union);
-    };
-}
-
 ascent! {
     relation assign_reg(Reg, Exp);
     relation assign_mloc(Mloc, Exp);
@@ -217,7 +204,8 @@ ascent! {
     // AddrMloc and AddrFunc
     aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::Mloc(_) | Exp::RefFunc(_)));
     // IReg and Mloc
-    aloc_val(loc, val) <-- assign(loc, exp), aloc_val(loc, val);
+    aloc_val(loc, val) <-- assign(loc, ?Exp::Reg(src_reg)), aloc_val(Loc::Reg(src_reg.clone()), val);
+    aloc_val(loc, val) <-- assign(loc, ?Exp::Mloc(src_loc)), aloc_val(Loc::Mloc(src_loc.clone()), val);
     // DIreg
     aloc_val(loc, val) <--
         assign(loc, ?Exp::Deref(src_reg)),
@@ -273,7 +261,9 @@ ascent! {
         vset_deref_ireg!(val, exp);
 
     // Phi
-    aloc_val(Loc::Reg(ireg.clone()), val) <-- phi(ireg, sreg, _), aloc_val(Loc::Reg(sreg.clone()), val);
+    aloc_val(Loc::Reg(target_reg.clone()), val) <--
+        phi(target_reg, source_reg, _),
+        aloc_val(Loc::Reg(source_reg.clone()), val);
 
     func_call_targets(blk, func) <--
         aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),
@@ -281,12 +271,14 @@ ascent! {
 
 
     // If, func to callsite, then create phi instruction
-    phi(target, ireg, blk) <--
-        aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),
-        used_func_call(ireg, blk),
-        phi(target, source, blk),
-        let base_reg = ireg.var.name.split("_").collect_vec()[0],
-        if target.var.name.split("_").collect_vec()[0] == base_reg;
+    phi(target_reg, ireg, target_blk) <--
+        func_call_targets(src_blk, func),
+        atfunc_to_block(func, target_blk),
+        reg_to_block(ireg, src_blk),
+        reg_to_block(target_reg, target_blk),
+        let src_base_reg = ireg.var.name.split("_").collect_vec()[0],
+        let target_base_reg = target_reg.var.name.split("_").collect_vec()[0],
+        if src_base_reg == target_base_reg;
 }
 
 /// Converts an Vec<Variable> to Tree like Exp expressions where the expressions is a union of all
