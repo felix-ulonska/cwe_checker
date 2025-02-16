@@ -204,7 +204,8 @@ impl<'a> StackAnalysis<'a> {
                     .windows(2)
                     .all(|val| val[0] == val[1]);
                 if inputs.len() == 0 || !all_values_same {
-                    return BoundaryCanidate::new_top(ByteSize::new(0));
+                    // TODO use correct size
+                    return BoundaryCanidate::new_top(ByteSize::new(8));
                 }
                 self.state.get_register(&inputs[0])
             }
@@ -263,7 +264,7 @@ impl<'a> StackAnalysis<'a> {
             crate::abstract_domain::AbstractLocation::from_stack_position(
                 &stack_reg,
                 0,
-                ByteSize::new(0),
+                ByteSize::new(8),
             ),
         );
         let init_rsp = BoundaryCanidate::from_target(
@@ -338,7 +339,7 @@ impl State {
     fn get_register(&self, variable: &Variable) -> BoundaryCanidate {
         self.register_state
             .get(variable)
-            .unwrap_or(&BoundaryCanidate::new_top(ByteSize::new(0)))
+            .unwrap_or(&BoundaryCanidate::new_top(ByteSize::new(8)))
             .clone()
     }
 
