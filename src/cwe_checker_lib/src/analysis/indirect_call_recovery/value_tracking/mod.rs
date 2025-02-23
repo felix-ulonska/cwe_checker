@@ -100,7 +100,7 @@ impl Display for Loc {
 pub enum Exp {
     Empty,
     Reg(Reg),
-    Mloc(Mloc),
+    //Mloc(Mloc),
     Deref(Reg),
     RefMLoc(Mloc),
     RefFunc(AtFunction),
@@ -112,7 +112,7 @@ impl Display for Exp {
         match self {
             Exp::Empty => write!(f, "Empty"),
             Exp::Reg(reg) => write!(f, "{}", reg.var.name),
-            Exp::Mloc(mloc) => write!(f, "{}", mloc),
+            //Exp::Mloc(mloc) => write!(f, "{}", mloc),
             Exp::Deref(deref) => write!(f, "*{}", deref.var.name),
             Exp::RefMLoc(ref_mloc) => write!(f, "&{}", ref_mloc),
             Exp::RefFunc(ref_func) => write!(f, "&{}", ref_func),
@@ -135,7 +135,7 @@ impl From<Exp> for Loc {
     fn from(value: Exp) -> Self {
         match value {
             Exp::Reg(reg) => Loc::Reg(reg),
-            Exp::Mloc(mloc) => Loc::Mloc(mloc),
+            Exp::RefMLoc(mloc) => Loc::Mloc(mloc),
             _ => todo!(),
         }
     }
@@ -204,7 +204,7 @@ ascent! {
 
     macro vset_mloc($v: ident, $exp: ident) {
         for exp in $exp.to_iter(),
-        if let Exp::Mloc(mloc) = exp,
+        if let Exp::RefMLoc(mloc) = exp,
         aloc_val(Loc::Mloc(mloc), $v)
     }
 
@@ -216,10 +216,10 @@ ascent! {
     }
 
     // AddrMloc and AddrFunc
-    aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::Mloc(_) | Exp::RefFunc(_)), _);
+    aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::RefMLoc(_) | Exp::RefFunc(_)), _);
     // IReg and Mloc
     aloc_val(loc, val) <-- assign(loc, ?Exp::Reg(src_reg), _), aloc_val(Loc::Reg(src_reg.clone()), val);
-    aloc_val(loc, val) <-- assign(loc, ?Exp::Mloc(src_loc), _), aloc_val(Loc::Mloc(src_loc.clone()), val);
+    aloc_val(loc, val) <-- assign(loc, ?Exp::RefMLoc(src_loc), _), aloc_val(Loc::Mloc(src_loc.clone()), val);
     // DIreg
     aloc_val(loc, val) <--
         assign(loc, ?Exp::Deref(src_reg), _),
@@ -229,7 +229,7 @@ ascent! {
     // Direg but not with refmloc, might be bad?
     aloc_val(loc, val) <--
         assign(loc, ?Exp::Deref(src_reg), _),
-        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::Mloc(mloc)),
+        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
         aloc_val(Loc::Mloc(mloc.clone()), val);
 
     aloc_val(loc, v) <--
@@ -358,7 +358,5 @@ mod tests {
     use super::AscentProgram;
 
     #[test]
-    fn test_ssa() {
-        let prog = AscentProgram::default();
-    }
+    fn test_ssa() {}
 }

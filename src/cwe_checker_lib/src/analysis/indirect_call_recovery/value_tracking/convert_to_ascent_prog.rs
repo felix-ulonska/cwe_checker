@@ -45,7 +45,7 @@ impl ValueTracking<'_> {
         }
 
         if let Some(interval) = self.block_memory.global.get_interval(val as i64) {
-            return Exp::Mloc(Mloc::Gblk(Gblk(interval.clone())));
+            return Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone())));
         }
 
         Exp::Empty
@@ -105,7 +105,7 @@ impl ValueTracking<'_> {
                             let var = Arc::new(var.clone());
                             self.ascent_prog.assign_reg.push((
                                 Reg { var: var.clone() },
-                                Exp::Mloc(Mloc::Gblk(Gblk(interval.clone()))),
+                                Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone()))),
                                 def.tid.clone(),
                             ));
                             self.ascent_prog
@@ -271,7 +271,7 @@ impl ValueTracking<'_> {
                 Loc::Reg(Reg {
                     var: Arc::new(heap_target_var.clone()),
                 }),
-                Exp::Mloc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
+                Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
             ));
         }
     }
@@ -287,7 +287,7 @@ impl ValueTracking<'_> {
                     var: Arc::new(stack_target_var.clone()),
                 }
                 .into(),
-                Exp::Mloc(Mloc::Sblk(Sblk(Arc::new(stack_blk.clone())))),
+                Exp::RefMLoc(Mloc::Sblk(Sblk(Arc::new(stack_blk.clone())))),
             ));
         }
     }
@@ -333,7 +333,7 @@ impl ValueTracking<'_> {
                         refered_values.push(exp.0.clone());
                     }
                 }
-                Exp::Mloc(mloc) => {
+                Exp::RefMLoc(mloc) => {
                     let Some(exps) = self.ascent_prog.aloc_val_indices_0.0.get(&(mloc.into(),))
                     else {
                         continue;
@@ -342,7 +342,7 @@ impl ValueTracking<'_> {
                         refered_values.push(exp.0.clone());
                     }
                 }
-                Exp::Deref(_) | Exp::RefMLoc(_) | Exp::RefFunc(_) => {
+                Exp::Deref(_) | Exp::RefFunc(_) => {
                     refered_values.push(exp.clone());
                 }
                 _ => (),
@@ -370,7 +370,7 @@ impl ValueTracking<'_> {
                     //        .join(",")
                     //);
                     for exp in exps {
-                        if let Exp::Mloc(mloc) = &exp.0 {
+                        if let Exp::RefMLoc(mloc) = &exp.0 {
                             refered_values.push(mloc.clone());
                         }
                         if let Exp::RefMLoc(mloc) = &exp.0 {
@@ -378,9 +378,9 @@ impl ValueTracking<'_> {
                         }
                     }
                 }
-                Exp::Mloc(mloc) => refered_values.push(mloc.into()),
+                //Exp::Mloc(mloc) => refered_values.push(mloc.into()),
                 Exp::Deref(_) => (),
-                Exp::RefMLoc(_) => (),
+                Exp::RefMLoc(mloc) => refered_values.push(mloc.into()),
                 Exp::RefFunc(_) => (),
                 Exp::Union(_, _) => (),
             }
