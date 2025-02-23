@@ -2,7 +2,10 @@ pub mod convert_to_ascent_prog;
 
 use std::{fmt::Display, rc::Rc, sync::Arc};
 
-use crate::{intermediate_representation::Variable, prelude::Tid};
+use crate::{
+    intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
+    prelude::Tid,
+};
 
 use ascent::ascent;
 use itertools::Itertools;
@@ -84,6 +87,15 @@ pub enum Loc {
     Reg(Reg),
 }
 
+impl Display for Loc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Loc::Reg(reg) => write!(f, "{}", reg.var.name),
+            Loc::Mloc(mloc) => write!(f, "{}", mloc),
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Exp {
     Empty,
@@ -151,12 +163,13 @@ impl From<&Mloc> for Loc {
 }
 
 ascent! {
-    relation assign_reg(Reg, Exp);
-    relation assign_mloc(Mloc, Exp);
-    relation assing_deref_reg(Reg, Exp);
+    // ID is for tracking
+    relation assign_reg(Reg, Exp, Tid);
+    relation assign_mloc(Mloc, Exp, Tid);
+    relation assing_deref_reg(Reg, Exp, Tid);
     relation undeterministic_assign(Reg, Mloc, Exp);
     relation phi(Reg, Reg, Blk);
-    relation assign(Loc, Exp);
+    relation assign(Loc, Exp, Tid);
     relation aloc_val(Loc, Exp);
 
     // To construct the new phi functions after adding an edge
@@ -171,12 +184,13 @@ ascent! {
 
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg
-    assign(reg.into(), exp) <-- assign_reg(reg, exp);
+    assign(reg.into(), exp, id) <-- assign_reg(reg, exp, id);
     // assign_mloc: change for rules
-    assign(mloc.into(), exp) <-- assign_mloc(mloc, exp);
-    assign(mloc.into(), exp) <-- assing_deref_reg(reg, exp), aloc_val(Loc::Reg(reg.clone()), ?Exp::RefMLoc(mloc));
+    assign(mloc.into(), exp, id) <-- assign_mloc(mloc, exp, id);
+    assign(mloc.into(), exp, id) <-- assing_deref_reg(reg, exp, id), aloc_val(Loc::Reg(reg.clone()), ?Exp::RefMLoc(mloc));
 
 
+    // v in exp
     macro vset_mloc_func($v: ident, $exp: ident) {
         for $v in $exp.to_iter(),
         if let Exp::RefFunc(_) | Exp::RefMLoc(_) = $v,
@@ -202,61 +216,67 @@ ascent! {
     }
 
     // AddrMloc and AddrFunc
-    aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::Mloc(_) | Exp::RefFunc(_)));
+    aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::Mloc(_) | Exp::RefFunc(_)), _);
     // IReg and Mloc
-    aloc_val(loc, val) <-- assign(loc, ?Exp::Reg(src_reg)), aloc_val(Loc::Reg(src_reg.clone()), val);
-    aloc_val(loc, val) <-- assign(loc, ?Exp::Mloc(src_loc)), aloc_val(Loc::Mloc(src_loc.clone()), val);
+    aloc_val(loc, val) <-- assign(loc, ?Exp::Reg(src_reg), _), aloc_val(Loc::Reg(src_reg.clone()), val);
+    aloc_val(loc, val) <-- assign(loc, ?Exp::Mloc(src_loc), _), aloc_val(Loc::Mloc(src_loc.clone()), val);
     // DIreg
     aloc_val(loc, val) <--
-        assign(loc, ?Exp::Deref(src_reg)),
+        assign(loc, ?Exp::Deref(src_reg), _),
         aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
         aloc_val(Loc::Mloc(mloc.clone()), val);
 
+    // Direg but not with refmloc, might be bad?
+    aloc_val(loc, val) <--
+        assign(loc, ?Exp::Deref(src_reg), _),
+        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::Mloc(mloc)),
+        aloc_val(Loc::Mloc(mloc.clone()), val);
+
     aloc_val(loc, v) <--
-        assign(loc, union),
+        assign(loc, union, _),
         if let Exp::Union(exp1, exp2) = union,
         vset_mloc_func!(v, union);
 
     // Vset(ireg)
     aloc_val(loc, v) <--
-        assign(loc, union),
+        assign(loc, union, _),
         if let Exp::Union(exp1, exp2) = union,
         vset_ireg!(v, union);
 
     // Vset(mloc)
     aloc_val(loc, v) <--
-        assign(loc, union),
+        assign(loc, union, _),
         if let Exp::Union(exp1, exp2) = union,
         vset_mloc!(v, union);
 
     // Vset(*ireg)
     aloc_val(loc, v) <--
-        assign(loc, union),
+        assign(loc, union, _),
         if let Exp::Union(exp1, exp2) = union,
         vset_deref_ireg!(v, union);
 
     // UpdMloc
     // Vset(&mloc) and Vset(&func)
     aloc_val(mloc.into(), v) <--
-        assing_deref_reg(ireg, exp),
+        assing_deref_reg(ireg, exp, _),
         aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
         vset_mloc_func!(v, exp);
 
     // Vset(ireg)
     aloc_val(Loc::Mloc(mloc.clone()), val) <--
-        assing_deref_reg(ireg, exp),
+        assing_deref_reg(ireg, exp, _),
         aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
         vset_ireg!(val, exp);
 
     // Vset(mloc)
     aloc_val(Loc::Mloc(mloc.clone()), val) <--
-        assing_deref_reg(ireg, exp),
+        assing_deref_reg(ireg, exp, _),
         aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
         vset_mloc!(val, exp);
 
     // Vset(*ireg)
     aloc_val(Loc::Mloc(mloc.clone()), val) <--
-        assing_deref_reg(ireg, exp),
+        assing_deref_reg(ireg, exp, _),
         aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
         vset_deref_ireg!(val, exp);
 
@@ -276,8 +296,8 @@ ascent! {
         atfunc_to_block(func, target_blk),
         reg_to_block(ireg, src_blk),
         reg_to_block(target_reg, target_blk),
-        let src_base_reg = ireg.var.name.split("_").collect_vec()[0],
-        let target_base_reg = target_reg.var.name.split("_").collect_vec()[0],
+        let src_base_reg = ireg.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
+        let target_base_reg = target_reg.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
         if src_base_reg == target_base_reg;
 }
 
@@ -306,4 +326,39 @@ fn build_union_of_vars(vars: &Vec<&Variable>) -> Exp {
 
     exps.pop()
         .expect("A vlaue should exist, the check is right bevor this line")
+}
+
+fn build_union_of_vars_as_deref(vars: &Vec<&Variable>) -> Exp {
+    let mut exps = vars
+        .into_iter()
+        .map(|var| {
+            Exp::Deref(Reg {
+                var: Arc::new(var.clone().clone()),
+            })
+        })
+        .collect_vec();
+
+    if exps.len() == 0 {
+        return Exp::Empty;
+    }
+
+    // Terminates as each iter, 2 pops and 1 add.
+    while exps.len() > 1 {
+        let exp_first = exps.pop().unwrap();
+        let exp_second = exps.pop().unwrap();
+        exps.push(Exp::Union(Arc::new(exp_first), Arc::new(exp_second)));
+    }
+
+    exps.pop()
+        .expect("A vlaue should exist, the check is right bevor this line")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AscentProgram;
+
+    #[test]
+    fn test_ssa() {
+        let prog = AscentProgram::default();
+    }
 }

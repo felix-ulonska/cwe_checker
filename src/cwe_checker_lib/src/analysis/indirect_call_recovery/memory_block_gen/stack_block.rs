@@ -9,7 +9,9 @@ use crate::{
     abstract_domain::{
         AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec,
     },
-    intermediate_representation::{BinOpType, Def, Expression, Program, Sub as Function, Variable},
+    intermediate_representation::{
+        ir_passes::SPLIT_SYMBOL, BinOpType, Def, Expression, Program, Sub as Function, Variable,
+    },
     prelude::{Bitvector, ByteSize, Term, Tid},
 };
 
@@ -160,7 +162,7 @@ impl<'a> StackAnalysis<'a> {
         let blocks = &self.function.blocks;
         for def in blocks[0].defs() {
             if let Def::Assign { var, .. } = &def.term {
-                if var.name.split("_").collect_vec()[0] == "RSP" {
+                if var.name.split(SPLIT_SYMBOL).collect_vec()[0] == "RSP" {
                     return var.clone();
                 }
             }
@@ -411,10 +413,10 @@ mod tests {
     #[test]
     fn test_stack_analysis() {
         let project = build_prog_with_block(defs![
-            "term_1: RSP_1:8 = phi()",
-            "term_1_1: RAX_1:8 = phi()",
-            "term_2: RSP_2:8 = RSP_1:8 + 0x08:8",
-            "term_3: RAX_1:8 = RSP_2:8 + 0x08:8"
+            "term_1: RSP__1:8 = phi()",
+            "term_1_1: RAX__1:8 = phi()",
+            "term_2: RSP__2:8 = RSP__1:8 + 0x08:8",
+            "term_3: RAX__1:8 = RSP__2:8 + 0x08:8"
         ]);
         let mut stack_analysis =
             StackAnalysis::new(&project.program.term.subs.first_key_value().unwrap().1);
