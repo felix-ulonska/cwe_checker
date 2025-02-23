@@ -10,11 +10,12 @@ pub struct AtFunction {
     pub tid: Tid,
     pub first_instruction: u64,
     pub first_block_tid: Tid,
+    pub name: String,
 }
 
 impl Display for AtFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AtFunction: {}", self.tid)
+        write!(f, "AtFunction: {}", self.name)
     }
 }
 
@@ -25,12 +26,14 @@ pub fn get_at_functions(project: &Project) -> HashSet<AtFunction> {
 
     let mut first_instruction_to_func = HashMap::new();
     let mut func_to_first_block = HashMap::new();
+    let mut func_to_name = HashMap::new();
 
     for function in program.functions() {
         first_instruction_to_func.insert(function.code_range().0, function.tid.clone());
         let Some(first_block) = function.blocks().next() else {
             continue;
         };
+        func_to_name.insert(function.tid.clone(), function.name.clone());
         func_to_first_block.insert(function.tid.clone(), first_block.tid.clone());
     }
 
@@ -43,10 +46,14 @@ pub fn get_at_functions(project: &Project) -> HashSet<AtFunction> {
         let Some(block_tid) = func_to_first_block.get(&(function_tid)) else {
             continue;
         };
+        let Some(name) = func_to_name.get(&(function_tid)) else {
+            continue;
+        };
         adress_taken_function.insert(AtFunction {
             tid: function_tid.clone(),
             first_instruction: code_ref.to as u64,
             first_block_tid: block_tid.clone(),
+            name: name.clone(),
         });
     }
 

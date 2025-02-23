@@ -123,6 +123,12 @@ impl StackBlockBoundaries {
     }
 }
 
+impl Display for StackBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}[{}-{}]", self.func_tid, self.min, self.max)
+    }
+}
+
 // TODO: add jsonCompact Trait
 impl Display for StackBlockBoundaries {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -132,6 +138,9 @@ impl Display for StackBlockBoundaries {
                 write!(f, "{},", boundary)?;
             }
             writeln!(f, "")?;
+        }
+        for (reg, blk) in &self.map_register_to_stack {
+            writeln!(f, "reg{}: {}", reg, blk);
         }
 
         Ok(())
@@ -364,6 +373,7 @@ impl Display for State {
             }
             write!(f, "\n")?;
         }
+
         Ok(())
     }
 }

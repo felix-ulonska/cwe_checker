@@ -23,6 +23,7 @@ pub fn build_memory_blocks(
     config: &Config,
 ) -> BlockMemoryModel {
     let stack_boundaries = build_stack_block(program);
+    println!("Stack Boundaries: {}", stack_boundaries);
     let global_boundaries = build_global_memory_blocks(
         program,
         analysis

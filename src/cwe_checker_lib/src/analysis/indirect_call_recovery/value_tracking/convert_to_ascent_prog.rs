@@ -278,10 +278,7 @@ impl ValueTracking<'_> {
 
     fn add_stack_aloc_val(&mut self) {
         for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
-            println!(
-                "Adding stack block {} <- {}",
-                stack_target_var, stack_blk.func_tid
-            );
+            println!("Adding stack block {} <- {}", stack_target_var, stack_blk);
             self.ascent_prog.aloc_val.push((
                 Reg {
                     var: Arc::new(stack_target_var.clone()),
@@ -370,9 +367,6 @@ impl ValueTracking<'_> {
                     //        .join(",")
                     //);
                     for exp in exps {
-                        if let Exp::RefMLoc(mloc) = &exp.0 {
-                            refered_values.push(mloc.clone());
-                        }
                         if let Exp::RefMLoc(mloc) = &exp.0 {
                             refered_values.push(mloc.clone());
                         }

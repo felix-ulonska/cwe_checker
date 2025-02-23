@@ -33,7 +33,7 @@ impl Display for Sblk {
         } else {
             &self.0.min.to_string()
         };
-        let max_str = if self.0.min == i64::MIN {
+        let max_str = if self.0.max == i64::MAX {
             "+inf"
         } else {
             &self.0.max.to_string()
