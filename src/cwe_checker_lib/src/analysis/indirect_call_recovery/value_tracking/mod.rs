@@ -7,7 +7,7 @@ use crate::{
     prelude::Tid,
 };
 
-use ascent::ascent;
+use ascent::{ascent, ascent_par};
 use itertools::Itertools;
 
 use super::{
@@ -162,7 +162,7 @@ impl From<&Mloc> for Loc {
     }
 }
 
-ascent! {
+ascent_par! {
     // ID is for tracking
     relation assign_reg(Reg, Exp, Tid);
     relation assign_mloc(Mloc, Exp, Tid);

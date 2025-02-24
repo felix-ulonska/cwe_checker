@@ -194,7 +194,7 @@ impl ValueTracking<'_> {
                                         var: source_var.clone().into(),
                                     },
                                     Blk(blk.tid.clone().into()),
-                                ))
+                                ));
                             }
                         } else {
                             self.ascent_prog.reg_to_block.push((
@@ -209,7 +209,7 @@ impl ValueTracking<'_> {
                                 },
                                 self.expression_to_value_tracking(&value),
                                 def.tid.clone(),
-                            ))
+                            ));
                         }
                     }
                 }
@@ -270,7 +270,7 @@ impl ValueTracking<'_> {
                         var: Arc::new(var.clone()),
                     },
                     Blk(blk.clone().into()),
-                ))
+                ));
             }
         }
     }
@@ -316,10 +316,6 @@ impl ValueTracking<'_> {
 
     fn convert(&mut self) {
         let prog = &mut self.ascent_prog;
-        prog.assign_reg = vec![];
-        prog.assign_mloc = vec![];
-        prog.assing_deref_reg = vec![];
-        prog.undeterministic_assign = vec![];
 
         self.convert_def_to_ascent();
         self.add_reg_to_block();
@@ -348,20 +344,28 @@ impl ValueTracking<'_> {
             match value {
                 Exp::Empty => (),
                 Exp::Reg(reg) => {
-                    let Some(exps) = self.ascent_prog.aloc_val_indices_0.0.get(&(reg.into(),))
+                    let Some(exps) = self
+                        .ascent_prog
+                        .aloc_val_indices_0
+                        .unwrap_unfrozen()
+                        .get(&(reg.into(),))
                     else {
                         continue;
                     };
-                    for exp in exps {
+                    for exp in exps.iter() {
                         refered_values.push(exp.0.clone());
                     }
                 }
                 Exp::RefMLoc(mloc) => {
-                    let Some(exps) = self.ascent_prog.aloc_val_indices_0.0.get(&(mloc.into(),))
+                    let Some(exps) = self
+                        .ascent_prog
+                        .aloc_val_indices_0
+                        .unwrap_unfrozen()
+                        .get(&(mloc.into(),))
                     else {
                         continue;
                     };
-                    for exp in exps {
+                    for exp in exps.iter() {
                         refered_values.push(exp.0.clone());
                     }
                 }
@@ -381,7 +385,11 @@ impl ValueTracking<'_> {
             match value {
                 Exp::Empty => (),
                 Exp::Reg(reg) => {
-                    let Some(exps) = self.ascent_prog.aloc_val_indices_0.0.get(&(reg.into(),))
+                    let Some(exps) = self
+                        .ascent_prog
+                        .aloc_val_indices_0
+                        .unwrap_unfrozen()
+                        .get(&(reg.into(),))
                     else {
                         continue;
                     };
@@ -392,7 +400,7 @@ impl ValueTracking<'_> {
                     //        .collect_vec()
                     //        .join(",")
                     //);
-                    for exp in exps {
+                    for exp in exps.iter() {
                         if let Exp::RefMLoc(mloc) = &exp.0 {
                             refered_values.push(mloc.clone());
                         }
@@ -427,7 +435,12 @@ impl ValueTracking<'_> {
             //if let Exp::RefFunc(ref ref_func) = value {
             //    refered_values.push(ref_func.clone());
             //}
-            let Some(exps) = self.ascent_prog.aloc_val_indices_0.0.get(&(value.into(),)) else {
+            let Some(exps) = self
+                .ascent_prog
+                .aloc_val_indices_0
+                .unwrap_unfrozen()
+                .get(&(value.into(),))
+            else {
                 continue;
             };
             if !exps.is_empty() {
@@ -475,9 +488,11 @@ impl Display for ValueTracking<'_> {
                                     .join(",")
                             )?;
                             let Some(exps) =
-                                self.ascent_prog.aloc_val_indices_0.0.get(&(Loc::Reg(Reg {
-                                    var: var.clone().into(),
-                                }),))
+                                self.ascent_prog.aloc_val_indices_0.unwrap_unfrozen().get(&(
+                                    Loc::Reg(Reg {
+                                        var: var.clone().into(),
+                                    }),
+                                ))
                             else {
                                 writeln!(f, "\t\t{} := {{}}", var.name)?;
                                 continue;
@@ -522,7 +537,7 @@ impl Display for ValueTracking<'_> {
                                 let Some(exps) = self
                                     .ascent_prog
                                     .aloc_val_indices_0
-                                    .0
+                                    .unwrap_unfrozen()
                                     .get(&(Loc::Mloc(refed_locs.clone().into()),))
                                 else {
                                     continue;
@@ -558,9 +573,11 @@ impl Display for ValueTracking<'_> {
                                 writeln!(f, "[!]\t\t{} := {}", assign.0, assign.1)?;
                             }
                             let Some(exps) =
-                                self.ascent_prog.aloc_val_indices_0.0.get(&(Loc::Reg(Reg {
-                                    var: var.clone().into(),
-                                }),))
+                                self.ascent_prog.aloc_val_indices_0.unwrap_unfrozen().get(&(
+                                    Loc::Reg(Reg {
+                                        var: var.clone().into(),
+                                    }),
+                                ))
                             else {
                                 continue;
                             };
@@ -599,10 +616,15 @@ impl Display for ValueTracking<'_> {
 
         for loc in all_locs {
             writeln!(f, "{}: ", loc)?;
-            let Some(exps) = self.ascent_prog.aloc_val_indices_0.0.get(&(loc.clone(),)) else {
+            let Some(exps) = self
+                .ascent_prog
+                .aloc_val_indices_0
+                .unwrap_unfrozen()
+                .get(&(loc.clone(),))
+            else {
                 continue;
             };
-            for exp in exps {
+            for exp in exps.iter() {
                 writeln!(f, "'\t{}: ", exp.0)?;
             }
         }
