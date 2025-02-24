@@ -1,8 +1,9 @@
+use ascent::rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use itertools::Itertools;
 
 use crate::{
     analysis::indirect_call_recovery::{
-        function_taken::AtFunction,
+        function_taken::Function,
         memory_block_gen::BlockMemoryModel,
         value_tracking::{build_union_of_vars, Blk, Hblk, Loc, Reg},
     },
@@ -27,8 +28,8 @@ use super::{build_union_of_vars_as_deref, AscentProgram, Exp, Gblk, Mloc, Sblk};
 pub struct ValueTracking<'a> {
     program: &'a Program,
     block_memory: &'a BlockMemoryModel,
-    at_functions: &'a HashSet<AtFunction>,
-    at_functions_by_addr: HashMap<u64, AtFunction>,
+    at_functions: &'a HashSet<Function>,
+    at_functions_by_addr: HashMap<u64, Function>,
     active_var_at_end_of_block: &'a VarsAtEndOfBlock,
     ascent_prog: AscentProgram,
 }
@@ -73,7 +74,7 @@ impl ValueTracking<'_> {
     pub fn new<'a>(
         program: &'a Program,
         block_memory: &'a BlockMemoryModel,
-        at_functions: &'a HashSet<AtFunction>,
+        at_functions: &'a HashSet<Function>,
         active_var_at_end_of_block: &'a VarsAtEndOfBlock,
     ) -> ValueTracking<'a> {
         let mut at_functions_by_addr = HashMap::new();
@@ -216,6 +217,30 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn add_return_statements(&mut self) {
+        for (tid, term) in &self.program.subs {
+            let Some(at_func) = self
+                .at_functions
+                .par_iter()
+                .find_any(|at_fun| at_fun.tid == *tid)
+            else {
+                println!("Warning: Missing AT Function");
+                continue;
+            };
+
+            for blk in term.blocks() {
+                for jmp in blk.jmps() {
+                    // assume: no mods to ret register. We return to the call instr
+                    if let Jmp::Return(..) = &jmp.term {
+                        self.ascent_prog
+                            .block_with_return_of_at_function
+                            .push((Blk(blk.tid.clone().into()), at_func.clone()));
+                    }
+                }
+            }
+        }
+    }
+
     fn add_used_func_call(&mut self) {
         for blk in self.program.blocks() {
             for jmp in blk.jmps() {
@@ -302,6 +327,7 @@ impl ValueTracking<'_> {
         self.add_stack_aloc_val();
         self.add_used_func_call();
         self.add_heap_aloc_val();
+        self.add_return_statements();
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and
@@ -515,6 +541,19 @@ impl Display for ValueTracking<'_> {
                             }
                         }
                         Def::Assign { var, value } => {
+                            if let Expression::Phi(..) = value {
+                                let phi_funcs = self.ascent_prog.phi.iter().filter(|phi| {
+                                    phi.0
+                                        == Reg {
+                                            var: var.clone().into(),
+                                        }
+                                });
+                                write!(f, "[!]\t\t{} <-- phi(", var.name)?;
+                                for phi_func in phi_funcs {
+                                    write!(f, "{},", phi_func.1.var.name)?;
+                                }
+                                writeln!(f, ")")?;
+                            }
                             if let Some(assign) = self.get_assign(&def.tid) {
                                 writeln!(f, "[!]\t\t{} := {}", assign.0, assign.1)?;
                             }

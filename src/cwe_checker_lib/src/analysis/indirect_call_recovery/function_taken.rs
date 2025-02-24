@@ -1,59 +1,46 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-};
+use std::{collections::HashSet, fmt::Display};
 
 use crate::{intermediate_representation::Project, prelude::Tid};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct AtFunction {
+pub struct Function {
     pub tid: Tid,
     pub first_instruction: u64,
     pub first_block_tid: Tid,
     pub name: String,
+    pub is_at_function: bool,
 }
 
-impl Display for AtFunction {
+impl Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "AtFunction: {}", self.name)
     }
 }
 
 /// Get all adress taken functions.
-pub fn get_at_functions(project: &Project) -> HashSet<AtFunction> {
+pub fn get_at_functions(project: &Project) -> HashSet<Function> {
     let program = &project.program;
     let code_refs = &project.code_references;
 
-    let mut first_instruction_to_func = HashMap::new();
-    let mut func_to_first_block = HashMap::new();
-    let mut func_to_name = HashMap::new();
+    let mut adress_taken_function = HashSet::new();
+
+    let mut used_first_addresses = HashSet::new();
+
+    for code_ref in code_refs {
+        used_first_addresses.insert(code_ref.to as u64);
+    }
 
     for function in program.functions() {
-        first_instruction_to_func.insert(function.code_range().0, function.tid.clone());
         let Some(first_block) = function.blocks().next() else {
             continue;
         };
-        func_to_name.insert(function.tid.clone(), function.name.clone());
-        func_to_first_block.insert(function.tid.clone(), first_block.tid.clone());
-    }
 
-    let mut adress_taken_function = HashSet::new();
-
-    for code_ref in code_refs {
-        let Some(function_tid) = first_instruction_to_func.get(&(code_ref.to as u64)) else {
-            continue;
-        };
-        let Some(block_tid) = func_to_first_block.get(&(function_tid)) else {
-            continue;
-        };
-        let Some(name) = func_to_name.get(&(function_tid)) else {
-            continue;
-        };
-        adress_taken_function.insert(AtFunction {
-            tid: function_tid.clone(),
-            first_instruction: code_ref.to as u64,
-            first_block_tid: block_tid.clone(),
-            name: name.clone(),
+        adress_taken_function.insert(Function {
+            tid: function.tid.clone(),
+            first_instruction: function.code_range().0,
+            first_block_tid: first_block.tid.clone(),
+            name: function.name.clone(),
+            is_at_function: false,
         });
     }
 

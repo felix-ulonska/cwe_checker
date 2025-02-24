@@ -11,7 +11,7 @@ use ascent::ascent;
 use itertools::Itertools;
 
 use super::{
-    function_taken::AtFunction,
+    function_taken::Function,
     memory_block_gen::{global_block::Interval, heap_block::HeapBlock, stack_block::StackBlock},
 };
 
@@ -103,7 +103,7 @@ pub enum Exp {
     //Mloc(Mloc),
     Deref(Reg),
     RefMLoc(Mloc),
-    RefFunc(AtFunction),
+    RefFunc(Function),
     Union(Arc<Exp>, Arc<Exp>),
 }
 
@@ -176,11 +176,15 @@ ascent! {
     // Active vars at end of block
     relation reg_to_block(Reg, Blk);
     // The target of an atfunction
-    relation atfunc_to_block(AtFunction, Blk);
+    relation atfunc_to_block(Function, Blk);
     // What regs are used for function call
     relation used_func_call(Reg, Blk);
 
-    relation func_call_targets(Blk, AtFunction);
+    // From blk to Function
+    relation func_call_targets(Blk, Function);
+
+    // Block at which end is a return statement
+    relation block_with_return_of_at_function(Blk, Function);
 
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg
@@ -290,15 +294,28 @@ ascent! {
         used_func_call(ireg, blk);
 
 
+    macro is_same_base_reg($reg1: expr, $reg2: expr) {
+        let src_base_reg = $reg1.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
+        let target_base_reg = $reg2.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
+        if src_base_reg == target_base_reg
+    }
+
     // If, func to callsite, then create phi instruction
-    phi(target_reg, ireg, target_blk) <--
-        func_call_targets(src_blk, func),
-        atfunc_to_block(func, target_blk),
-        reg_to_block(ireg, src_blk),
-        reg_to_block(target_reg, target_blk),
-        let src_base_reg = ireg.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
-        let target_base_reg = target_reg.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
-        if src_base_reg == target_base_reg;
+    phi(callee_reg, caller_reg, callee_blk) <--
+        func_call_targets(caller_blk, func),
+        atfunc_to_block(func, callee_blk),
+        reg_to_block(caller_reg, caller_blk),
+        reg_to_block(callee_reg, callee_blk),
+        is_same_base_reg!(caller_reg, callee_reg);
+
+    phi(target_reg, callee_reg, after_call_blk) <--
+        phi(target_reg, caller_reg, after_call_blk),
+        func_call_targets(caller_blk, callee_func),
+        block_with_return_of_at_function(blk_in_callee, callee_func),
+        reg_to_block(caller_reg, caller_blk),
+        reg_to_block(callee_reg, blk_in_callee),
+        is_same_base_reg!(target_reg, callee_reg);
+
 }
 
 /// Converts an Vec<Variable> to Tree like Exp expressions where the expressions is a union of all
