@@ -6,6 +6,8 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::Arc;
 
+use itertools::Itertools;
+
 use super::*;
 
 /// A `DomainMap<Key, Value, MapMergeStrategy>` is a wrapper type around a

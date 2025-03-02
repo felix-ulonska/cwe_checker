@@ -1,16 +1,15 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Display,
-    sync::Arc,
+    backtrace::Backtrace, collections::{BTreeMap, BTreeSet}, fmt::Display, sync::Arc
 };
 
 use apint::ApInt;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     abstract_domain::{
         AbstractDomain, AbstractIdentifier, AbstractLocation, DataDomain, DomainMap,
-        IntervalDomain, MergeTopStrategy, RegisterDomain, SizedDomain, TryToBitvec, TryToInterval,
+        IntervalDomain, MergeTopStrategy, RegisterDomain, SizedDomain, TryToBitvec, TryToInterval, UnionMergeStrategy,
     },
     analysis::{
         forward_intraprocdural_fixpoint::Context, graph::intraprocedural_cfg::IntraproceduralCfg,
@@ -32,7 +31,7 @@ pub type Data = DataDomain<ValueDomain>;
 pub struct State {
     /// Maps a register variable to the data known about its content.
     /// A variable not contained in the map has value `Data::Top(..)`, i.e. nothing is known about its content.
-    register: DomainMap<Variable, Data, MergeTopStrategy>,
+    register: DomainMap<Variable, Data, UnionMergeStrategy>,
     /// A list of constants that are assumed to be addresses of global variables accessed by this function.
     /// Used to replace constants by relative values pointing to the global memory object.
     known_global_addresses: Arc<BTreeSet<u64>>,
@@ -88,10 +87,11 @@ impl State {
     /// Evaluate expression on the given state and write the result to the target register.
     pub fn handle_register_assign(&mut self, target: &Variable, expression: &Expression) {
         println!(
-            "set register {} to {:#?} from {}",
+            "set register {} to {:#?} from {}, with backtrace {}",
             target,
             self.eval(expression),
-            expression
+            expression,
+            Backtrace::force_capture()
         );
         self.set_register(target, self.eval(expression))
     }
@@ -99,6 +99,7 @@ impl State {
     /// Evaluate the value of an expression in the current state.
     pub fn eval(&self, expression: &Expression) -> Data {
         let result = self.eval_recursive(expression);
+        println!("Eval Expr: {} to result {:#?}", expression, result);
         self.replace_if_global_pointer(result)
     }
 
@@ -122,7 +123,7 @@ impl State {
     /// Should only be called by [`State::eval`].
     fn eval_recursive(&self, expression: &Expression) -> Data {
         use Expression::*;
-        println!("Expr: {}", expression);
+        println!("Rec Expr: {}", expression);
         match expression {
             Var(variable) => self.get_register(variable),
             Const(bitvector) => bitvector.clone().into(),
@@ -181,6 +182,10 @@ impl AbstractDomain for State {
     /// Merge two states
     fn merge(&self, other: &Self) -> Self {
         //let merged_memory_objects = self.memory.merge(&other.memory);
+        println!("Existing 1 {}", self.register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
+        println!("Existing 2 {}", other.register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
+        let new_register = self.register.merge(&other.register);
+        println!("new_register {}", new_register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
         State {
             register: self.register.merge(&other.register),
             known_global_addresses: self.known_global_addresses.clone(),

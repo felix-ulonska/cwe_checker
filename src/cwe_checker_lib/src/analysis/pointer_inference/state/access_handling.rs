@@ -1,5 +1,7 @@
 //! Methods of [`State`] for handling memory and register access operations.
 
+use std::backtrace::Backtrace;
+
 use super::*;
 
 impl State {
@@ -14,6 +16,7 @@ impl State {
 
     /// Set the value of a register.
     pub fn set_register(&mut self, variable: &Variable, value: Data) {
+        println!("Set register {} to {:#?} and a backtrace, just to be sure: {}", variable, value, Backtrace::force_capture());
         if !value.is_top() {
             self.register.insert(variable.clone(), value);
         } else {

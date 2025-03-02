@@ -28,7 +28,7 @@ pub fn build_memory_blocks(
     analysis: &AnalysisResults,
     config: &Config,
 ) -> BlockMemoryModel {
-    foo(program);
+    foo(ssa_program);
     exit(0);
     let stack_boundaries = build_stack_block(program);
     println!("Stack Boundaries: {}", stack_boundaries);

@@ -319,6 +319,22 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     let analysis_results =
         analysis_results.with_function_signatures(function_signatures.as_deref());
     // Compute pointer inference if required
+    println!("Prog");
+    for sub in &project.program.subs {
+        if sub.1.name != "main" {
+            continue;
+        }
+        for blk in sub.1.blocks() {
+            println!("== blk {} ==", blk.tid);
+            for def in blk.defs() {
+                println!("\t {}", def);
+            }
+            for jmp in blk.jmps() {
+                println!("\t {}", jmp);
+            }
+        }
+    }
+
     let pi_analysis_results = if pi_analysis_needed {
         Some(analysis_results.compute_pointer_inference(&config["Memory"], args.statistics))
     } else {

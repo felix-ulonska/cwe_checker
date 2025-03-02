@@ -77,8 +77,11 @@ impl State {
                     arg,
                 } => {
                     if *low_byte == ByteSize::new(0) {
+                        println!("[!] 1");
                         if let Some(arg_value) = self.eval(expression).get_if_absolute_value() {
+                            println!("[!] 2");
                             if arg_value.fits_into_size(*size) {
+                                println!("[!] 3");
                                 let intermediate_result =
                                     result.cast(CastOpType::IntSExt, arg.bytesize());
                                 return self

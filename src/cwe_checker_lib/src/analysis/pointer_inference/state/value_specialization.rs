@@ -17,6 +17,7 @@ impl State {
         expression: &Expression,
         result: Data,
     ) -> Result<(), Error> {
+        println!("Spez Result, expr {}  with {:#?}", expression, result);
         if let Expression::Var(var) = expression {
             self.set_register(var, self.eval(expression).intersect(&result)?);
             Ok(())
@@ -91,6 +92,7 @@ impl State {
         rhs: &Expression,
         result: Data,
     ) -> Result<(), Error> {
+        println!("Spez binop: {} {} {}", lhs, op, rhs);
         match op {
             BinOpType::IntAdd => {
                 let intermediate_result = result.clone() - self.eval(lhs).without_widening_hints();
@@ -311,6 +313,7 @@ impl State {
         lhs: &Expression,
         rhs: &Expression,
     ) -> Result<(), Error> {
+        println!("Spez by comparison {} {} {}", lhs, op, rhs);
         use BinOpType::*;
         if let Ok(mut lhs_bound) = self.eval(lhs).try_to_bitvec() {
             match op {
