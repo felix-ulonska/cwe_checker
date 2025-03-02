@@ -1,5 +1,6 @@
 // Analysis of global memory, for speration into blocks.
 // We use pointer interference results for gaining knowledge about data
+//
 
 use std::{
     collections::{HashMap, HashSet},
