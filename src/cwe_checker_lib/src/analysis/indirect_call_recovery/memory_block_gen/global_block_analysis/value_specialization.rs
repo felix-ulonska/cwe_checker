@@ -27,7 +27,6 @@ impl<'a> State<'a> {
         expression: &Expression,
         result: Data,
     ) -> Result<(), Error> {
-        println!("Spez result: expr {} with {:#?}", expression, result);
         if let Expression::Var(var) = expression {
             self.set_register(var, self.eval(expression).intersect(&result)?);
             Ok(())
@@ -77,11 +76,8 @@ impl<'a> State<'a> {
                     arg,
                 } => {
                     if *low_byte == ByteSize::new(0) {
-                        println!("[!] 1");
                         if let Some(arg_value) = self.eval(expression).get_if_absolute_value() {
-                            println!("[!] 2");
                             if arg_value.fits_into_size(*size) {
-                                println!("[!] 3");
                                 let intermediate_result =
                                     result.cast(CastOpType::IntSExt, arg.bytesize());
                                 return self
@@ -105,7 +101,6 @@ impl<'a> State<'a> {
         rhs: &Expression,
         result: Data,
     ) -> Result<(), Error> {
-        println!("Spez, {} {} {}", lhs, op, rhs);
         match op {
             BinOpType::IntAdd => {
                 let intermediate_result = result.clone() - self.eval(lhs).without_widening_hints();
@@ -274,7 +269,6 @@ impl<'a> State<'a> {
         lhs: &Expression,
         rhs: &Expression,
     ) -> Result<(), Error> {
-        println!("Spez pointer inf {} {} {}", lhs, op, rhs);
         let (lhs_pointer, rhs_pointer) = (
             self.eval(lhs).without_widening_hints(),
             self.eval(rhs).without_widening_hints(),

@@ -125,7 +125,6 @@ impl<'a, T: Context<'a>> GeneralFPContext for GeneralizedContext<'a, T> {
     /// context object.
     fn merge(&self, val1: &Self::NodeValue, val2: &Self::NodeValue) -> Self::NodeValue {
         use NodeValue::*;
-        println!("x values");
         match (val1, val2) {
             (Value(value1), Value(value2)) => Value(self.context.merge(value1, value2)),
             (

@@ -5,7 +5,6 @@ use std::process::exit;
 use crate::{
     ghidra_pcode::ir_passes::IrPass,
     intermediate_representation::{ir_passes::SingleStaticAssigment, Project},
-    prelude::AnalysisResults,
     utils::debug,
 };
 
@@ -22,7 +21,6 @@ pub mod value_tracking;
 /// Needs pointer interference
 pub fn run_icall_recovery(
     project: &Project,
-    analysis_results: &AnalysisResults,
     debug_settings: &debug::Settings,
     config: &serde_json::Value,
 ) {
@@ -35,7 +33,7 @@ pub fn run_icall_recovery(
 
     println!("Building Block mem");
     let block_memory_model =
-        build_memory_blocks(&ssa_program, &project, &analysis_results, &config);
+        build_memory_blocks(&ssa_program, &project, &config);
     println!("Get AT funcs");
     let at_functions = get_at_functions(project);
 

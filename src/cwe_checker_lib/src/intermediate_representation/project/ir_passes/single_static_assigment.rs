@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, time::Instant};
 
 use itertools::Itertools;
 use petgraph::visit::EdgeRef;
@@ -326,23 +326,35 @@ impl IrPass for SingleStaticAssigment {
     fn run(&mut self, mut program: &mut Self::Input) -> Vec<super::prelude::LogMessage> {
         let mut logs: Vec<LogMessage> = vec![];
 
+        let mut last_time = Instant::now();
+        eprintln!("Starting SSA Transform");
+        eprintln!("Collecting used_register_vars: {:02?}", last_time.elapsed());
+        last_time = Instant::now();
+
         let used_register_vars = self.get_used_register(&program);
 
         logs.push(LogMessage::new_info(format!(
             "Found following var names {}",
             itertools::join(&used_register_vars, ",")
         )));
+        eprintln!("Incoming edge for each bloc: {:02?}", last_time.elapsed());
+        last_time = Instant::now();
 
         let incoming_edge_for_each_block = get_incoming_edges_for_each_blk(&program);
+        eprintln!("Active Var at the end of block: {:02?}", last_time.elapsed());
+        last_time = Instant::now();
 
         let active_var_at_end_of_block =
             self.rename_all_vars_and_add_empty_phi_fn(&mut program, &used_register_vars);
+        eprintln!("Fix PHI Functions: {:02?}", last_time.elapsed());
+        last_time = Instant::now();
 
         fix_phi_functions(
             program,
             incoming_edge_for_each_block,
             active_var_at_end_of_block,
         );
+        eprintln!("Done SSA: {:02?}", last_time.elapsed());
         //rename_temp_variables(program);
 
         logs

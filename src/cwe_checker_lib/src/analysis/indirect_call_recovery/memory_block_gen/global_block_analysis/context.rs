@@ -56,7 +56,6 @@ impl<'a> State<'a> {
         //);
         let mut memory_segements = vec![];
         for segment in &runtime_memory_image.memory_segments {
-            println!("MemorySegments: {:x} {} {:x}", segment.base_address, segment.bytes.len(),segment.base_address + segment.bytes.len() as u64);
             memory_segements.push(MemorySegmentWithInterval {
                 interval: Interval::new(segment.base_address.into(), (segment.base_address + segment.bytes.len() as u64).into(), 1),
                 segment
@@ -89,13 +88,6 @@ impl<'a> State<'a> {
 
     /// Evaluate expression on the given state and write the result to the target register.
     pub fn handle_register_assign(&mut self, target: &Variable, expression: &Expression) {
-        println!(
-            "set register {} to {:#?} from {}, with backtrace {}",
-            target,
-            self.eval(expression),
-            expression,
-            Backtrace::force_capture()
-        );
         self.set_register(target, self.eval(expression))
     }
 
@@ -103,7 +95,6 @@ impl<'a> State<'a> {
     pub fn eval(&self, expression: &Expression) -> Data {
         let result = self.eval_recursive(expression);
         let result = self.replace_if_global_pointer(result);
-        println!("Eval Expr: {} to result {:#?}", expression, result);
 
         result
     }
@@ -124,12 +115,9 @@ impl<'a> State<'a> {
     /// If the input value is a constant that is also the address of a global variable known to the function
     /// then replace it with a value relative to the global memory ID of the state.
     fn replace_if_global_pointer(&self, mut value: Data) -> Data {
-        println!("Replace Val with global ptr {:#?}", value);
         if let Ok(constant) = value.try_to_offset() {
-            println!("Is offset!");
             for segment in &self.memory_segments {
                 if segment.interval.contains(&Bitvector::from_i64(constant)) {
-                    println!("got global ptr {:#?} from {}", segment.segment.name, segment.segment.base_address);
                     value = Data::from_target(
                         self.get_global_mem_id(),
                         value.try_to_interval().unwrap().into(),
@@ -144,7 +132,6 @@ impl<'a> State<'a> {
     /// Should only be called by [`State::eval`].
     fn eval_recursive(&self, expression: &Expression) -> Data {
         use Expression::*;
-        println!("Rec Expr: {}", expression);
         match expression {
             Var(variable) => self.get_register(variable),
             Const(bitvector) => self.replace_if_global_pointer(bitvector.clone().into()),
@@ -173,12 +160,6 @@ impl<'a> State<'a> {
                 // value
                 .filter(|input| self.register.get(input).is_some())
                 .fold(Data::new_empty(ByteSize::new(8)), |data, val| {
-                    println!(
-                        "phi function: {:#?}, {}, adding {:#?}",
-                        data,
-                        val,
-                        self.get_register(val)
-                    );
                     data.clone().merge(&self.get_register(val))
                 }),
         }
@@ -208,14 +189,12 @@ pub fn fill_vsa_result_maps<'b>(computation: Computation<GeneralizedContext<'b, 
                                 .insert(def.tid.clone(), state.eval(value));
                         }
                         Def::Load { var: _var, address } => {
-                            println!("Build for Load {} with the adress {} and got {:#?}", def.tid, address, state.eval(address));
                             addresses_at_defs
                                 .insert(def.tid.clone(), state.eval(address));
                         }
                         Def::Store { address, value } => {
                             values_at_defs
                                 .insert(def.tid.clone(), state.eval(value));
-                            println!("Build for Store {} with the adress {} and got {:#?}", def.tid, address, state.eval(address));
                             addresses_at_defs
                                 .insert(def.tid.clone(), state.eval(address));
                         }
@@ -253,7 +232,6 @@ pub fn fill_vsa_result_maps<'b>(computation: Computation<GeneralizedContext<'b, 
 impl Display for State<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (reg, value) in self.register.iter() {
-            //println!("Intervall {:#?} ", value);
             let Some(value) = value.get_absolute_value() else {
                 write!(f, "{}: [-]", reg.name)?;
                 continue;
@@ -268,10 +246,7 @@ impl AbstractDomain for State<'_> {
     /// Merge two states
     fn merge(&self, other: &Self) -> Self {
         //let merged_memory_objects = self.memory.merge(&other.memory);
-        println!("Existing 1 {}", self.register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
-        println!("Existing 2 {}", other.register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
         let new_register = self.register.merge(&other.register);
-        println!("new_register {}", new_register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
         State {
             register: self.register.merge(&other.register),
             memory_segments: self.memory_segments.clone(),

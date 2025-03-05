@@ -22,6 +22,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::convert::From;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::process::exit;
 
 mod cfg_stats;
 
@@ -299,6 +300,9 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
         "CWE119", "CWE134", "CWE190", "CWE252", "CWE337", "CWE416", "CWE476", "CWE789", "Memory",
     ]);
 
+    // Compute BPA
+    run_icall_recovery(&project, &debug_settings, &config["Memory"]);
+    exit(0);
     let string_abstraction_needed = modules
         .iter()
         .any(|module| modules_depending_on_string_abstraction.contains(&module.name));
@@ -318,22 +322,6 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     };
     let analysis_results =
         analysis_results.with_function_signatures(function_signatures.as_deref());
-    // Compute pointer inference if required
-    println!("Prog");
-    for sub in &project.program.subs {
-        if sub.1.name != "main" {
-            continue;
-        }
-        for blk in sub.1.blocks() {
-            println!("== blk {} ==", blk.tid);
-            for def in blk.defs() {
-                println!("\t {}", def);
-            }
-            for jmp in blk.jmps() {
-                println!("\t {}", jmp);
-            }
-        }
-    }
 
     let pi_analysis_results = if pi_analysis_needed {
         Some(analysis_results.compute_pointer_inference(&config["Memory"], args.statistics))
@@ -342,8 +330,6 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     };
     let analysis_results = analysis_results.with_pointer_inference(pi_analysis_results.as_ref());
 
-    // Compute BPA
-    run_icall_recovery(&project, &analysis_results, &debug_settings, &config["Memory"]);
 
     // Compute string abstraction analysis if required
     let string_abstraction_results =
