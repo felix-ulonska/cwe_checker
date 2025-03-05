@@ -1,22 +1,35 @@
 use std::{
-    backtrace::Backtrace, collections::{BTreeMap, HashMap}, fmt::Display
+    backtrace::Backtrace,
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
 };
 
+use ascent::hashbrown::HashSet;
 use itertools::Itertools;
 use nix::NixPath;
 
 use crate::{
     abstract_domain::{
-        AbstractDomain, AbstractIdentifier, AbstractLocation, DataDomain, DomainMap, Interval, IntervalDomain, RegisterDomain, SizedDomain, TryToBitvec, TryToInterval, UnionMergeStrategy
+        AbstractDomain, AbstractIdentifier, AbstractLocation, DataDomain, DomainMap, Interval,
+        IntervalDomain, RegisterDomain, SizedDomain, TryToBitvec, TryToInterval,
+        UnionMergeStrategy,
     },
     analysis::{
-        fixpoint::Computation, forward_intraprocdural_fixpoint::{Context, GeneralizedContext}, graph::{intraprocedural_cfg::IntraproceduralCfg, Node}
+        fixpoint::Computation,
+        forward_intraprocdural_fixpoint::{Context, GeneralizedContext},
+        graph::{intraprocedural_cfg::IntraproceduralCfg, Node},
     },
-    intermediate_representation::{BinOpType, Def, Expression, Program, RuntimeMemoryImage, Sub, Variable},
-    prelude::{Bitvector, ByteSize, Term, Tid}, utils::binary::MemorySegment,
+    intermediate_representation::{
+        BinOpType, Def, Expression, Program, RuntimeMemoryImage, Sub, Variable,
+    },
+    prelude::{Bitvector, ByteSize, Term, Tid},
+    utils::binary::MemorySegment,
 };
 
-use super::vsa_result::{GlobalBlockAnalysisResult, RegisterState};
+use super::{
+    taint::simple_taint,
+    vsa_result::{GlobalBlockAnalysisResult, RegisterState},
+};
 
 pub type ValueDomain = IntervalDomain;
 
@@ -26,7 +39,7 @@ pub type Data = DataDomain<ValueDomain>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MemorySegmentWithInterval<'a> {
     interval: Interval,
-    segment: &'a MemorySegment
+    segment: &'a MemorySegment,
 }
 
 // A lot of the following is taken from the pointer interference, however this only includes the
@@ -38,7 +51,7 @@ pub struct State<'a> {
     /// A variable not contained in the map has value `Data::Top(..)`, i.e. nothing is known about its content.
     pub register: DomainMap<Variable, Data, UnionMergeStrategy>,
     memory_segments: Vec<MemorySegmentWithInterval<'a>>,
-    function_tid: Tid
+    function_tid: Tid,
 }
 
 impl<'a> State<'a> {
@@ -57,14 +70,18 @@ impl<'a> State<'a> {
         let mut memory_segements = vec![];
         for segment in &runtime_memory_image.memory_segments {
             memory_segements.push(MemorySegmentWithInterval {
-                interval: Interval::new(segment.base_address.into(), (segment.base_address + segment.bytes.len() as u64).into(), 1),
-                segment
+                interval: Interval::new(
+                    segment.base_address.into(),
+                    (segment.base_address + segment.bytes.len() as u64).into(),
+                    1,
+                ),
+                segment,
             });
         }
         State {
             register,
             memory_segments: memory_segements,
-            function_tid
+            function_tid,
         }
     }
 
@@ -166,8 +183,14 @@ impl<'a> State<'a> {
     }
 }
 
+fn is_interval_global(val: &Data) -> bool {
+    val.get_if_unique_target().is_some()
+}
+
 /// Fill the various result maps of `self` that are needed for the [`VsaResult`](crate::analysis::vsa_results::VsaResult) trait implementation.
-pub fn fill_vsa_result_maps<'b>(computation: Computation<GeneralizedContext<'b, AnalysisContext<'b>>>) -> GlobalBlockAnalysisResult {
+pub fn fill_vsa_result_maps<'b>(
+    computation: Computation<GeneralizedContext<'b, AnalysisContext<'b>>>,
+) -> GlobalBlockAnalysisResult {
     let mut values_at_defs = HashMap::new();
     let mut addresses_at_defs = HashMap::new();
     let mut states_at_tids = HashMap::new();
@@ -185,18 +208,26 @@ pub fn fill_vsa_result_maps<'b>(computation: Computation<GeneralizedContext<'b, 
                 for def in &blk.term.defs {
                     match &def.term {
                         Def::Assign { var: _, value } => {
-                            values_at_defs
-                                .insert(def.tid.clone(), state.eval(value));
+                            let evaled = state.eval(value);
+                            if is_interval_global(&evaled) {
+                                values_at_defs.insert(def.tid.clone(), evaled);
+                            }
                         }
                         Def::Load { var: _var, address } => {
-                            addresses_at_defs
-                                .insert(def.tid.clone(), state.eval(address));
+                            let evaled = state.eval(address);
+                            if is_interval_global(&evaled) {
+                                addresses_at_defs.insert(def.tid.clone(), evaled);
+                            }
                         }
                         Def::Store { address, value } => {
-                            values_at_defs
-                                .insert(def.tid.clone(), state.eval(value));
-                            addresses_at_defs
-                                .insert(def.tid.clone(), state.eval(address));
+                            let evaled = state.eval(value);
+                            if is_interval_global(&evaled) {
+                                values_at_defs.insert(def.tid.clone(), evaled);
+                            }
+                            let evaled = state.eval(address);
+                            if is_interval_global(&evaled) {
+                                addresses_at_defs.insert(def.tid.clone(), evaled);
+                            }
                         }
                     }
                     state = match context.update_def(&state, def) {
@@ -211,18 +242,18 @@ pub fn fill_vsa_result_maps<'b>(computation: Computation<GeneralizedContext<'b, 
                     _ => continue,
                 };
                 for jmp in &blk.term.jmps {
-                    states_at_tids
-                        .insert(jmp.tid.clone(), RegisterState {
-                            register: node_state.register.clone()
+                    //states_at_tids
+                    //    .insert(jmp.tid.clone(), RegisterState {
+                    //        register: node_state.register.clone()
 
-                        });
+                    //    });
                 }
             }
             Node::CallSource { .. } => (),
             Node::CallReturn {
                 call: (_caller_blk, _caller_sub),
                 return_: _,
-            } => ()
+            } => (),
         }
     }
 
@@ -250,7 +281,7 @@ impl AbstractDomain for State<'_> {
         State {
             register: self.register.merge(&other.register),
             memory_segments: self.memory_segments.clone(),
-            function_tid: self.function_tid.clone()
+            function_tid: self.function_tid.clone(),
         }
     }
 
@@ -264,12 +295,19 @@ pub struct AnalysisContext<'a> {
     program: &'a Program,
     sub: &'a Term<Sub>,
     cfg: IntraproceduralCfg<'a>,
+    taint: HashSet<&'a Variable>,
 }
 
 impl<'a> AnalysisContext<'a> {
     pub fn new(program: &'a Program, sub: &'a Term<Sub>) -> AnalysisContext<'a> {
         let cfg = IntraproceduralCfg::new(program, sub);
-        AnalysisContext { program, sub, cfg }
+        let taint = simple_taint(sub);
+        AnalysisContext {
+            program,
+            sub,
+            cfg,
+            taint,
+        }
     }
 }
 
@@ -301,7 +339,9 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
                 Some(new_state)
             }
             Def::Assign { var, value } => {
-                new_state.handle_register_assign(var, value);
+                if self.taint.contains(var) {
+                    new_state.handle_register_assign(var, value);
+                }
                 Some(new_state)
             }
             Def::Load { var, address } => Some(new_state),
@@ -361,6 +401,15 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         is_true: bool,
     ) -> Option<Self::Value> {
         let mut specialized_state = state.clone();
+        let mut has_taint = false;
+        for input_var in condition.input_vars() {
+            if self.taint.contains(input_var) {
+                has_taint = true;
+            }
+        }
+        if !has_taint {
+            return None;
+        }
         match specialized_state
             .specialize_by_expression_result(condition, Bitvector::from_u8(is_true as u8).into())
         {

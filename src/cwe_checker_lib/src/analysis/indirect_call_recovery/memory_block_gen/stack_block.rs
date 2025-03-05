@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
 };
 
+use ascent::rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use itertools::Itertools;
 
 use crate::{
@@ -17,9 +18,12 @@ use crate::{
 
 pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
     let mut boundaries = StackBlockBoundaries::new();
-    for sub in &program.subs {
+    let analysees: Vec<StackAnalysis> = program.subs.par_iter().map(|sub| {
         let mut analysis = StackAnalysis::new(sub.1);
         analysis.analyze_block();
+        analysis
+    }).collect();
+    for analysis in analysees {
         boundaries.add_analysis_result(&analysis);
     }
 
