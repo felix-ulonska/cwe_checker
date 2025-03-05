@@ -35,7 +35,7 @@ pub fn run_icall_recovery(
 
     println!("Building Block mem");
     let block_memory_model =
-        build_memory_blocks(&ssa_program, &project.program, &analysis_results, &config);
+        build_memory_blocks(&ssa_program, &project, &analysis_results, &config);
     println!("Get AT funcs");
     let at_functions = get_at_functions(project);
 

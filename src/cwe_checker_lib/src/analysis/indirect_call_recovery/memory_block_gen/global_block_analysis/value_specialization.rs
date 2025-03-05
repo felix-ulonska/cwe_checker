@@ -12,7 +12,7 @@ use crate::{
 
 use super::context::{Data, State};
 
-impl State {
+impl<'a> State<'a> {
     /// Try to restrict the input variables of `expression` on `self`
     /// so that `expression` only evaluates to values represented by the given `result`.
     ///

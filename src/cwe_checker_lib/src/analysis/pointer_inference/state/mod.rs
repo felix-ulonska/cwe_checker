@@ -336,7 +336,8 @@ impl State {
     /// Remove all objects that cannot longer be reached by any known pointer.
     /// This does not remove objects, where some caller may still know a pointer to the object.
     ///
-    /// The function uses an underapproximation of all possible pointer targets contained in a memory object.
+    /// The fu,
+    /// function_tid: self.function_tid.clone()nction uses an underapproximation of all possible pointer targets contained in a memory object.
     /// This keeps the number of tracked objects reasonably small.
     pub fn remove_unreferenced_objects(&mut self) {
         // get all referenced IDs from registers

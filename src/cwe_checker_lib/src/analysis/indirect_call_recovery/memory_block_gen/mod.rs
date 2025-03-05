@@ -12,7 +12,7 @@ use heap_block::{build_heap_blocks, HeapAnalysis};
 use stack_block::{build_stack_block, StackBlockBoundaries};
 
 use crate::{
-    analysis::pointer_inference::Config, intermediate_representation::Program,
+    analysis::pointer_inference::Config, intermediate_representation::{Program, Project},
     prelude::AnalysisResults,
 };
 
@@ -24,19 +24,19 @@ pub struct BlockMemoryModel {
 
 pub fn build_memory_blocks(
     ssa_program: &Program,
-    program: &Program,
+    project: &Project,
     analysis: &AnalysisResults,
     config: &Config,
 ) -> BlockMemoryModel {
-    foo(ssa_program);
-    exit(0);
-    let stack_boundaries = build_stack_block(program);
+    let global_analysis = foo(ssa_program, &project.runtime_memory_image);
+    let stack_boundaries = build_stack_block(ssa_program);
     println!("Stack Boundaries: {}", stack_boundaries);
     let global_boundaries = build_global_memory_blocks(
         ssa_program,
-        analysis
-            .pointer_inference
-            .expect("Pointer Interference is needed for BPA"),
+        &global_analysis
+        //analysis
+        //    .pointer_inference
+        //    .expect("Pointer Interference is needed for BPA"),
     );
     let heap_analysis = build_heap_blocks(ssa_program, config);
 

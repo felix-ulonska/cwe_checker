@@ -16,6 +16,8 @@ use crate::{
     prelude::{Term, Tid},
 };
 
+use super::global_block_analysis::vsa_result::SmallVsaResult;
+
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Interval {
     begin: i64,
@@ -142,7 +144,7 @@ impl GlobalMemorySeperation {
 /// overlapping address ranges.
 pub fn build_global_memory_blocks(
     program: &Program,
-    value_sets: &impl VsaResult<ValueDomain = DataDomain<IntervalDomain>>,
+    value_sets: &impl SmallVsaResult<ValueDomain = DataDomain<IntervalDomain>>,
 ) -> GlobalMemorySeperation {
     let mut intervals = vec![];
     for sub in &program.subs {
@@ -152,6 +154,7 @@ pub fn build_global_memory_blocks(
                     if let Some((abstract_location, interval)) = address.get_if_unique_target() {
                         match abstract_location.get_location() {
                             AbstractLocation::GlobalAddress { address: _, .. } => {
+                                println!("GMB: got {} the interval {}", def.tid.clone(), interval);
                                 intervals.push((def.tid.clone(), interval.clone()));
                             }
                             // Global Pointer is not inherently useful.

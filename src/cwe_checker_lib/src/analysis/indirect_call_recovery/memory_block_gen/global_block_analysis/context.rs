@@ -1,68 +1,71 @@
 use std::{
-    backtrace::Backtrace, collections::{BTreeMap, BTreeSet}, fmt::Display, sync::Arc
+    backtrace::Backtrace, collections::{BTreeMap, HashMap}, fmt::Display
 };
 
-use apint::ApInt;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use nix::NixPath;
 
 use crate::{
     abstract_domain::{
-        AbstractDomain, AbstractIdentifier, AbstractLocation, DataDomain, DomainMap,
-        IntervalDomain, MergeTopStrategy, RegisterDomain, SizedDomain, TryToBitvec, TryToInterval, UnionMergeStrategy,
+        AbstractDomain, AbstractIdentifier, AbstractLocation, DataDomain, DomainMap, Interval, IntervalDomain, RegisterDomain, SizedDomain, TryToBitvec, TryToInterval, UnionMergeStrategy
     },
     analysis::{
-        forward_intraprocdural_fixpoint::Context, graph::intraprocedural_cfg::IntraproceduralCfg,
+        fixpoint::Computation, forward_intraprocdural_fixpoint::{Context, GeneralizedContext}, graph::{intraprocedural_cfg::IntraproceduralCfg, Node}
     },
-    intermediate_representation::{BinOpType, Def, Expression, Program, Sub, Variable},
-    prelude::{Bitvector, ByteSize, Term, Tid},
+    intermediate_representation::{BinOpType, Def, Expression, Program, RuntimeMemoryImage, Sub, Variable},
+    prelude::{Bitvector, ByteSize, Term, Tid}, utils::binary::MemorySegment,
 };
+
+use super::vsa_result::{GlobalBlockAnalysisResult, RegisterState};
 
 pub type ValueDomain = IntervalDomain;
 
 /// The abstract domain type for representing register values.
 pub type Data = DataDomain<ValueDomain>;
 
-// A lot of the following is taken from the pointer interference, however this only includes the
-// necassary to determine intereger values.
-
-/// Contains all information known about the state of a program at a specific point of time.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct State {
-    /// Maps a register variable to the data known about its content.
-    /// A variable not contained in the map has value `Data::Top(..)`, i.e. nothing is known about its content.
-    register: DomainMap<Variable, Data, UnionMergeStrategy>,
-    /// A list of constants that are assumed to be addresses of global variables accessed by this function.
-    /// Used to replace constants by relative values pointing to the global memory object.
-    known_global_addresses: Arc<BTreeSet<u64>>,
-    /// The abstract identifier of the current stack frame.
-    /// It points to the base of the stack frame, i.e. only negative offsets point into the current stack frame.
-    pub stack_id: AbstractIdentifier,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MemorySegmentWithInterval<'a> {
+    interval: Interval,
+    segment: &'a MemorySegment
 }
 
-impl State {
+// A lot of the following is taken from the pointer interference, however this only includes the
+// necassary to determine intereger values.
+/// Contains all information known about the state of a program at a specific point of time.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct State<'a> {
+    /// Maps a register variable to the data known about its content.
+    /// A variable not contained in the map has value `Data::Top(..)`, i.e. nothing is known about its content.
+    pub register: DomainMap<Variable, Data, UnionMergeStrategy>,
+    memory_segments: Vec<MemorySegmentWithInterval<'a>>,
+    function_tid: Tid
+}
+
+impl<'a> State<'a> {
     pub fn new(
-        stack_register: &Variable,
+        //stack_register: &Variable,
         function_tid: Tid,
-        global_addresses: BTreeSet<u64>,
+        runtime_memory_image: &'a RuntimeMemoryImage,
     ) -> State {
-        let stack_id = AbstractIdentifier::new(
-            function_tid,
-            AbstractLocation::from_var(stack_register).unwrap(),
-        );
-        let mut register = DomainMap::from(BTreeMap::new());
-        register.insert(
-            stack_register.clone(),
-            Data::from_target(
-                stack_id.clone(),
-                Bitvector::zero(apint::BitWidth::from(stack_register.size)).into(),
-            ),
-        );
+        let register = DomainMap::from(BTreeMap::new());
+        //register.insert(
+        //    stack_register.clone(),
+        //    Data::from_target(
+        //        Bitvector::zero(apint::BitWidth::from(stack_register.size)).into(),
+        //    ),
+        //);
+        let mut memory_segements = vec![];
+        for segment in &runtime_memory_image.memory_segments {
+            println!("MemorySegments: {:x} {} {:x}", segment.base_address, segment.bytes.len(),segment.base_address + segment.bytes.len() as u64);
+            memory_segements.push(MemorySegmentWithInterval {
+                interval: Interval::new(segment.base_address.into(), (segment.base_address + segment.bytes.len() as u64).into(), 1),
+                segment
+            });
+        }
         State {
             register,
-            //memory: AbstractObjectList::from_stack_id(stack_id.clone(), stack_register.size),
-            stack_id,
-            known_global_addresses: Arc::new(global_addresses),
+            memory_segments: memory_segements,
+            function_tid
         }
     }
 
@@ -99,22 +102,40 @@ impl State {
     /// Evaluate the value of an expression in the current state.
     pub fn eval(&self, expression: &Expression) -> Data {
         let result = self.eval_recursive(expression);
+        let result = self.replace_if_global_pointer(result);
         println!("Eval Expr: {} to result {:#?}", expression, result);
-        self.replace_if_global_pointer(result)
+
+        result
+    }
+
+    /// Get the abstract ID of the global memory object corresponding to this function.
+    pub fn get_global_mem_id(&self) -> AbstractIdentifier {
+        AbstractIdentifier::new(
+            // TODO: this is probaly the wrong one
+            self.function_tid.clone(),
+            AbstractLocation::GlobalAddress {
+                address: 0,
+                // TODO: constant byteSize
+                size: ByteSize::new(8),
+            },
+        )
     }
 
     /// If the input value is a constant that is also the address of a global variable known to the function
     /// then replace it with a value relative to the global memory ID of the state.
     fn replace_if_global_pointer(&self, mut value: Data) -> Data {
+        println!("Replace Val with global ptr {:#?}", value);
         if let Ok(constant) = value.try_to_offset() {
-            //if self.known_global_addresses.contains(&(constant as u64)) {
-            //    // The result is a constant that denotes a pointer to global writeable memory.
-            //    // Thus we replace it with a value relative the global memory ID.
-            //    value = Data::from_target(
-            //        self.get_global_mem_id(),
-            //        value.try_to_interval().unwrap().into(),
-            //    );
-            //}
+            println!("Is offset!");
+            for segment in &self.memory_segments {
+                if segment.interval.contains(&Bitvector::from_i64(constant)) {
+                    println!("got global ptr {:#?} from {}", segment.segment.name, segment.segment.base_address);
+                    value = Data::from_target(
+                        self.get_global_mem_id(),
+                        value.try_to_interval().unwrap().into(),
+                    );
+                }
+            }
         }
         value
     }
@@ -126,7 +147,7 @@ impl State {
         println!("Rec Expr: {}", expression);
         match expression {
             Var(variable) => self.get_register(variable),
-            Const(bitvector) => bitvector.clone().into(),
+            Const(bitvector) => self.replace_if_global_pointer(bitvector.clone().into()),
             BinOp { op, lhs, rhs } => {
                 if *op == BinOpType::IntXOr && lhs == rhs {
                     // the result of `x XOR x` is always zero.
@@ -164,7 +185,72 @@ impl State {
     }
 }
 
-impl Display for State {
+/// Fill the various result maps of `self` that are needed for the [`VsaResult`](crate::analysis::vsa_results::VsaResult) trait implementation.
+pub fn fill_vsa_result_maps<'b>(computation: Computation<GeneralizedContext<'b, AnalysisContext<'b>>>) -> GlobalBlockAnalysisResult {
+    let mut values_at_defs = HashMap::new();
+    let mut addresses_at_defs = HashMap::new();
+    let mut states_at_tids = HashMap::new();
+
+    let context = computation.get_context().get_context();
+    let graph = computation.get_graph();
+    for node in graph.node_indices() {
+        match graph[node] {
+            Node::BlkStart(blk, _sub) => {
+                let node_state = match computation.get_node_value(node) {
+                    Some(value) => value,
+                    _ => continue,
+                };
+                let mut state = node_state.clone();
+                for def in &blk.term.defs {
+                    match &def.term {
+                        Def::Assign { var: _, value } => {
+                            values_at_defs
+                                .insert(def.tid.clone(), state.eval(value));
+                        }
+                        Def::Load { var: _var, address } => {
+                            println!("Build for Load {} with the adress {} and got {:#?}", def.tid, address, state.eval(address));
+                            addresses_at_defs
+                                .insert(def.tid.clone(), state.eval(address));
+                        }
+                        Def::Store { address, value } => {
+                            values_at_defs
+                                .insert(def.tid.clone(), state.eval(value));
+                            println!("Build for Store {} with the adress {} and got {:#?}", def.tid, address, state.eval(address));
+                            addresses_at_defs
+                                .insert(def.tid.clone(), state.eval(address));
+                        }
+                    }
+                    state = match context.update_def(&state, def) {
+                        Some(new_state) => new_state,
+                        None => break,
+                    }
+                }
+            }
+            Node::BlkEnd(blk, _sub) => {
+                let node_state = match computation.get_node_value(node) {
+                    Some(value) => value,
+                    _ => continue,
+                };
+                for jmp in &blk.term.jmps {
+                    states_at_tids
+                        .insert(jmp.tid.clone(), RegisterState {
+                            register: node_state.register.clone()
+
+                        });
+                }
+            }
+            Node::CallSource { .. } => (),
+            Node::CallReturn {
+                call: (_caller_blk, _caller_sub),
+                return_: _,
+            } => ()
+        }
+    }
+
+    GlobalBlockAnalysisResult::new(values_at_defs, addresses_at_defs, states_at_tids)
+}
+
+impl Display for State<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (reg, value) in self.register.iter() {
             //println!("Intervall {:#?} ", value);
@@ -178,7 +264,7 @@ impl Display for State {
     }
 }
 
-impl AbstractDomain for State {
+impl AbstractDomain for State<'_> {
     /// Merge two states
     fn merge(&self, other: &Self) -> Self {
         //let merged_memory_objects = self.memory.merge(&other.memory);
@@ -188,8 +274,8 @@ impl AbstractDomain for State {
         println!("new_register {}", new_register.iter().filter(|(key, val)| {key.name == "RAX"}).map(|(key, val)| {format!("{}:{:#?}", key, val)}).collect_vec().join(","));
         State {
             register: self.register.merge(&other.register),
-            known_global_addresses: self.known_global_addresses.clone(),
-            stack_id: self.stack_id.clone(),
+            memory_segments: self.memory_segments.clone(),
+            function_tid: self.function_tid.clone()
         }
     }
 
@@ -213,7 +299,7 @@ impl<'a> AnalysisContext<'a> {
 }
 
 impl<'a> Context<'a> for AnalysisContext<'a> {
-    type Value = State;
+    type Value = State<'a>;
 
     fn get_graph(&self) -> &crate::analysis::graph::Graph<'a> {
         &self.cfg.graph()
