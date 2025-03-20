@@ -43,13 +43,13 @@ pub const SPLIT_SYMBOL: &str = "__";
 pub type VarsAtEndOfBlock = HashMap<Tid, Vec<Variable>>;
 
 pub struct SingleStaticAssigment {
-    register_vars: vec<variable>,
+    register_vars: Vec<Variable>,
     pub active_var_at_end_of_block: VarsAtEndOfBlock,
 }
 
 fn add_ssa_index_to_name(name: &str, index: &i64) -> String {
     let index_str = index.to_string();
-    let output_str = String::with_capacity(name.len() + SPLIT_SYMBOL.len() + index.len());
+    let mut output_str = String::with_capacity(name.len() + SPLIT_SYMBOL.len() + index_str.len());
     output_str.push_str(&name);
     output_str.push_str(SPLIT_SYMBOL);
     output_str.push_str(&index_str);
