@@ -22,6 +22,7 @@ itertools = "0.10.3"
 gcd = "2.1.0"
 nix = "0.26.1"
 ascent = "*"
+itoa = "1.0.15"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

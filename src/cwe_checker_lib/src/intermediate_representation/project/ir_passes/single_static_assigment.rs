@@ -48,7 +48,8 @@ pub struct SingleStaticAssigment {
 }
 
 fn add_ssa_index_to_name(name: &str, index: &i64) -> String {
-    let index_str = index.to_string();
+    let mut buffer = itoa::Buffer::new();
+    let index_str = buffer.format(*index);
     let mut output_str = String::with_capacity(name.len() + SPLIT_SYMBOL.len() + index_str.len());
     output_str.push_str(&name);
     output_str.push_str(SPLIT_SYMBOL);
@@ -179,10 +180,7 @@ impl SingleStaticAssigment {
                     def.substitute_input_var(
                         &var,
                         &Expression::Var(Variable {
-                            name: format!(
-                                "{}{}{}",
-                                var.name, SPLIT_SYMBOL, active_indices[&var.name]
-                            ),
+                            name: add_ssa_index_to_name(&var.name, &active_indices[&var.name]),
                             size: var.size,
                             is_temp: var.is_temp,
                         }),
@@ -205,9 +203,8 @@ impl SingleStaticAssigment {
                     jmp.term.substitute_input_var(
                         &var,
                         &Expression::Var(Variable {
-                            name: format!(
-                                "{}{}{}",
-                                var.name, SPLIT_SYMBOL, active_indices[&var.name]
+                            name: add_ssa_index_to_name(
+                                &var.name, &active_indices[&var.name]
                             ),
                             size: var.size,
                             is_temp: var.is_temp,
@@ -219,7 +216,7 @@ impl SingleStaticAssigment {
             let mut active_vars = vec![];
             for var in used_register_vars {
                 active_vars.push(Variable {
-                    name: format!("{}{}{}", var.name, SPLIT_SYMBOL, active_indices[&var.name]),
+                    name: add_ssa_index_to_name(&var.name, &active_indices[&var.name]),
                     size: var.size,
                     is_temp: var.is_temp,
                 });
