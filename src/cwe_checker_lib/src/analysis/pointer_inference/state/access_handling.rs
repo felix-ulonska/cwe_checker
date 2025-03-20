@@ -16,7 +16,6 @@ impl State {
 
     /// Set the value of a register.
     pub fn set_register(&mut self, variable: &Variable, value: Data) {
-        println!("Set register {} to {:#?} and a backtrace, just to be sure: {}", variable, value, Backtrace::force_capture());
         if !value.is_top() {
             self.register.insert(variable.clone(), value);
         } else {

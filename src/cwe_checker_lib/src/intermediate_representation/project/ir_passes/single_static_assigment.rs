@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use itertools::Itertools;
 use petgraph::visit::EdgeRef;
@@ -40,8 +43,18 @@ pub const SPLIT_SYMBOL: &str = "__";
 pub type VarsAtEndOfBlock = HashMap<Tid, Vec<Variable>>;
 
 pub struct SingleStaticAssigment {
-    register_vars: Vec<Variable>,
+    register_vars: vec<variable>,
     pub active_var_at_end_of_block: VarsAtEndOfBlock,
+}
+
+fn add_ssa_index_to_name(name: &str, index: &i64) -> String {
+    let index_str = index.to_string();
+    let output_str = String::with_capacity(name.len() + SPLIT_SYMBOL.len() + index.len());
+    output_str.push_str(&name);
+    output_str.push_str(SPLIT_SYMBOL);
+    output_str.push_str(&index_str);
+
+    output_str
 }
 
 impl SingleStaticAssigment {
@@ -148,7 +161,7 @@ impl SingleStaticAssigment {
                         tid: Tid::new_phi(&block.tid, &var.name),
                         term: Def::Assign {
                             var: Variable {
-                                name: format!("{}{}{}", &var.name, SPLIT_SYMBOL, new_var_index),
+                                name: add_ssa_index_to_name(&var.name, &new_var_index),
                                 size: var.size,
                                 is_temp: var.is_temp,
                             },
@@ -180,8 +193,7 @@ impl SingleStaticAssigment {
                         if used_register_vars.contains(var) {
                             let new_var_index = active_indices[&var.name] + 1;
                             active_indices.insert(var.name.clone(), new_var_index);
-                            var.name =
-                                format!("{}{}{}", var.name, SPLIT_SYMBOL, new_var_index).to_owned();
+                            var.name = add_ssa_index_to_name(&var.name, &new_var_index)
                         }
                     }
                     _ => (),
@@ -234,7 +246,7 @@ fn rename_temp_variables(program: &mut Program) {
                 def.substitute_input_var(
                     &var,
                     &Expression::Var(Variable {
-                        name: format!("{}{}{}", var.name, SPLIT_SYMBOL, active_indices[&var]),
+                        name: add_ssa_index_to_name(&var.name, &active_indices[&var]),
                         size: var.size,
                         is_temp: true,
                     }),
@@ -245,8 +257,7 @@ fn rename_temp_variables(program: &mut Program) {
                     if var.is_temp {
                         let new_var_index = active_indices.get(&var).unwrap_or(&0_i64) + 1;
                         active_indices.insert(var.clone(), new_var_index);
-                        var.name =
-                            format!("{}{}{}", var.name, SPLIT_SYMBOL, new_var_index).to_owned();
+                        var.name = add_ssa_index_to_name(&var.name, &new_var_index);
                     }
                 }
                 _ => (),
@@ -258,7 +269,7 @@ fn rename_temp_variables(program: &mut Program) {
                 jmp.term.substitute_input_var(
                     &var,
                     &Expression::Var(Variable {
-                        name: format!("{}{}{}", var.name, SPLIT_SYMBOL, index),
+                        name: add_ssa_index_to_name(&var.name, &index),
                         size: var.size,
                         is_temp: var.is_temp,
                     }),
@@ -288,11 +299,9 @@ fn fix_phi_functions(
                 {
                     let original_name = var.name.split(SPLIT_SYMBOL).take(1).collect_vec()[0];
                     inputs.push(Variable {
-                        name: format!(
-                            "{}{}{}",
+                        name: add_ssa_index_to_name(
                             original_name,
-                            SPLIT_SYMBOL,
-                            active_var_at_end_of_block[&incoming_edge_name.clone()][original_name]
+                            &active_var_at_end_of_block[&*incoming_edge_name][original_name],
                         ),
                         size: var.size,
                         is_temp: var.is_temp,
@@ -341,7 +350,10 @@ impl IrPass for SingleStaticAssigment {
         last_time = Instant::now();
 
         let incoming_edge_for_each_block = get_incoming_edges_for_each_blk(&program);
-        eprintln!("Active Var at the end of block: {:02?}", last_time.elapsed());
+        eprintln!(
+            "Active Var at the end of block: {:02?}",
+            last_time.elapsed()
+        );
         last_time = Instant::now();
 
         let active_var_at_end_of_block =
