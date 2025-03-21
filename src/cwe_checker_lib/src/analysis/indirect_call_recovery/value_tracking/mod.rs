@@ -325,7 +325,7 @@ fn build_union_of_vars(vars: &Vec<&Variable>) -> Exp {
         .into_iter()
         .map(|var| {
             Exp::Reg(Reg {
-                var: Arc::new(var.clone().clone()),
+                var: Arc::new((*var).clone()),
             })
         })
         .collect_vec();
@@ -350,7 +350,7 @@ fn build_union_of_vars_as_deref(vars: &Vec<&Variable>) -> Exp {
         .into_iter()
         .map(|var| {
             Exp::Deref(Reg {
-                var: Arc::new(var.clone().clone()),
+                var: Arc::new((*var).clone()),
             })
         })
         .collect_vec();
@@ -368,12 +368,4 @@ fn build_union_of_vars_as_deref(vars: &Vec<&Variable>) -> Exp {
 
     exps.pop()
         .expect("A vlaue should exist, the check is right bevor this line")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::AscentProgram;
-
-    #[test]
-    fn test_ssa() {}
 }

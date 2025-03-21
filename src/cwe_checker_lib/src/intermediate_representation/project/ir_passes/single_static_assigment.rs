@@ -43,7 +43,6 @@ pub const SPLIT_SYMBOL: &str = "__";
 pub type VarsAtEndOfBlock = HashMap<Tid, Vec<Variable>>;
 
 pub struct SingleStaticAssigment {
-    register_vars: Vec<Variable>,
     pub active_var_at_end_of_block: VarsAtEndOfBlock,
 }
 
@@ -203,9 +202,7 @@ impl SingleStaticAssigment {
                     jmp.term.substitute_input_var(
                         &var,
                         &Expression::Var(Variable {
-                            name: add_ssa_index_to_name(
-                                &var.name, &active_indices[&var.name]
-                            ),
+                            name: add_ssa_index_to_name(&var.name, &active_indices[&var.name]),
                             size: var.size,
                             is_temp: var.is_temp,
                         }),
@@ -228,53 +225,6 @@ impl SingleStaticAssigment {
         }
         active_var_at_end_of_block
     }
-}
-
-/// Renames all temp variables. temp varaibles are only used within one instruction but the name is
-/// reused.*
-///
-/// * this is at moment a hypothesis.
-fn rename_temp_variables(program: &mut Program) {
-    let mut active_indices = HashMap::<Variable, i64>::new();
-
-    for block in program.blocks_mut() {
-        for def in &mut block.defs {
-            for (var, index) in &active_indices {
-                def.substitute_input_var(
-                    &var,
-                    &Expression::Var(Variable {
-                        name: add_ssa_index_to_name(&var.name, &active_indices[&var]),
-                        size: var.size,
-                        is_temp: true,
-                    }),
-                )
-            }
-            match &mut def.term {
-                Def::Assign { var, .. } | Def::Load { var, .. } => {
-                    if var.is_temp {
-                        let new_var_index = active_indices.get(&var).unwrap_or(&0_i64) + 1;
-                        active_indices.insert(var.clone(), new_var_index);
-                        var.name = add_ssa_index_to_name(&var.name, &new_var_index);
-                    }
-                }
-                _ => (),
-            }
-        }
-
-        for jmp in &mut block.jmps_mut() {
-            for (var, index) in &active_indices {
-                jmp.term.substitute_input_var(
-                    &var,
-                    &Expression::Var(Variable {
-                        name: add_ssa_index_to_name(&var.name, &index),
-                        size: var.size,
-                        is_temp: var.is_temp,
-                    }),
-                )
-            }
-        }
-    }
-    println!("Temp vars {}", active_indices.len());
 }
 
 fn fix_phi_functions(
@@ -319,12 +269,6 @@ impl IrPass for SingleStaticAssigment {
 
     fn new(construction_input: &Self::ConstructionInput) -> Self {
         return SingleStaticAssigment {
-            register_vars: construction_input
-                .register_set
-                .iter()
-                .map(|var| var.clone())
-                .clone()
-                .collect_vec(),
             active_var_at_end_of_block: VarsAtEndOfBlock::new(),
         };
     }

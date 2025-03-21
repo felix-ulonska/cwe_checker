@@ -2,16 +2,12 @@
 // We use pointer interference results for gaining knowledge about data
 //
 
-use std::{
-    collections::HashMap,
-    fmt::Display,
-};
+use std::{collections::HashMap, fmt::Display};
 
 use itertools::Itertools;
 
 use crate::{
     abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval},
-    analysis::vsa_results::VsaResult,
     intermediate_representation::{Def, Program},
     prelude::{Term, Tid},
 };
@@ -43,7 +39,7 @@ pub struct GlobalMemorySeperation {
 }
 
 impl GlobalMemorySeperation {
-    fn get_interval_for_def(&self, def: Term<Def>) -> Option<Interval> {
+    fn _get_interval_for_def(&self, def: Term<Def>) -> Option<Interval> {
         self.map_def_to_interval.get(&def.tid).cloned()
     }
 }
@@ -105,7 +101,9 @@ impl GlobalMemorySeperation {
         let mut map_def_to_interval = HashMap::<Tid, Interval>::new();
 
         for (tid, interval) in in_intervals {
-            let Ok(interval) = interval.try_to_offset_interval() else {continue;};
+            let Ok(interval) = interval.try_to_offset_interval() else {
+                continue;
+            };
             let interval = Interval {
                 begin: interval.0,
                 end: interval.1,

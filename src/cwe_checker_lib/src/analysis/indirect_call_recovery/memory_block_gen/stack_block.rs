@@ -18,11 +18,15 @@ use crate::{
 
 pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
     let mut boundaries = StackBlockBoundaries::new();
-    let analysees: Vec<StackAnalysis> = program.subs.par_iter().map(|sub| {
-        let mut analysis = StackAnalysis::new(sub.1);
-        analysis.analyze_block();
-        analysis
-    }).collect();
+    let analysees: Vec<StackAnalysis> = program
+        .subs
+        .par_iter()
+        .map(|sub| {
+            let mut analysis = StackAnalysis::new(sub.1);
+            analysis.analyze_block();
+            analysis
+        })
+        .collect();
     for analysis in analysees {
         boundaries.add_analysis_result(&analysis);
     }
@@ -54,11 +58,6 @@ impl StackBlockBoundaries {
             stack_boundaries: HashMap::new(),
             map_register_to_stack: HashMap::new(),
         }
-    }
-
-    /// Gets stack block for register
-    fn get_stack_block_for_reg(&self, var: &Variable) -> Option<&StackBlock> {
-        self.map_register_to_stack.get(var)
     }
 
     fn add_analysis_result(&mut self, analysis_result: &StackAnalysis) {
@@ -144,7 +143,7 @@ impl Display for StackBlockBoundaries {
             writeln!(f, "")?;
         }
         for (reg, blk) in &self.map_register_to_stack {
-            writeln!(f, "reg{}: {}", reg, blk);
+            writeln!(f, "reg{}: {}", reg, blk)?;
         }
 
         Ok(())

@@ -284,8 +284,6 @@ impl AbstractDomain for State<'_> {
 }
 
 pub struct AnalysisContext<'a> {
-    program: &'a Program,
-    sub: &'a Term<Sub>,
     cfg: IntraproceduralCfg<'a>,
     taint: HashSet<&'a Variable>,
 }
@@ -294,12 +292,7 @@ impl<'a> AnalysisContext<'a> {
     pub fn new(program: &'a Program, sub: &'a Term<Sub>) -> AnalysisContext<'a> {
         let cfg = IntraproceduralCfg::new(program, sub);
         let taint = simple_taint(sub);
-        AnalysisContext {
-            program,
-            sub,
-            cfg,
-            taint,
-        }
+        AnalysisContext { cfg, taint }
     }
 }
 

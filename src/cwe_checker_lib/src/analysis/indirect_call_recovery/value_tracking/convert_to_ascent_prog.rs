@@ -17,9 +17,7 @@ use std::{
 };
 
 use crate::{
-    intermediate_representation::{
-        ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program,
-    },
+    intermediate_representation::{ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program},
     prelude::Bitvector,
 };
 
@@ -426,7 +424,7 @@ impl ValueTracking<'_> {
         return None;
     }
 
-    fn refed_values(&self, f: &mut std::fmt::Formatter<'_>, exp: &Exp) -> std::fmt::Result {
+    fn _refed_values(&self, f: &mut std::fmt::Formatter, exp: &Exp) -> std::fmt::Result {
         //let mut refered_values = vec![];
         for value in exp.to_iter() {
             //if let Exp::RefMLoc(ref ref_mloc) = value {
