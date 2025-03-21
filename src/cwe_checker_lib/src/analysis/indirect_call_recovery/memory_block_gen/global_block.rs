@@ -71,7 +71,9 @@ impl GlobalMemorySeperation {
 
         let intervals_sorted_by_start = in_intervals
             .iter()
-            .map(|interval| interval.1.try_to_offset_interval().unwrap())
+            .map(|interval| interval.1.try_to_offset_interval())
+            .filter(|interval| interval.is_ok())
+            .map(|interval| interval.unwrap())
             .sorted_by_key(|x| x.0)
             .collect_vec();
         for (begin, end) in intervals_sorted_by_start {
@@ -103,7 +105,7 @@ impl GlobalMemorySeperation {
         let mut map_def_to_interval = HashMap::<Tid, Interval>::new();
 
         for (tid, interval) in in_intervals {
-            let interval = interval.try_to_offset_interval().unwrap();
+            let Ok(interval) = interval.try_to_offset_interval() else {continue;};
             let interval = Interval {
                 begin: interval.0,
                 end: interval.1,

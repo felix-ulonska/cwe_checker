@@ -28,7 +28,10 @@ pub fn infer_global_ptr(
 
             let mut compution =
                 create_computation(analysis, Some(State::new(sub.0.clone(), memory_segments)));
-            compution.compute();
+            compution.compute_with_max_steps(10000);
+            if !compution.has_stabilized() {
+                eprintln!("Sub: {} did not stabilize!", sub.1.name);
+            }
 
             let started_vsa_result = Instant::now();
             let result = fill_vsa_result_maps(compution);
