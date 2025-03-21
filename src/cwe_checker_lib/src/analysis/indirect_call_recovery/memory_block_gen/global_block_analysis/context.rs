@@ -1,5 +1,4 @@
 use std::{
-    backtrace::Backtrace,
     collections::{BTreeMap, HashMap},
     fmt::Display,
 };
@@ -26,10 +25,7 @@ use crate::{
     utils::binary::MemorySegment,
 };
 
-use super::{
-    taint::simple_taint,
-    vsa_result::{GlobalBlockAnalysisResult, RegisterState},
-};
+use super::{taint::simple_taint, vsa_result::GlobalBlockAnalysisResult};
 
 pub type ValueDomain = IntervalDomain;
 
@@ -52,21 +48,16 @@ pub struct State<'a> {
     pub register: DomainMap<Variable, Data, UnionMergeStrategy>,
     memory_segments: Vec<MemorySegmentWithInterval<'a>>,
     function_tid: Tid,
+    var_size: ByteSize,
 }
 
 impl<'a> State<'a> {
     pub fn new(
-        //stack_register: &Variable,
         function_tid: Tid,
         runtime_memory_image: &'a RuntimeMemoryImage,
+        variable_size: ByteSize,
     ) -> State {
         let register = DomainMap::from(BTreeMap::new());
-        //register.insert(
-        //    stack_register.clone(),
-        //    Data::from_target(
-        //        Bitvector::zero(apint::BitWidth::from(stack_register.size)).into(),
-        //    ),
-        //);
         let mut memory_segements = vec![];
         for segment in &runtime_memory_image.memory_segments {
             memory_segements.push(MemorySegmentWithInterval {
@@ -82,6 +73,7 @@ impl<'a> State<'a> {
             register,
             memory_segments: memory_segements,
             function_tid,
+            var_size: variable_size,
         }
     }
 
@@ -123,8 +115,7 @@ impl<'a> State<'a> {
             self.function_tid.clone(),
             AbstractLocation::GlobalAddress {
                 address: 0,
-                // TODO: constant byteSize
-                size: ByteSize::new(8),
+                size: self.var_size.clone(),
             },
         )
     }
@@ -176,7 +167,7 @@ impl<'a> State<'a> {
                 // Ensure that values are set, otherwise not yet inited value would inject a top
                 // value
                 .filter(|input| self.register.get(input).is_some())
-                .fold(Data::new_empty(ByteSize::new(8)), |data, val| {
+                .fold(Data::new_empty(self.var_size), |data, val| {
                     data.clone().merge(&self.get_register(val))
                 }),
         }
@@ -282,6 +273,7 @@ impl AbstractDomain for State<'_> {
             register: self.register.merge(&other.register),
             memory_segments: self.memory_segments.clone(),
             function_tid: self.function_tid.clone(),
+            var_size: self.var_size,
         }
     }
 

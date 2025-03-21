@@ -7,6 +7,7 @@ use vsa_result::GlobalBlockAnalysisResult;
 use crate::{
     analysis::forward_intraprocdural_fixpoint::create_computation,
     intermediate_representation::{Program, RuntimeMemoryImage},
+    prelude::ByteSize,
 };
 
 mod context;
@@ -17,6 +18,7 @@ pub mod vsa_result;
 pub fn infer_global_ptr(
     program: &Program,
     memory_segments: &RuntimeMemoryImage,
+    register_size: ByteSize,
 ) -> GlobalBlockAnalysisResult {
     program
         .subs
@@ -26,8 +28,10 @@ pub fn infer_global_ptr(
             let start_time = Instant::now();
             let analysis = AnalysisContext::new(program, sub.1);
 
-            let mut compution =
-                create_computation(analysis, Some(State::new(sub.0.clone(), memory_segments)));
+            let mut compution = create_computation(
+                analysis,
+                Some(State::new(sub.0.clone(), memory_segments, register_size)),
+            );
             compution.compute_with_max_steps(10000);
             if !compution.has_stabilized() {
                 eprintln!("Sub: {} did not stabilize!", sub.1.name);
