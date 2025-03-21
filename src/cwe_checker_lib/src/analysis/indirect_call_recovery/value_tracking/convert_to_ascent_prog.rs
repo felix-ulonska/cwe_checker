@@ -18,9 +18,9 @@ use std::{
 
 use crate::{
     intermediate_representation::{
-        ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program, Variable,
+        ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program,
     },
-    prelude::{Bitvector, ByteSize},
+    prelude::Bitvector,
 };
 
 use super::{build_union_of_vars_as_deref, AscentProgram, Exp, Gblk, Mloc, Sblk};

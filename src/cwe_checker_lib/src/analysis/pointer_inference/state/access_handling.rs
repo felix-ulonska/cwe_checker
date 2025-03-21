@@ -1,6 +1,5 @@
 //! Methods of [`State`] for handling memory and register access operations.
 
-use std::backtrace::Backtrace;
 
 use super::*;
 

@@ -1,11 +1,10 @@
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
-use petgraph::adj::NodeIndex;
 
-use crate::{abstract_domain::{AbstractIdentifier, AbstractLocation, DomainMap, UnionMergeStrategy}, analysis::vsa_results::VsaResult, intermediate_representation::{Arg, Expression, Variable}, prelude::Tid};
+use crate::{abstract_domain::{DomainMap, UnionMergeStrategy}, analysis::vsa_results::VsaResult, intermediate_representation::Variable, prelude::Tid};
 
-use super::context::{Data, ValueDomain};
+use super::context::Data;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RegisterState {

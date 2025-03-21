@@ -1,13 +1,13 @@
 pub mod convert_to_ascent_prog;
 
-use std::{fmt::Display, rc::Rc, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
 use crate::{
     intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
     prelude::Tid,
 };
 
-use ascent::{ascent, ascent_par};
+use ascent::ascent_par;
 use itertools::Itertools;
 
 use super::{

@@ -14,7 +14,6 @@ use stack_block::{build_stack_block, StackBlockBoundaries};
 use crate::{
     analysis::pointer_inference::Config,
     intermediate_representation::{Program, Project},
-    prelude::AnalysisResults,
 };
 
 pub struct BlockMemoryModel {

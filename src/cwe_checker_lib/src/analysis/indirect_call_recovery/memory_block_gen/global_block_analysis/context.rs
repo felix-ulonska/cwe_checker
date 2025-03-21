@@ -184,7 +184,7 @@ pub fn fill_vsa_result_maps<'b>(
 ) -> GlobalBlockAnalysisResult {
     let mut values_at_defs = HashMap::new();
     let mut addresses_at_defs = HashMap::new();
-    let mut states_at_tids = HashMap::new();
+    let states_at_tids = HashMap::new();
 
     let context = computation.get_context().get_context();
     let graph = computation.get_graph();
