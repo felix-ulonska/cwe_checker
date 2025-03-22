@@ -82,6 +82,7 @@ impl<'a> State<'a> {
         if let Some(data) = self.register.get(variable) {
             data.clone()
         } else {
+            //was: Data::new_top(variable.size)
             Data::new_top(variable.size)
         }
     }
@@ -140,9 +141,11 @@ impl<'a> State<'a> {
     /// Should only be called by [`State::eval`].
     fn eval_recursive(&self, expression: &Expression) -> Data {
         use Expression::*;
-        match expression {
+        let output = match expression {
             Var(variable) => self.get_register(variable),
-            Const(bitvector) => self.replace_if_global_pointer(bitvector.clone().into()),
+            Const(bitvector) => {
+                return self.replace_if_global_pointer(bitvector.clone().into());
+            }
             BinOp { op, lhs, rhs } => {
                 if *op == BinOpType::IntXOr && lhs == rhs {
                     // the result of `x XOR x` is always zero.
@@ -161,16 +164,37 @@ impl<'a> State<'a> {
                 low_byte,
                 size,
                 arg,
-            } => self.eval_recursive(arg).subpiece(*low_byte, *size),
-            Phi(inputs) => inputs
-                .iter()
-                // Ensure that values are set, otherwise not yet inited value would inject a top
-                // value
-                .filter(|input| self.register.get(input).is_some())
-                .fold(Data::new_empty(self.var_size), |data, val| {
-                    data.clone().merge(&self.get_register(val))
-                }),
-        }
+            } => {
+                let result = self.eval_recursive(arg).subpiece(*low_byte, *size);
+                result
+            }
+            Phi(inputs) => {
+                let inputs = inputs
+                    .iter()
+                    // Ensure that values are set, otherwise not yet inited value would inject a top
+                    // value
+                    .filter(|input| {
+                        let Some(reg) = self.register.get(input) else {
+                            return false;
+                        };
+                        !reg.get_relative_values().is_empty() || reg.get_absolute_value().is_some()
+                    })
+                    .collect_vec();
+                if inputs.len() == 0 {
+                    Data::new_empty(self.var_size)
+                } else if inputs.len() == 1 {
+                    self.get_register(inputs[0])
+                } else {
+                    let mut merged_data = self.get_register(inputs[0]).clone();
+                    for input in inputs {
+                        merged_data = merged_data.merge(&self.get_register(input));
+                    }
+                    merged_data
+                }
+            }
+        };
+
+        output
     }
 }
 

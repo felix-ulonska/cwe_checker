@@ -154,7 +154,6 @@ pub fn build_global_memory_blocks(
                     if let Some((abstract_location, interval)) = address.get_if_unique_target() {
                         match abstract_location.get_location() {
                             AbstractLocation::GlobalAddress { address: _, .. } => {
-                                println!("GMB: got {} the interval {}", def.tid.clone(), interval);
                                 intervals.push((def.tid.clone(), interval.clone()));
                             }
                             // Global Pointer is not inherently useful.

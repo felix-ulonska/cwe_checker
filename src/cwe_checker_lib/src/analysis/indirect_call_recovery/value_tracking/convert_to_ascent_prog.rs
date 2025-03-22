@@ -328,7 +328,7 @@ impl ValueTracking<'_> {
     pub fn run_value_tracking(&mut self) {
         self.convert();
         self.ascent_prog.run();
-        self.debug_print();
+        //self.debug_print();
     }
 
     pub fn debug_print(&mut self) {

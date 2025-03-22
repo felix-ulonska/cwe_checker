@@ -1,6 +1,9 @@
 use std::time::Instant;
 
-use ascent::rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use ascent::rayon::{
+    self,
+    iter::{IntoParallelRefIterator, ParallelIterator},
+};
 use context::{fill_vsa_result_maps, AnalysisContext, State};
 use vsa_result::GlobalBlockAnalysisResult;
 
@@ -23,8 +26,11 @@ pub fn infer_global_ptr(
     program
         .subs
         .par_iter()
+        //.iter()
+        //.filter(|sub| sub.1.name == "get_32bit_section_headers")
         .map(|sub| {
             eprintln!("Started for sub {}", sub.1.name);
+            //println!("Start for sub {}", sub.1);
             let start_time = Instant::now();
             let analysis = AnalysisContext::new(program, sub.1);
 
@@ -49,6 +55,9 @@ pub fn infer_global_ptr(
 
             result
         })
+        //.fold(GlobalBlockAnalysisResult::new_empty(), |acc, item| {
+        //    acc.merge(&item)
+        //})
         .fold(
             || GlobalBlockAnalysisResult::new_empty(),
             |acc, item| acc.merge(&item),

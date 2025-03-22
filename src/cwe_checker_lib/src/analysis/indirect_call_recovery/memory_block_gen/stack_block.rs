@@ -245,12 +245,14 @@ impl<'a> StackAnalysis<'a> {
         let mut boundaries = HashMap::<Variable, BoundaryCanidate>::new();
         for (variable, data) in &self.state.register_state {
             // Stores in general purpose register, e.g. not RSP or RBP
-            let offset_to_rsp = data
-                .get_if_unique_target()
-                .unwrap()
-                .1
-                .try_to_offset()
-                .unwrap();
+            let offset_to_rsp = match data.get_if_unique_target() {
+                Some(target) => match target.1.try_to_offset() {
+                    Ok(offset) => offset,
+                    _ => continue,
+                },
+                None => continue,
+            };
+
             let is_case_1_or_2 = offset_to_rsp <= 0;
             let is_case_3 = variable.is_physical_register()
                 && !(variable.name.contains("RSP") || variable.name.contains("RBP"));
@@ -353,7 +355,7 @@ impl State {
     fn get_register(&self, variable: &Variable) -> BoundaryCanidate {
         self.register_state
             .get(variable)
-            .unwrap_or(&BoundaryCanidate::new_top(ByteSize::new(8)))
+            .unwrap_or(&BoundaryCanidate::new_top(variable.size))
             .clone()
     }
 

@@ -105,7 +105,6 @@ impl<'a> PointerInference<'a> {
         log_sender: crossbeam_channel::Sender<LogThreadMsg>,
         print_stats: bool,
     ) -> PointerInference<'a> {
-        panic!("PI started");
         let context = Context::new(analysis_results, config, log_sender.clone());
         let project = analysis_results.project;
         let function_signatures = analysis_results.function_signatures.unwrap();

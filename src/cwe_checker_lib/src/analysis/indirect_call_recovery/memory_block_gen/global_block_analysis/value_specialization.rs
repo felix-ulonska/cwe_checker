@@ -31,6 +31,9 @@ impl<'a> State<'a> {
             self.set_register(var, self.eval(expression).intersect(&result)?);
             Ok(())
         } else if let Expression::BinOp { op, lhs, rhs } = expression {
+            if lhs.bytesize() != rhs.bytesize() {
+                return Ok(());
+            }
             self.specialize_by_binop_expression_result(op, lhs, rhs, result)
         } else {
             match expression {
@@ -278,10 +281,10 @@ impl<'a> State<'a> {
             rhs_pointer.get_if_unique_target(),
         ) {
             (Some((lhs_id, lhs_offset)), Some((rhs_id, rhs_offset))) if lhs_id == rhs_id => {
-               // if !(self.memory.is_unique_object(lhs_id)?) {
-               //     // Since the pointers may or may not point to different instances referenced by the same ID we cannot compare them.
-               //     return Ok(());
-               // }
+                // if !(self.memory.is_unique_object(lhs_id)?) {
+                //     // Since the pointers may or may not point to different instances referenced by the same ID we cannot compare them.
+                //     return Ok(());
+                // }
                 if *op == BinOpType::IntEqual {
                     let specialized_offset = lhs_offset.clone().intersect(rhs_offset)?;
                     let specialized_domain: Data =
