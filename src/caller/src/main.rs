@@ -330,7 +330,6 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     };
     let analysis_results = analysis_results.with_pointer_inference(pi_analysis_results.as_ref());
 
-
     // Compute string abstraction analysis if required
     let string_abstraction_results =
         if string_abstraction_needed {

@@ -1,3 +1,4 @@
+pub mod arc_cache;
 pub mod convert_to_ascent_prog;
 
 use std::{fmt::Display, sync::Arc};
@@ -103,7 +104,7 @@ pub enum Exp {
     //Mloc(Mloc),
     Deref(Reg),
     RefMLoc(Mloc),
-    RefFunc(Function),
+    RefFunc(Arc<Function>),
     Union(Arc<Exp>, Arc<Exp>),
 }
 
@@ -162,14 +163,17 @@ impl From<&Mloc> for Loc {
     }
 }
 
+//ascent_par! {
 ascent_par! {
+    #![measure_rule_times]
+    #![generate_run_timeout]
     // ID is for tracking
-    relation assign_reg(Reg, Exp, Tid);
-    relation assign_mloc(Mloc, Exp, Tid);
-    relation assing_deref_reg(Reg, Exp, Tid);
+    relation assign_reg(Reg, Exp, Arc<Tid>);
+    relation assign_mloc(Mloc, Exp, Arc<Tid>);
+    relation assing_deref_reg(Reg, Exp, Arc<Tid>);
     relation undeterministic_assign(Reg, Mloc, Exp);
     relation phi(Reg, Reg, Blk);
-    relation assign(Loc, Exp, Tid);
+    relation assign(Loc, Exp, Arc<Tid>);
     relation aloc_val(Loc, Exp);
 
     // To construct the new phi functions after adding an edge
@@ -182,6 +186,9 @@ ascent_par! {
 
     // From blk to Function
     relation func_call_targets(Blk, Function);
+
+    // First is SSA Reg, second is the base reg
+    relation base_reg(Reg, Reg);
 
     // Block at which end is a return statement
     relation block_with_return_of_at_function(Blk, Function);
@@ -295,9 +302,11 @@ ascent_par! {
 
 
     macro is_same_base_reg($reg1: expr, $reg2: expr) {
-        let src_base_reg = $reg1.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
-        let target_base_reg = $reg2.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
-        if src_base_reg == target_base_reg
+        //let src_base_reg = $reg1.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
+        //let target_base_reg = $reg2.var.name.split(SPLIT_SYMBOL).collect_vec()[0],
+        base_reg($reg1, base_reg_1),
+        base_reg($reg2, base_reg_2),
+        if base_reg_1 == base_reg_2
     }
 
     // If, func to callsite, then create phi instruction

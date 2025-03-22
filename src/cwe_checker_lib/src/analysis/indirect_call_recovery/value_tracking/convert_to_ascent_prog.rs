@@ -4,15 +4,17 @@ use itertools::Itertools;
 use crate::{
     analysis::indirect_call_recovery::{
         function_taken::Function,
-        memory_block_gen::BlockMemoryModel,
+        memory_block_gen::{stack_block::StackBlock, BlockMemoryModel},
         value_tracking::{build_union_of_vars, Blk, Hblk, Loc, Reg},
     },
-    prelude::Tid,
+    intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
+    prelude::{Term, Tid},
 };
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     sync::Arc,
+    time::Duration,
     vec::Vec,
 };
 
@@ -21,7 +23,9 @@ use crate::{
     prelude::Bitvector,
 };
 
-use super::{build_union_of_vars_as_deref, AscentProgram, Exp, Gblk, Mloc, Sblk};
+use super::{
+    arc_cache::ArcCache, build_union_of_vars_as_deref, AscentProgram, Exp, Gblk, Mloc, Sblk,
+};
 
 pub struct ValueTracking<'a> {
     program: &'a Program,
@@ -29,18 +33,23 @@ pub struct ValueTracking<'a> {
     at_functions: &'a HashSet<Function>,
     at_functions_by_addr: HashMap<u64, Function>,
     active_var_at_end_of_block: &'a VarsAtEndOfBlock,
+    var_cache: ArcCache<Variable>,
+    blk_cache: ArcCache<Tid>,
+    def_cache: ArcCache<Tid>,
+    fn_cache: ArcCache<Function>,
+    stkblk_cache: ArcCache<StackBlock>,
     ascent_prog: AscentProgram,
 }
 
 impl ValueTracking<'_> {
     /// Parse a const addr to exp
-    fn parse_const(&self, bitvector: &Bitvector) -> Exp {
+    fn parse_const(&mut self, bitvector: &Bitvector) -> Exp {
         let Ok(val) = bitvector.try_to_u64() else {
             return Exp::Empty;
         };
 
         if let Some(at_function) = self.at_functions_by_addr.get(&val) {
-            return Exp::RefFunc(at_function.clone());
+            return Exp::RefFunc(self.fn_cache.get(at_function));
         }
 
         if let Some(interval) = self.block_memory.global.get_interval(val as i64) {
@@ -50,10 +59,26 @@ impl ValueTracking<'_> {
         Exp::Empty
     }
 
-    fn expression_to_value_tracking(&self, exp: &Expression) -> Exp {
+    fn parse_const_slow(&self, bitvector: &Bitvector) -> Exp {
+        let Ok(val) = bitvector.try_to_u64() else {
+            return Exp::Empty;
+        };
+
+        if let Some(at_function) = self.at_functions_by_addr.get(&val) {
+            return Exp::RefFunc(at_function.clone().into());
+        }
+
+        if let Some(interval) = self.block_memory.global.get_interval(val as i64) {
+            return Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone())));
+        }
+
+        Exp::Empty
+    }
+
+    fn expression_to_value_tracking(&mut self, exp: &Expression) -> Exp {
         match exp {
             Expression::Var(var) => Exp::Reg(Reg {
-                var: var.clone().into(),
+                var: self.var_cache.get(var),
             }),
             // TODO add infer for function pointer and global pointer
             Expression::Const(bitvector) => self.parse_const(bitvector),
@@ -64,6 +89,25 @@ impl ValueTracking<'_> {
             Expression::UnOp { arg, .. }
             | Expression::Cast { arg, .. }
             | Expression::Subpiece { arg, .. } => self.expression_to_value_tracking(&*arg),
+            Expression::Unknown { .. } => panic!(),
+            Expression::Phi(vars) => build_union_of_vars(&vars.iter().collect()),
+        }
+    }
+
+    fn expression_to_value_tracking_slow(&self, exp: &Expression) -> Exp {
+        match exp {
+            Expression::Var(var) => Exp::Reg(Reg {
+                var: var.clone().into(),
+            }),
+            // TODO add infer for function pointer and global pointer
+            Expression::Const(bitvector) => self.parse_const_slow(bitvector),
+            Expression::BinOp { lhs, rhs, .. } => Exp::Union(
+                Arc::new(self.expression_to_value_tracking_slow(&*lhs)),
+                Arc::new(self.expression_to_value_tracking_slow(&*rhs)),
+            ),
+            Expression::UnOp { arg, .. }
+            | Expression::Cast { arg, .. }
+            | Expression::Subpiece { arg, .. } => self.expression_to_value_tracking_slow(&*arg),
             Expression::Unknown { .. } => panic!(),
             Expression::Phi(vars) => build_union_of_vars(&vars.iter().collect()),
         }
@@ -88,28 +132,34 @@ impl ValueTracking<'_> {
             at_functions_by_addr,
             active_var_at_end_of_block,
             ascent_prog: prog,
+            fn_cache: ArcCache::new(),
+            var_cache: ArcCache::new(),
+            blk_cache: ArcCache::new(),
+            def_cache: ArcCache::new(),
+            stkblk_cache: ArcCache::new(),
         }
     }
 
     fn convert_def_to_ascent(&mut self) {
         for blk in self.program.blocks() {
             for def in blk.defs() {
-                let _tid = def.tid.clone();
+                let _tid = self.def_cache.get(&def.tid);
                 match &def.term {
                     // AssignReg
                     Def::Load { var, address } => {
                         if let Some(interval) =
                             self.block_memory.global.get_interval_of_def(def.clone())
                         {
-                            let var = Arc::new(var.clone());
+                            let var = self.var_cache.get(var);
                             self.ascent_prog.assign_reg.push((
                                 Reg { var: var.clone() },
                                 Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone()))),
-                                def.tid.clone(),
+                                self.def_cache.get(&def.tid),
                             ));
-                            self.ascent_prog
-                                .reg_to_block
-                                .push((Reg { var: var.clone() }, Blk(Arc::new(blk.tid.clone()))));
+                            self.ascent_prog.reg_to_block.push((
+                                Reg { var: var.clone() },
+                                Blk(self.blk_cache.get(&blk.tid)),
+                            ));
                             continue;
                         }
 
@@ -117,47 +167,25 @@ impl ValueTracking<'_> {
                         // if inputs_vars.len() == 1 {
                         self.ascent_prog.assign_reg.push((
                             Reg {
-                                var: Arc::new(var.clone()),
+                                var: self.var_cache.get(var),
                             },
                             build_union_of_vars_as_deref(&inputs_vars),
                             //Exp::Deref(Reg {
                             //    var: inputs_vars[0].clone().into(),
                             //}),
-                            def.tid.clone(),
+                            self.def_cache.get(&def.tid),
                         ));
-                        //// TODO this is probably wrong?!
-                        //} else if inputs_vars.len() > 1 {
-                        //    // Build temp variable which includes all possible inputs
-                        //    let temp_var = Arc::new(Variable {
-                        //        name: format!("tempSrcAddrFor{}", var.name),
-                        //        size: var.size,
-                        //        is_temp: true,
-                        //    });
-                        //    self.ascent_prog.assign_reg.push((
-                        //        Reg {
-                        //            var: temp_var.clone(),
-                        //        },
-                        //        build_union_of_vars_as_deref(&inputs_vars),
-                        //        def.tid.clone(),
-                        //    ));
-                        //    self.ascent_prog.assign_reg.push((
-                        //        Reg {
-                        //            var: Arc::new(var.clone()),
-                        //        },
-                        //        Exp::Reg(Reg { var: temp_var }),
-                        //        def.tid.clone(),
-                        //    ));
-                        //}
                     }
                     // AssignMloc
                     Def::Store { address, value } => {
                         if let Some(interval) =
                             self.block_memory.global.get_interval_of_def(def.clone())
                         {
+                            let out_expr = self.expression_to_value_tracking(&value);
                             self.ascent_prog.assign_mloc.push((
                                 Mloc::Gblk(Gblk(interval.clone())),
-                                self.expression_to_value_tracking(&value),
-                                def.tid.clone(),
+                                out_expr,
+                                self.def_cache.get(&def.tid),
                             ));
                             continue;
                         }
@@ -165,12 +193,13 @@ impl ValueTracking<'_> {
                         // TODO: refactor code dupl
                         let input_vars = address.input_vars();
                         for input_var in input_vars {
+                            let out_expr = self.expression_to_value_tracking(&value);
                             self.ascent_prog.assing_deref_reg.push((
                                 Reg {
-                                    var: Arc::new(input_var.clone()),
+                                    var: self.var_cache.get(input_var),
                                 },
-                                self.expression_to_value_tracking(&value),
-                                def.tid.clone(),
+                                out_expr,
+                                self.def_cache.get(&def.tid),
                             ));
                         }
                     }
@@ -179,17 +208,17 @@ impl ValueTracking<'_> {
                         if let Expression::Phi(vars) = &value {
                             self.ascent_prog.reg_to_block.push((
                                 Reg {
-                                    var: var.clone().into(),
+                                    var: self.var_cache.get(var),
                                 },
-                                Blk(Arc::new(blk.tid.clone())),
+                                Blk(self.blk_cache.get(&blk.tid)),
                             ));
                             for source_var in vars {
                                 self.ascent_prog.phi.push((
                                     Reg {
-                                        var: Arc::new(var.clone()),
+                                        var: self.var_cache.get(var),
                                     },
                                     Reg {
-                                        var: source_var.clone().into(),
+                                        var: self.var_cache.get(source_var),
                                     },
                                     Blk(blk.tid.clone().into()),
                                 ));
@@ -197,16 +226,17 @@ impl ValueTracking<'_> {
                         } else {
                             self.ascent_prog.reg_to_block.push((
                                 Reg {
-                                    var: Arc::new(var.clone()),
+                                    var: self.var_cache.get(var),
                                 },
-                                Blk(Arc::new(blk.tid.clone())),
+                                Blk(self.blk_cache.get(&blk.tid)),
                             ));
+                            let out_expr = self.expression_to_value_tracking(&value);
                             self.ascent_prog.assign_reg.push((
                                 Reg {
-                                    var: Arc::new(var.clone()),
+                                    var: self.var_cache.get(var),
                                 },
-                                self.expression_to_value_tracking(&value),
-                                def.tid.clone(),
+                                out_expr,
+                                self.def_cache.get(&def.tid),
                             ));
                         }
                     }
@@ -232,7 +262,7 @@ impl ValueTracking<'_> {
                     if let Jmp::Return(..) = &jmp.term {
                         self.ascent_prog
                             .block_with_return_of_at_function
-                            .push((Blk(blk.tid.clone().into()), at_func.clone()));
+                            .push((Blk(self.blk_cache.get(&blk.tid)), at_func.clone()));
                     }
                 }
             }
@@ -252,7 +282,7 @@ impl ValueTracking<'_> {
                             Reg {
                                 var: Arc::new(input_var.clone()),
                             },
-                            Blk(Arc::new(blk.tid.clone())),
+                            Blk(self.blk_cache.get(&blk.tid)),
                         ));
                     }
                 }
@@ -267,7 +297,7 @@ impl ValueTracking<'_> {
                     Reg {
                         var: Arc::new(var.clone()),
                     },
-                    Blk(blk.clone().into()),
+                    Blk(self.blk_cache.get(&blk)),
                 ));
             }
         }
@@ -304,30 +334,63 @@ impl ValueTracking<'_> {
             println!("Adding stack block {} <- {}", stack_target_var, stack_blk);
             self.ascent_prog.aloc_val.push((
                 Reg {
-                    var: Arc::new(stack_target_var.clone()),
+                    var: self.var_cache.get(stack_target_var),
                 }
                 .into(),
-                Exp::RefMLoc(Mloc::Sblk(Sblk(Arc::new(stack_blk.clone())))),
+                Exp::RefMLoc(Mloc::Sblk(Sblk(self.stkblk_cache.get(stack_blk)))),
             ));
         }
     }
 
-    fn convert(&mut self) {
-        let prog = &mut self.ascent_prog;
+    fn fill_base_reg_mapping(&mut self) {
+        for blk in self.program.blocks() {
+            for def in blk.defs() {
+                if let Def::Assign { var, .. } = &def.term {
+                    let base_reg_name = var.name.split(SPLIT_SYMBOL).collect_vec()[0];
+                    self.ascent_prog.base_reg.push((
+                        Reg {
+                            var: self.var_cache.get(var),
+                        },
+                        Reg {
+                            var: self.var_cache.get(&Variable {
+                                name: base_reg_name.to_string(),
+                                size: var.size,
+                                is_temp: var.is_temp,
+                            }),
+                        },
+                    ));
+                }
+            }
+        }
+    }
 
+    fn convert(&mut self) {
+        eprintln!("Starting to convert");
         self.convert_def_to_ascent();
+        eprintln!("Converted def");
         self.add_reg_to_block();
+        eprintln!("Converted Reg To blk");
         self.add_atfunc_to_block();
+        eprintln!("Converted AtFunc");
         self.add_stack_aloc_val();
+        eprintln!("Converted StackAlloc");
         self.add_used_func_call();
+        eprintln!("Converted UsedFunc");
         self.add_heap_aloc_val();
+        eprintln!("Converted Alocval");
         self.add_return_statements();
+        eprintln!("Converted Return");
+        self.fill_base_reg_mapping();
+        eprintln!("Converted fill_base_reg_mapping");
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and
     pub fn run_value_tracking(&mut self) {
         self.convert();
-        self.ascent_prog.run();
+        println!("Starting to run ascent_prog");
+        //self.ascent_prog.run();
+        self.ascent_prog.run_timeout(Duration::from_secs(120));
+        println!("{}", self.ascent_prog.scc_times_summary());
         //self.debug_print();
     }
 
@@ -415,9 +478,9 @@ impl ValueTracking<'_> {
         refered_values
     }
 
-    fn get_assign(&self, tid: &Tid) -> Option<(Loc, Exp, Tid)> {
+    fn get_assign(&self, tid: &Tid) -> Option<(Loc, Exp, Arc<Tid>)> {
         for assign in &self.ascent_prog.assign {
-            if assign.2 == tid.clone() {
+            if *assign.2 == *tid {
                 return Some(assign.clone());
             }
         }
@@ -479,11 +542,13 @@ impl Display for ValueTracking<'_> {
                             writeln!(
                                 f,
                                 "{}",
-                                self.refed_mem_locs(&self.expression_to_value_tracking(address))
-                                    .iter()
-                                    .map(|exp| exp.to_string())
-                                    .collect_vec()
-                                    .join(",")
+                                self.refed_mem_locs(
+                                    &self.expression_to_value_tracking_slow(address)
+                                )
+                                .iter()
+                                .map(|exp| exp.to_string())
+                                .collect_vec()
+                                .join(",")
                             )?;
                             let Some(exps) =
                                 self.ascent_prog.aloc_val_indices_0.unwrap_unfrozen().get(&(
@@ -514,23 +579,25 @@ impl Display for ValueTracking<'_> {
                             write!(
                                 f,
                                 "\t\t{}",
-                                self.refed_mem_locs(&self.expression_to_value_tracking(address))
-                                    .iter()
-                                    .map(|exp| exp.to_string())
-                                    .collect_vec()
-                                    .join(",")
+                                self.refed_mem_locs(
+                                    &self.expression_to_value_tracking_slow(address)
+                                )
+                                .iter()
+                                .map(|exp| exp.to_string())
+                                .collect_vec()
+                                .join(",")
                             )?;
                             writeln!(
                                 f,
                                 "+= {}",
-                                self.value_set(&self.expression_to_value_tracking(value))
+                                self.value_set(&self.expression_to_value_tracking_slow(value))
                                     .iter()
                                     .map(|exp| exp.to_string())
                                     .collect_vec()
                                     .join(",")
                             )?;
-                            for refed_locs in
-                                self.refed_mem_locs(&self.expression_to_value_tracking(address))
+                            for refed_locs in self
+                                .refed_mem_locs(&self.expression_to_value_tracking_slow(address))
                             {
                                 let Some(exps) = self
                                     .ascent_prog
