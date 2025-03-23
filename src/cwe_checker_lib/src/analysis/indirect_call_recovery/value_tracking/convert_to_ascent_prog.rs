@@ -332,7 +332,6 @@ impl ValueTracking<'_> {
 
     fn add_stack_aloc_val(&mut self) {
         for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
-            println!("Adding stack block {} <- {}", stack_target_var, stack_blk);
             self.ascent_prog.aloc_val.push((
                 Reg {
                     var: self.var_cache.get(stack_target_var),
@@ -392,7 +391,21 @@ impl ValueTracking<'_> {
         self.ascent_prog.run();
         //self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
         println!("{}", self.ascent_prog.scc_times_summary());
+        self.print_results();
         //self.debug_print();
+    }
+
+    fn print_results(&self) {
+        let mut results: HashMap<Blk, Vec<Arc<Function>>> = HashMap::new();
+        for (blk, func) in &self.ascent_prog.func_call_targets {
+            results.entry(blk.clone()).or_default().push(func.clone());
+        }
+        for (a, bs) in &results {
+            println!("{a}:");
+            for b in bs {
+                println!("  {b}");
+            }
+        }
     }
 
     pub fn debug_print(&mut self) {
