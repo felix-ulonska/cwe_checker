@@ -292,7 +292,7 @@ impl<'a> StackAnalysis<'a> {
         // Fixpoint recursion: Loop over all defs until setteled. Here can be optimization in order
         // of execution and what parts gets re executed.
         let mut changed = false;
-        for _i in 0..10 {
+        for _i in 0..100 {
             changed = self.analysis_pass();
             if !changed {
                 break;
