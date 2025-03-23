@@ -8,7 +8,7 @@ use crate::{
         value_tracking::{build_union_of_vars, Blk, Hblk, Loc, Reg},
     },
     intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
-    prelude::{Term, Tid},
+    prelude::Tid,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -260,9 +260,10 @@ impl ValueTracking<'_> {
                 for jmp in blk.jmps() {
                     // assume: no mods to ret register. We return to the call instr
                     if let Jmp::Return(..) = &jmp.term {
-                        self.ascent_prog
-                            .block_with_return_of_at_function
-                            .push((Blk(self.blk_cache.get(&blk.tid)), at_func.clone()));
+                        self.ascent_prog.block_with_return_of_at_function.push((
+                            Blk(self.blk_cache.get(&blk.tid)),
+                            self.fn_cache.get(at_func),
+                        ));
                     }
                 }
             }
@@ -307,8 +308,8 @@ impl ValueTracking<'_> {
         for atfunction in self.at_functions {
             println!("AtFunc to {}", atfunction.tid);
             self.ascent_prog.atfunc_to_block.push((
-                atfunction.clone(),
-                Blk(atfunction.first_block_tid.clone().into()),
+                self.fn_cache.get(atfunction),
+                Blk(self.blk_cache.get(&atfunction.first_block_tid)),
             ));
         }
     }
@@ -322,7 +323,7 @@ impl ValueTracking<'_> {
         for (heap_target_var, heap_blk) in &self.block_memory.heap.register_with_heap {
             self.ascent_prog.aloc_val.push((
                 Loc::Reg(Reg {
-                    var: Arc::new(heap_target_var.clone()),
+                    var: self.var_cache.get(&heap_target_var),
                 }),
                 Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
             ));
@@ -389,7 +390,7 @@ impl ValueTracking<'_> {
         self.convert();
         println!("Starting to run ascent_prog");
         //self.ascent_prog.run();
-        self.ascent_prog.run_timeout(Duration::from_secs(120));
+        self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
         println!("{}", self.ascent_prog.scc_times_summary());
         //self.debug_print();
     }

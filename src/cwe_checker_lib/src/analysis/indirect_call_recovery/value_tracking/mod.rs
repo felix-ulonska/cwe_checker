@@ -180,18 +180,18 @@ ascent_par! {
     // Active vars at end of block
     relation reg_to_block(Reg, Blk);
     // The target of an atfunction
-    relation atfunc_to_block(Function, Blk);
+    relation atfunc_to_block(Arc<Function>, Blk);
     // What regs are used for function call
     relation used_func_call(Reg, Blk);
 
     // From blk to Function
-    relation func_call_targets(Blk, Function);
+    relation func_call_targets(Blk, Arc<Function>);
 
     // First is SSA Reg, second is the base reg
     relation base_reg(Reg, Reg);
 
     // Block at which end is a return statement
-    relation block_with_return_of_at_function(Blk, Function);
+    relation block_with_return_of_at_function(Blk, Arc<Function>);
 
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg

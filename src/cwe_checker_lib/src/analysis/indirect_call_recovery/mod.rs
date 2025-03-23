@@ -4,7 +4,7 @@ use std::process::exit;
 
 use crate::{
     ghidra_pcode::ir_passes::IrPass,
-    intermediate_representation::{ir_passes::SingleStaticAssigment, Project},
+    intermediate_representation::{ir_passes::SingleStaticAssigment, Program, Project},
     utils::debug,
 };
 
@@ -18,6 +18,18 @@ use super::pointer_inference::Config;
 pub mod function_taken;
 pub mod value_tracking;
 
+fn statistics(prog: &Program) {
+    let mut indirect_call_counter = 0;
+    for blk in prog.blocks() {
+        for call in blk.jmps() {
+            if call.is_indirect_call() {
+                indirect_call_counter += 1;
+            }
+        }
+    }
+    println!("Prog has {} indirect calls", indirect_call_counter);
+}
+
 /// Needs pointer interference
 pub fn run_icall_recovery(
     project: &Project,
@@ -26,14 +38,14 @@ pub fn run_icall_recovery(
 ) {
     println!("Starting SSA");
     let mut ssa_program = project.program.clone();
+    statistics(&ssa_program.term);
 
     let config: Config = serde_json::from_value(config.clone()).unwrap();
     let mut pass = <SingleStaticAssigment>::new(&project);
     pass.run(&mut ssa_program);
 
     println!("Building Block mem");
-    let block_memory_model =
-        build_memory_blocks(&ssa_program, &project, &config);
+    let block_memory_model = build_memory_blocks(&ssa_program, &project, &config);
     println!("Get AT funcs");
     let at_functions = get_at_functions(project);
 
