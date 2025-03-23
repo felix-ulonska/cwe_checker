@@ -389,8 +389,8 @@ impl ValueTracking<'_> {
     pub fn run_value_tracking(&mut self) {
         self.convert();
         println!("Starting to run ascent_prog");
-        //self.ascent_prog.run();
-        self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
+        self.ascent_prog.run();
+        //self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
         println!("{}", self.ascent_prog.scc_times_summary());
         //self.debug_print();
     }
