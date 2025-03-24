@@ -26,8 +26,6 @@ pub fn infer_global_ptr(
     program
         .subs
         .par_iter()
-        //.iter()
-        //.filter(|sub| sub.1.name == "get_32bit_section_headers")
         .map(|sub| {
             eprintln!("Started for sub {}", sub.1.name);
             //println!("Start for sub {}", sub.1);
@@ -55,6 +53,7 @@ pub fn infer_global_ptr(
 
             result
         })
+        // For non parallel
         //.fold(GlobalBlockAnalysisResult::new_empty(), |acc, item| {
         //    acc.merge(&item)
         //})

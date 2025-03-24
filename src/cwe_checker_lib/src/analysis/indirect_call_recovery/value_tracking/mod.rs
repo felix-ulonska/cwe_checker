@@ -1,5 +1,6 @@
 pub mod arc_cache;
 pub mod convert_to_ascent_prog;
+pub mod slice;
 
 use std::{fmt::Display, sync::Arc};
 

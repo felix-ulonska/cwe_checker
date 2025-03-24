@@ -1,5 +1,7 @@
 use std::fmt;
 
+use ascent::hashbrown::HashSet;
+
 use super::{CastOpType, Expression, Variable};
 use crate::prelude::*;
 
@@ -83,6 +85,40 @@ impl Term<Def> {
             Def::Store { address, value } => {
                 address.substitute_input_var(input_var, replace_with_expression);
                 value.substitute_input_var(input_var, replace_with_expression);
+            }
+        }
+    }
+
+    /// Gets all inputs_vars for a def. This includes the address and value expressions.
+    pub fn inputs_vars(&self) -> Vec<&Variable> {
+        match &self.term {
+            Def::Assign { var: _, value } => value.input_vars(),
+            Def::Load { var: _, address } => address.input_vars(),
+            Def::Store { address, value } => {
+                let mut input_vars_of_store = address.input_vars();
+                input_vars_of_store.append(&mut value.input_vars());
+                input_vars_of_store
+            }
+        }
+    }
+
+    /// Gets all for a def. This includes the target value, the address value.
+    pub fn used_vars(&self) -> Vec<&Variable> {
+        match &self.term {
+            Def::Assign { var, value } => {
+                let mut used_vars_of_assign = vec![var];
+                used_vars_of_assign.append(&mut value.input_vars());
+                used_vars_of_assign
+            }
+            Def::Load { var, address } => {
+                let mut used_vars_of_load = vec![var];
+                used_vars_of_load.append(&mut address.input_vars());
+                used_vars_of_load
+            }
+            Def::Store { address, value } => {
+                let mut input_vars_of_store = address.input_vars();
+                input_vars_of_store.append(&mut value.input_vars());
+                input_vars_of_store
             }
         }
     }

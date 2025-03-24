@@ -1,4 +1,7 @@
-use ascent::rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use ascent::{
+    hashbrown::HashMap,
+    rayon::iter::{IntoParallelRefIterator, ParallelIterator},
+};
 use itertools::Itertools;
 
 use crate::{
@@ -10,13 +13,7 @@ use crate::{
     intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
     prelude::Tid,
 };
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    sync::Arc,
-    time::Duration,
-    vec::Vec,
-};
+use std::{collections::HashSet, fmt::Display, sync::Arc, vec::Vec};
 
 use crate::{
     intermediate_representation::{ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program},
@@ -24,7 +21,8 @@ use crate::{
 };
 
 use super::{
-    arc_cache::ArcCache, build_union_of_vars_as_deref, AscentProgram, Exp, Gblk, Mloc, Sblk,
+    arc_cache::ArcCache, build_union_of_vars_as_deref, slice::slice_program, AscentProgram, Exp,
+    Gblk, Mloc, Sblk,
 };
 
 pub struct ValueTracking<'a> {
@@ -32,6 +30,7 @@ pub struct ValueTracking<'a> {
     block_memory: &'a BlockMemoryModel,
     at_functions: &'a HashSet<Function>,
     at_functions_by_addr: HashMap<u64, Function>,
+    rename_table: &'a HashMap<Variable, Variable>,
     active_var_at_end_of_block: &'a VarsAtEndOfBlock,
     var_cache: ArcCache<Variable>,
     blk_cache: ArcCache<Tid>,
@@ -118,6 +117,7 @@ impl ValueTracking<'_> {
         block_memory: &'a BlockMemoryModel,
         at_functions: &'a HashSet<Function>,
         active_var_at_end_of_block: &'a VarsAtEndOfBlock,
+        rename_table: &'a HashMap<Variable, Variable>,
     ) -> ValueTracking<'a> {
         let mut at_functions_by_addr = HashMap::new();
         for func in at_functions {
@@ -131,6 +131,7 @@ impl ValueTracking<'_> {
             at_functions,
             at_functions_by_addr,
             active_var_at_end_of_block,
+            rename_table,
             ascent_prog: prog,
             fn_cache: ArcCache::new(),
             var_cache: ArcCache::new(),
@@ -291,15 +292,18 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn replace_var_from_rename_table_and_get_cache(&mut self, var: Variable) -> Arc<Variable> {
+        self.var_cache
+            .get(&self.rename_table.get(&var).cloned().unwrap_or(var))
+    }
+
     fn add_reg_to_block(&mut self) {
         for (blk, active_vars) in self.active_var_at_end_of_block {
             for var in active_vars {
-                self.ascent_prog.reg_to_block.push((
-                    Reg {
-                        var: Arc::new(var.clone()),
-                    },
-                    Blk(self.blk_cache.get(&blk)),
-                ));
+                let var = self.replace_var_from_rename_table_and_get_cache(var.clone());
+                self.ascent_prog
+                    .reg_to_block
+                    .push((Reg { var }, Blk(self.blk_cache.get(&blk))));
             }
         }
     }
@@ -321,10 +325,9 @@ impl ValueTracking<'_> {
         //      Add temp_var <- &Mloc(heap)
         //      Add phi(target_reg, temp_var)
         for (heap_target_var, heap_blk) in &self.block_memory.heap.register_with_heap {
+            let var = self.replace_var_from_rename_table_and_get_cache(heap_target_var.clone());
             self.ascent_prog.aloc_val.push((
-                Loc::Reg(Reg {
-                    var: self.var_cache.get(&heap_target_var),
-                }),
+                Loc::Reg(Reg { var }),
                 Exp::RefMLoc(Mloc::Hblk(Hblk(Arc::new(heap_blk.clone())))),
             ));
         }
@@ -332,11 +335,9 @@ impl ValueTracking<'_> {
 
     fn add_stack_aloc_val(&mut self) {
         for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
+            let var = self.replace_var_from_rename_table_and_get_cache(stack_target_var.clone());
             self.ascent_prog.aloc_val.push((
-                Reg {
-                    var: self.var_cache.get(stack_target_var),
-                }
-                .into(),
+                Reg { var }.into(),
                 Exp::RefMLoc(Mloc::Sblk(Sblk(self.stkblk_cache.get(stack_blk)))),
             ));
         }
@@ -391,8 +392,8 @@ impl ValueTracking<'_> {
         self.ascent_prog.run();
         //self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
         println!("{}", self.ascent_prog.scc_times_summary());
-        self.print_results();
         //self.debug_print();
+        self.print_results();
     }
 
     fn print_results(&self) {

@@ -75,7 +75,7 @@ pub enum Expression {
         arg: Box<Expression>,
     },
     /// Single Static Assigment combination operator
-    Phi(Vec<Variable>)
+    Phi(Vec<Variable>),
 }
 
 /// The type/mnemonic of a binary operation.
@@ -173,7 +173,13 @@ impl Expression {
             },
             Cast { size, .. } | Unknown { size, .. } | Subpiece { size, .. } => *size,
             // TODO: this could be slow
-            Phi(inputs) => inputs.into_iter().max_by_key(|input| input.size).expect("inputs were empty!").size
+            Phi(inputs) => {
+                inputs
+                    .into_iter()
+                    .max_by_key(|input| input.size)
+                    .expect("inputs were empty!")
+                    .size
+            }
         }
     }
 
@@ -211,7 +217,7 @@ impl Expression {
                 vars
             }
             UnOp { arg, .. } | Cast { arg, .. } | Subpiece { arg, .. } => arg.input_vars(),
-            Phi(inputs) => inputs.iter().collect()
+            Phi(inputs) => inputs.iter().collect(),
         }
     }
 
@@ -233,8 +239,16 @@ impl Expression {
                 lhs.substitute_input_var(input_var, replace_with_expression);
                 rhs.substitute_input_var(input_var, replace_with_expression);
             }
-            // TODO: check if wrong?
-            Phi(_) => ()
+            Phi(inputs) => {
+                let Expression::Var(var) = replace_with_expression else {
+                    panic!("Tried to replace phi assigment input with an expression which does not only containt a Var");
+                };
+                for input in inputs.iter_mut() {
+                    if *input == *input_var {
+                        *input = var.clone();
+                    }
+                }
+            }
         }
     }
 
@@ -249,7 +263,7 @@ impl Expression {
     pub fn recursion_depth(&self) -> u64 {
         use Expression::*;
         match self {
-            Const(_) | Unknown { .. } | Var(_) | Phi (_) => 0,
+            Const(_) | Unknown { .. } | Var(_) | Phi(_) => 0,
             Subpiece { arg, .. } | Cast { arg, .. } | UnOp { arg, .. } => arg.recursion_depth() + 1,
             BinOp { lhs, rhs, .. } => {
                 std::cmp::max(lhs.recursion_depth(), rhs.recursion_depth()) + 1
@@ -288,7 +302,15 @@ impl fmt::Display for Expression {
             }
             Expression::Phi(inputs) => {
                 // TODO: this can be optimized, surely
-                write!(f, "phi({})", inputs.iter().map(|v| v.name.clone()).collect::<Vec<_>>().join(","))
+                write!(
+                    f,
+                    "phi({})",
+                    inputs
+                        .iter()
+                        .map(|v| v.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
             }
         }
     }

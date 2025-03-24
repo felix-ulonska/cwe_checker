@@ -5,6 +5,7 @@ use crate::{
     prelude::Term,
 };
 
+/// Taint Analysis for every input into jump instrucitons, load and store instructions.
 pub fn simple_taint<'a>(program: &'a Term<Sub>) -> HashSet<&'a Variable> {
     let mut changes = true;
     let mut taint = HashSet::new();
