@@ -1,6 +1,6 @@
 use ascent::{
     hashbrown::{HashMap, HashSet},
-    rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
+    rayon::{iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator}, slice::ParallelSlice},
 };
 use itertools::Itertools;
 
@@ -69,15 +69,34 @@ fn remove_instructions_without_tainted_vars(
 fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
     let keys: Vec<_> = input.keys().cloned().collect();
 
-    for key in keys {
-        let mut next = input.get(&key).clone();
-        while let Some(val) = next.and_then(|k| input.get(k)) {
-            next = Some(val);
-        }
-        if let Some(final_val) = next {
-            input.insert(key, final_val.clone());
-        }
-    }
+    let updates = keys
+        .par_chunks(1000)
+        .map(|chunk| {
+            let mut local_map = HashMap::with_capacity(chunk.len());
+
+            for key in chunk {
+                let mut next = input.get(key);
+
+                while let Some(val) = next.and_then(|k| input.get(k)) {
+                    next = Some(val);
+                }
+
+                if let Some(final_val) = next {
+                    local_map.insert(key.clone(), final_val.clone());
+                }
+            }
+
+            local_map
+        })
+        .reduce(
+            || HashMap::new(),
+            |mut acc, map| {
+                acc.extend(map);
+                acc
+            },
+        );
+
+    input.extend(updates);
 }
 
 // Essentially the Dead Var eliminiation with some extra rules
@@ -182,7 +201,8 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                 if iter > 10000 {
                     panic!("Loop did not settle");
                 }
-                changed = false;
+                c
+                    hanged = false;
                 for def in blk.defs_mut() {
                     let cloned_def = def.clone();
                     let used_vars: HashSet<&Variable> =
