@@ -163,7 +163,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                         // If loops exist there could recursion. If the new variable has a lower
                         // index, it indicates that we have loop backedge. Skip those variables
                         if inputs[0]
-                            .to_string()
+                            .name
                             .split_once(SPLIT_SYMBOL)
                             .unwrap()
                             .1
