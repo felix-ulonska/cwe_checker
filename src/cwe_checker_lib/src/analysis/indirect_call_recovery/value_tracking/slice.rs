@@ -8,7 +8,8 @@ use ascent::{
 use itertools::Itertools;
 
 use crate::intermediate_representation::{
-    ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program, Variable,
+    ir_passes::{VarsAtEndOfBlock, SPLIT_SYMBOL},
+    Def, Expression, Jmp, Program, Variable,
 };
 
 /// Slice the **SSA** program, so that only assigments and variables exist that
@@ -157,6 +158,27 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                     // change
                     if inputs.len() == 1 {
                         if inputs[0] == var {
+                            continue;
+                        }
+                        // If loops exist there could recursion. If the new variable has a lower
+                        // index, it indicates that we have loop backedge. Skip those variables
+                        if inputs[0]
+                            .to_string()
+                            .split_once(SPLIT_SYMBOL)
+                            .unwrap()
+                            .1
+                            .parse::<i32>()
+                            .ok()
+                            .unwrap()
+                            > var
+                                .name
+                                .split_once(SPLIT_SYMBOL)
+                                .unwrap()
+                                .1
+                                .parse::<i32>()
+                                .ok()
+                                .unwrap()
+                        {
                             continue;
                         }
                         local_rename_table.insert(var.clone(), inputs[0].clone());
