@@ -64,14 +64,8 @@ impl StackBlockBoundaries {
         let boundaries_storted = analysis_result
             .boundaries
             .iter()
-            .map(|boundary| {
-                boundary
-                    .get_if_unique_target()
-                    .unwrap()
-                    .1
-                    .try_to_offset()
-                    .unwrap()
-            })
+            .filter_map(|boundary| boundary.get_if_unique_target())
+            .filter_map(|(_id, bitvector)| bitvector.try_to_offset().ok())
             .sorted()
             .collect_vec();
         self.stack_boundaries.insert(
