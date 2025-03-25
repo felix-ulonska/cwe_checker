@@ -1,6 +1,9 @@
 use ascent::{
     hashbrown::{HashMap, HashSet},
-    rayon::{iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator}, slice::ParallelSlice},
+    rayon::{
+        iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
+        slice::ParallelSlice,
+    },
 };
 use itertools::Itertools;
 
@@ -201,8 +204,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                 if iter > 10000 {
                     panic!("Loop did not settle");
                 }
-                c
-                    hanged = false;
+                changed = false;
                 for def in blk.defs_mut() {
                     let cloned_def = def.clone();
                     let used_vars: HashSet<&Variable> =
