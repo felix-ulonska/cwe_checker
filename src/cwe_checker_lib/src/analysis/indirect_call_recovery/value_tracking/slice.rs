@@ -1,6 +1,6 @@
 use ascent::{
     hashbrown::{HashMap, HashSet},
-    rayon::iter::ParallelIterator,
+    rayon::iter::{IntoParallelRefMutIterator, ParallelIterator},
 };
 use itertools::Itertools;
 
@@ -140,8 +140,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
     ssa_program
         .blocks_mut()
         .collect_vec()
-        //.par_iter_mut()
-        .iter_mut()
+        .par_iter_mut()
         .for_each(|blk| {
             let mut changed = true;
             let mut iter = 0;
