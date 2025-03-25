@@ -99,7 +99,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
         .subs
         .par_iter()
         .map(|sub| {
-            let first_block = sub.1.blocks().take(1).next().unwrap(); // safer than [0]
+            let first_block = sub.1.blocks().take(1).next().unwrap();
             first_block.tid.clone()
         })
         .collect::<std::collections::HashSet<_>>();
@@ -107,8 +107,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
     block_with_full_phi.extend(first_blocks);
 
     // rename First to Second Element
-    let mut rename_table = HashMap::new();
-    ssa_program
+    let mut rename_table = ssa_program
         .blocks_mut()
         .collect_vec()
         .par_iter_mut()
