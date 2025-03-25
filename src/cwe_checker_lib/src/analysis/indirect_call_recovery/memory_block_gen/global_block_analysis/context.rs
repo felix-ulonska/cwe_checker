@@ -5,7 +5,6 @@ use std::{
 
 use ascent::hashbrown::HashSet;
 use itertools::Itertools;
-use nix::NixPath;
 
 use crate::{
     abstract_domain::{

@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use ascent::rayon::{
-    self,
-    iter::{IntoParallelRefIterator, ParallelIterator},
-};
+use ascent::rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use context::{fill_vsa_result_maps, AnalysisContext, State};
 use vsa_result::GlobalBlockAnalysisResult;
 

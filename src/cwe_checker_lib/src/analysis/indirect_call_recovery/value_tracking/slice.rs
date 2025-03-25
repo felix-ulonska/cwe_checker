@@ -1,6 +1,6 @@
 use ascent::{
     hashbrown::{HashMap, HashSet},
-    rayon::iter::{IntoParallelRefMutIterator, ParallelIterator},
+    rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
 };
 use itertools::Itertools;
 
@@ -94,42 +94,70 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
             }
         }
     }
-    for sub in &ssa_program.subs {
-        let first_block = sub.1.blocks().take(1).collect_vec()[0];
-        block_with_full_phi.insert(first_block.tid.clone());
-    }
+
+    let first_blocks = ssa_program
+        .subs
+        .par_iter()
+        .map(|sub| {
+            let first_block = sub.1.blocks().take(1).next().unwrap(); // safer than [0]
+            first_block.tid.clone()
+        })
+        .collect::<std::collections::HashSet<_>>();
+
+    block_with_full_phi.extend(first_blocks);
 
     // rename First to Second Element
     let mut rename_table = HashMap::new();
-    for blk in ssa_program.blocks_mut() {
-        let mut def_to_remove = HashSet::new();
-        // Skip blocks which can be returnted to or are at the start of a function.
-        if block_with_full_phi.contains(&blk.tid) {
-            continue;
-        }
+    ssa_program
+        .blocks_mut()
+        .collect_vec()
+        .par_iter_mut()
+        .map(|blk| {
+            let mut local_rename_table = HashMap::new();
+            let mut def_to_remove = HashSet::new();
+            // Skip blocks which can be returnted to or are at the start of a function.
+            if block_with_full_phi.contains(&blk.tid) {
+                return local_rename_table;
+            }
 
-        for def in blk.defs() {
-            if let Def::Assign { var, value } = &def.term {
-                let inputs = value.input_vars();
-                // Single Input var: Can be replaced with original value
-                // Phi instruction can have the same input as output if within a loop; do not
-                // change
-                if inputs.len() == 1 {
-                    if inputs[0] == var {
-                        continue;
+            for def in blk.defs() {
+                if let Def::Assign { var, value } = &def.term {
+                    let inputs = value.input_vars();
+                    // Single Input var: Can be replaced with original value
+                    // Phi instruction can have the same input as output if within a loop; do not
+                    // change
+                    if inputs.len() == 1 {
+                        if inputs[0] == var {
+                            continue;
+                        }
+                        local_rename_table.insert(var.clone(), inputs[0].clone());
+                        def_to_remove.insert(def.tid.clone());
                     }
-                    rename_table.insert(var.clone(), inputs[0].clone());
-                    def_to_remove.insert(def.tid.clone());
                 }
             }
-        }
-        blk.defs = blk
-            .defs
-            .iter()
-            .filter(|def| !def_to_remove.contains(&def.tid))
-            .map(|def| def.clone())
-            .collect_vec();
-    }
+            blk.defs = blk
+                .defs
+                .iter()
+                .filter(|def| !def_to_remove.contains(&def.tid))
+                .map(|def| def.clone())
+                .collect_vec();
+
+            local_rename_table
+        })
+        .fold(
+            || HashMap::new(),
+            |mut acc, item| {
+                acc.extend(item);
+                acc
+            },
+        )
+        .reduce(
+            || HashMap::new(),
+            |mut acc, item| {
+                acc.extend(item);
+                acc
+            },
+        );
     remove_intermediate_steps(&mut rename_table);
 
     let rename_table_clone = rename_table.clone();
