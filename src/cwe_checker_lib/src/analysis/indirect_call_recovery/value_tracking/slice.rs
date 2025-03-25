@@ -105,6 +105,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
         .collect::<std::collections::HashSet<_>>();
 
     block_with_full_phi.extend(first_blocks);
+    eprintln!("1");
 
     // rename First to Second Element
     let mut rename_table = ssa_program
@@ -157,10 +158,14 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                 acc
             },
         );
+    eprintln!("2");
     remove_intermediate_steps(&mut rename_table);
+    eprintln!("3");
 
     let rename_table_clone = rename_table.clone();
     let rename_table_keys: HashSet<&Variable> = HashSet::from_iter(rename_table_clone.keys());
+
+    eprintln!("4");
 
     // This is quadratic runtime!
     // Replace all vars until no variable is left from the rename_table is needed
