@@ -72,6 +72,8 @@ fn remove_instructions_without_tainted_vars(
 fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
     let keys: Vec<_> = input.keys().cloned().collect();
 
+    eprintln!("Has renamed {} variables", input.len());
+    let input_size = input.len();
     let updates = keys
         .par_chunks(1000)
         .map(|chunk| {
@@ -80,8 +82,13 @@ fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
             for key in chunk {
                 let mut next = input.get(key);
 
+                let mut i = 0;
                 while let Some(val) = next.and_then(|k| input.get(k)) {
+                    if i > input_size {
+                        panic!("remove_intermediate_steps has a circular rename");
+                    }
                     next = Some(val);
+                    i += 1;
                 }
 
                 if let Some(final_val) = next {
