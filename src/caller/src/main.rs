@@ -253,7 +253,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
 
     let binary_file_path = PathBuf::from(args.binary.clone().unwrap());
 
-    let (binary, project) =
+    let (binary, mut project) =
         disassemble_binary(&binary_file_path, bare_metal_config_opt, &debug_settings)?;
 
     if debug_settings.should_debug(debug::Stage::CallGraph) {
@@ -301,7 +301,7 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
     ]);
 
     // Compute BPA
-    run_icall_recovery(&project, &debug_settings, &config["Memory"]);
+    run_icall_recovery(&mut project, &debug_settings, &config["Memory"]);
     exit(0);
     let string_abstraction_needed = modules
         .iter()

@@ -12,7 +12,10 @@ pub mod memory_block_gen;
 use function_taken::get_at_functions;
 use itertools::Itertools;
 use memory_block_gen::build_memory_blocks;
-use value_tracking::{convert_to_ascent_prog::ValueTracking, slice::slice_program};
+use value_tracking::{
+    convert_to_ascent_prog::ValueTracking, output::IndirectCalls, slice::slice_program,
+    AscentProgram,
+};
 
 use super::pointer_inference::Config;
 
@@ -35,12 +38,12 @@ fn statistics(prog: &Program) {
     println!("\t {} instructions", instr_counter);
 }
 
-/// Needs pointer interference
-pub fn run_icall_recovery(
+// Helper method to drop all structs information that is only constructed to build the ascent_prog
+fn build_ascent_prog(
     project: &Project,
     debug_settings: &debug::Settings,
     config: &serde_json::Value,
-) {
+) -> AscentProgram {
     println!("Starting SSA");
     let mut ssa_program = project.program.clone();
 
@@ -67,10 +70,28 @@ pub fn run_icall_recovery(
         &pass.active_var_at_end_of_block,
         &rename_table,
     );
+    value_tracking.convert();
 
-    value_tracking.run_value_tracking();
+    let ValueTracking { ascent_prog, .. } = value_tracking;
+
+    ascent_prog
+}
+
+/// Needs pointer interference
+pub fn run_icall_recovery(
+    project: &mut Project,
+    debug_settings: &debug::Settings,
+    config: &serde_json::Value,
+) {
+    //value_tracking.run_value_tracking();
+    let mut ascent_prog = build_ascent_prog(project, debug_settings, config);
+    ascent_prog.run();
+    let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
+    indirect_calls.add_to_program(&mut project.program);
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
         exit(0);
     }
 }
+
+fn export_indirect_call_graph(program: &Program) {}

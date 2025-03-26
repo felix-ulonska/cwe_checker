@@ -37,7 +37,7 @@ pub struct ValueTracking<'a> {
     def_cache: ArcCache<Tid>,
     fn_cache: ArcCache<Function>,
     stkblk_cache: ArcCache<StackBlock>,
-    ascent_prog: AscentProgram,
+    pub ascent_prog: AscentProgram,
 }
 
 impl ValueTracking<'_> {
@@ -365,7 +365,7 @@ impl ValueTracking<'_> {
         }
     }
 
-    fn convert(&mut self) {
+    pub fn convert(&mut self) {
         eprintln!("Starting to convert");
         self.convert_def_to_ascent();
         eprintln!("Converted def");
