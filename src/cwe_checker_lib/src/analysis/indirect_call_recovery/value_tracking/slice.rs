@@ -1,11 +1,15 @@
 use ascent::{
     hashbrown::{HashMap, HashSet},
-    rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
+    rayon::{
+        iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
+        slice::ParallelSlice,
+    },
 };
 use itertools::Itertools;
 
 use crate::intermediate_representation::{
-    ir_passes::VarsAtEndOfBlock, Def, Expression, Jmp, Program, Variable,
+    ir_passes::{VarsAtEndOfBlock, SPLIT_SYMBOL},
+    Def, Expression, Jmp, Program, Variable,
 };
 
 /// Slice the **SSA** program, so that only assigments and variables exist that
@@ -69,15 +73,41 @@ fn remove_instructions_without_tainted_vars(
 fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
     let keys: Vec<_> = input.keys().cloned().collect();
 
-    for key in keys {
-        let mut next = input.get(&key).clone();
-        while let Some(val) = next.and_then(|k| input.get(k)) {
-            next = Some(val);
-        }
-        if let Some(final_val) = next {
-            input.insert(key, final_val.clone());
-        }
-    }
+    eprintln!("Has renamed {} variables", input.len());
+    let input_size = input.len();
+    let updates = keys
+        .par_chunks(1000)
+        .map(|chunk| {
+            let mut local_map = HashMap::with_capacity(chunk.len());
+
+            for key in chunk {
+                let mut next = input.get(key);
+
+                let mut i = 0;
+                while let Some(val) = next.and_then(|k| input.get(k)) {
+                    if i > input_size {
+                        panic!("remove_intermediate_steps has a circular rename");
+                    }
+                    next = Some(val);
+                    i += 1;
+                }
+
+                if let Some(final_val) = next {
+                    local_map.insert(key.clone(), final_val.clone());
+                }
+            }
+
+            local_map
+        })
+        .reduce(
+            || HashMap::new(),
+            |mut acc, map| {
+                acc.extend(map);
+                acc
+            },
+        );
+
+    input.extend(updates);
 }
 
 // Essentially the Dead Var eliminiation with some extra rules
@@ -105,6 +135,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
         .collect::<std::collections::HashSet<_>>();
 
     block_with_full_phi.extend(first_blocks);
+    eprintln!("1");
 
     // rename First to Second Element
     let mut rename_table = ssa_program
@@ -127,6 +158,32 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                     // change
                     if inputs.len() == 1 {
                         if inputs[0] == var {
+                            continue;
+                        }
+                        // If loops exist there could recursion. If the new variable has a lower
+                        // index, it indicates that we have loop backedge. Skip those variables
+                        // This could like this:
+                        // x_1 := x_2
+                        // x_2 := x_1
+                        // Without this check, we would have a loop x_1 => x_2 => x_1...
+                        // We break the loop because we do not rename the first statement
+                        if inputs[0]
+                            .name
+                            .split_once(SPLIT_SYMBOL)
+                            .unwrap()
+                            .1
+                            .parse::<i32>()
+                            .ok()
+                            .unwrap()
+                            > var
+                                .name
+                                .split_once(SPLIT_SYMBOL)
+                                .unwrap()
+                                .1
+                                .parse::<i32>()
+                                .ok()
+                                .unwrap()
+                        {
                             continue;
                         }
                         local_rename_table.insert(var.clone(), inputs[0].clone());
@@ -157,10 +214,14 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
                 acc
             },
         );
+    eprintln!("2");
     remove_intermediate_steps(&mut rename_table);
+    eprintln!("3");
 
     let rename_table_clone = rename_table.clone();
     let rename_table_keys: HashSet<&Variable> = HashSet::from_iter(rename_table_clone.keys());
+
+    eprintln!("4");
 
     // This is quadratic runtime!
     // Replace all vars until no variable is left from the rename_table is needed
