@@ -1,4 +1,5 @@
 //! Indirect Call Target recovery, inspired by BPA.
+pub mod json_export;
 
 use std::process::exit;
 
@@ -11,6 +12,7 @@ use crate::{
 pub mod memory_block_gen;
 use function_taken::get_at_functions;
 use itertools::Itertools;
+use json_export::export_json;
 use memory_block_gen::build_memory_blocks;
 use value_tracking::{
     convert_to_ascent_prog::ValueTracking, output::IndirectCalls, slice::slice_program,
@@ -44,25 +46,25 @@ fn build_ascent_prog(
     debug_settings: &debug::Settings,
     config: &serde_json::Value,
 ) -> AscentProgram {
-    println!("Starting SSA");
+    eprintln!("Starting SSA");
     let mut ssa_program = project.program.clone();
 
     let config: Config = serde_json::from_value(config.clone()).unwrap();
     let mut pass = <SingleStaticAssigment>::new(&project);
     pass.run(&mut ssa_program);
 
-    println!("Building Block mem");
+    eprintln!("Building Block mem");
     let block_memory_model = build_memory_blocks(&ssa_program, &project, &config);
-    println!("Get AT funcs");
+    eprintln!("Get AT funcs");
     let at_functions = get_at_functions(project);
 
     let mut sliced_program = ssa_program.clone();
-    statistics(&ssa_program);
+    //statistics(&ssa_program);
     let rename_table = slice_program(&mut sliced_program, &pass.active_var_at_end_of_block);
     ssa_program = sliced_program;
-    statistics(&ssa_program);
+    //statistics(&ssa_program);
 
-    println!("Start Value Tracking");
+    eprintln!("Start Value Tracking");
     let mut value_tracking = ValueTracking::new(
         &ssa_program,
         &block_memory_model,
@@ -72,8 +74,9 @@ fn build_ascent_prog(
     );
     value_tracking.convert();
 
-    let ValueTracking { ascent_prog, .. } = value_tracking;
+    //value_tracking.run_value_tracking();
 
+    let ValueTracking { ascent_prog, .. } = value_tracking;
     ascent_prog
 }
 
@@ -88,10 +91,9 @@ pub fn run_icall_recovery(
     ascent_prog.run();
     let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
     indirect_calls.add_to_program(&mut project.program);
+    export_json(&project.program);
 
     if debug_settings.should_debug(debug::Stage::ICallRec) {
         exit(0);
     }
 }
-
-fn export_indirect_call_graph(program: &Program) {}

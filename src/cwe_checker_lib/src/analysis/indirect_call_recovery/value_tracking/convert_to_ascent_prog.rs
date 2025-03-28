@@ -310,7 +310,6 @@ impl ValueTracking<'_> {
 
     fn add_atfunc_to_block(&mut self) {
         for atfunction in self.at_functions {
-            println!("AtFunc to {}", atfunction.tid);
             self.ascent_prog.atfunc_to_block.push((
                 self.fn_cache.get(atfunction),
                 Blk(self.blk_cache.get(&atfunction.first_block_tid)),
@@ -386,13 +385,12 @@ impl ValueTracking<'_> {
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and
-    pub fn run_value_tracking(&mut self) {
+    pub fn run_value_tracking_with_debug(&mut self) {
         self.convert();
-        println!("Starting to run ascent_prog");
+        eprintln!("Starting to run ascent_prog");
         self.ascent_prog.run();
         //self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
-        println!("{}", self.ascent_prog.scc_times_summary());
-        //self.debug_print();
+        self.debug_print();
         self.print_results();
     }
 

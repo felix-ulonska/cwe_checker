@@ -326,7 +326,6 @@ ascent_par! {
         reg_to_block(caller_reg, caller_blk),
         reg_to_block(callee_reg, blk_in_callee),
         is_same_base_reg!(target_reg, callee_reg);
-
 }
 
 /// Converts an Vec<Variable> to Tree like Exp expressions where the expressions is a union of all
