@@ -27,10 +27,10 @@ pub fn export_json(program: &Program) {
 
     let mut calls = vec![];
 
-    program
-        .subs
-        .iter()
-        .for_each(|sub| println!("{}", sub.1.name));
+    //program
+    //    .subs
+    //    .iter()
+    //    .for_each(|sub| println!("{}", sub.1.name));
 
     for blk in program.blocks() {
         for jmp in blk.jmps() {

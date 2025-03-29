@@ -130,13 +130,13 @@ impl PcodeProject {
         };
         debug_settings.print(&ir_program, debug::Stage::Ir(debug::IrForm::Early));
 
-        run_ir_pass![
-            ir_program,
-            (),
-            SingleTargetIndirectCallsPass,
-            logs,
-            debug_settings
-        ];
+        //run_ir_pass![
+        //    ir_program,
+        //    (),
+        //    SingleTargetIndirectCallsPass,
+        //    logs,
+        //    debug_settings
+        //];
         run_ir_pass![ir_program, (), ReorderFnBlocksPass, logs, debug_settings];
         run_ir_pass!(ir_program, ReplaceCallsToExtFnsPass, logs, debug_settings);
         run_ir_pass![
@@ -152,7 +152,7 @@ impl PcodeProject {
         run_ir_pass!(ir_program, PatchCfPass, logs, debug_settings);
         run_ir_pass![ir_program, (), EntryPointsPass, logs, debug_settings];
 
-        debug_assert_postconditions![ir_program, (), SingleTargetIndirectCallsPass];
+        //debug_assert_postconditions![ir_program, (), SingleTargetIndirectCallsPass];
         debug_assert_postconditions![ir_program, (), ReorderFnBlocksPass];
         debug_assert_postconditions!(ir_program, ReplaceCallsToExtFnsPass);
         debug_assert_postconditions![ir_program, register_map, SubregisterSubstitutionPass];

@@ -59,7 +59,7 @@ fn build_ascent_prog(
     let at_functions = get_at_functions(project);
 
     let mut sliced_program = ssa_program.clone();
-    //statistics(&ssa_program);
+    statistics(&ssa_program);
     let rename_table = slice_program(&mut sliced_program, &pass.active_var_at_end_of_block);
     ssa_program = sliced_program;
     //statistics(&ssa_program);
@@ -72,9 +72,9 @@ fn build_ascent_prog(
         &pass.active_var_at_end_of_block,
         &rename_table,
     );
-    value_tracking.convert();
+    //value_tracking.convert();
 
-    //value_tracking.run_value_tracking();
+    value_tracking.run_value_tracking_with_debug();
 
     let ValueTracking { ascent_prog, .. } = value_tracking;
     ascent_prog
@@ -88,7 +88,7 @@ pub fn run_icall_recovery(
 ) {
     //value_tracking.run_value_tracking();
     let mut ascent_prog = build_ascent_prog(project, debug_settings, config);
-    ascent_prog.run();
+    //hascent_prog.run();
     let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
     indirect_calls.add_to_program(&mut project.program);
     export_json(&project.program);
