@@ -72,9 +72,12 @@ fn build_ascent_prog(
         &pass.active_var_at_end_of_block,
         &rename_table,
     );
-    //value_tracking.convert();
-
-    value_tracking.run_value_tracking_with_debug();
+    // Run inside here, to get debug logs. Run outside to drop the helper structs which were used
+    // to built the ascent_prog
+    value_tracking.convert();
+    if debug_settings.should_debug(debug::Stage::ICallRec(true)) {
+        value_tracking.run_value_tracking_with_debug();
+    }
 
     let ValueTracking { ascent_prog, .. } = value_tracking;
     ascent_prog
@@ -88,12 +91,19 @@ pub fn run_icall_recovery(
 ) {
     //value_tracking.run_value_tracking();
     let mut ascent_prog = build_ascent_prog(project, debug_settings, config);
-    //hascent_prog.run();
+    // Run this, if the ascent_prog is not already run in the build_ascent_prog. This is done to
+    // drop all the helper structs to build the prog.
+    if !debug_settings.should_debug(debug::Stage::ICallRec(true)) {
+        ascent_prog.run();
+    }
     let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
     indirect_calls.add_to_program(&mut project.program);
-    export_json(&project.program);
+    println!("{}", ascent_prog.scc_times_summary());
 
-    if debug_settings.should_debug(debug::Stage::ICallRec) {
+    if debug_settings.should_debug(debug::Stage::ICallRec(false))
+        || debug_settings.should_debug(debug::Stage::ICallRec(true))
+    {
+        export_json(&project.program);
         exit(0);
     }
 }

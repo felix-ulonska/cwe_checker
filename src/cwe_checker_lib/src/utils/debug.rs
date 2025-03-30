@@ -16,8 +16,8 @@ pub enum Stage {
     CallGraph,
     /// Construction of whole-program control flow graph.
     ControlFlowGraph,
-    /// BPA analysis
-    ICallRec,
+    /// BPA analysis. If bool is true, show debug debug_log
+    ICallRec(bool),
     /// Pointer inference.
     Pi,
     /// Generation of intermediate representation.

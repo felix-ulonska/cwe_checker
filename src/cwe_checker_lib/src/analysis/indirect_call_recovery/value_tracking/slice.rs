@@ -7,9 +7,12 @@ use ascent::{
 };
 use itertools::Itertools;
 
-use crate::intermediate_representation::{
-    ir_passes::{VarsAtEndOfBlock, SPLIT_SYMBOL},
-    Def, Expression, Jmp, Program, Variable,
+use crate::{
+    intermediate_representation::{
+        ir_passes::{VarsAtEndOfBlock, SPLIT_SYMBOL},
+        Def, Expression, Jmp, Program, Variable,
+    },
+    prelude::Tid,
 };
 
 /// Slice the **SSA** program, so that only assigments and variables exist that
@@ -28,8 +31,9 @@ pub fn slice_program(
     ssa_program: &mut Program,
     var_at_end_of_block: &VarsAtEndOfBlock,
 ) -> HashMap<Variable, Variable> {
+    let blocks_with_full_phi = build_blocks_without_changes(ssa_program);
     eprintln!("Removing unused Instructions");
-    let rename_table = remove_unused_instructions(ssa_program);
+    let rename_table = remove_unused_instructions(ssa_program, &blocks_with_full_phi);
     eprintln!("Start taint analysis");
     let tainted_vars = taint(ssa_program, var_at_end_of_block);
     eprintln!("Remove Instruction WIthout taint");
@@ -110,17 +114,20 @@ fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
     input.extend(updates);
 }
 
-// Essentially the Dead Var eliminiation with some extra rules
-// All Assigments with one input var, get inlined. That should be the phi instructions
-fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Variable> {
+fn build_blocks_without_changes(ssa_program: &Program) -> HashSet<Tid> {
     // Blocks where phi functions are not shorted
     let mut block_with_full_phi = HashSet::new();
 
     // Fill block_with_full_phi for blocks in which no optimization are done
-    for jmp in ssa_program.jmps() {
-        if let Jmp::CallInd { return_, .. } = &jmp.term {
-            if let Some(return_) = return_ {
-                block_with_full_phi.insert(return_.clone());
+    for blk in ssa_program.blocks() {
+        for jmp in blk.jmps() {
+            if let Jmp::CallInd { return_, .. } = &jmp.term {
+                if let Some(return_) = return_ {
+                    block_with_full_phi.insert(return_.clone());
+                }
+            }
+            if let Jmp::Return { .. } = &jmp.term {
+                block_with_full_phi.insert(blk.tid.clone());
             }
         }
     }
@@ -135,6 +142,16 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
         .collect::<std::collections::HashSet<_>>();
 
     block_with_full_phi.extend(first_blocks);
+
+    block_with_full_phi
+}
+
+// Essentially the Dead Var eliminiation with some extra rules
+// All Assigments with one input var, get inlined. That should be the phi instructions
+fn remove_unused_instructions(
+    ssa_program: &mut Program,
+    blocks_with_full_phi: &HashSet<Tid>,
+) -> HashMap<Variable, Variable> {
     eprintln!("1");
 
     // rename First to Second Element
@@ -146,7 +163,7 @@ fn remove_unused_instructions(ssa_program: &mut Program) -> HashMap<Variable, Va
             let mut local_rename_table = HashMap::new();
             let mut def_to_remove = HashSet::new();
             // Skip blocks which can be returnted to or are at the start of a function.
-            if block_with_full_phi.contains(&blk.tid) {
+            if blocks_with_full_phi.contains(&blk.tid) {
                 return local_rename_table;
             }
 
@@ -304,6 +321,16 @@ fn taint<'a>(program: &'a Program, var_at_end_of_block: &VarsAtEndOfBlock) -> Ha
             if let Jmp::CallInd { target, .. } = &jmp.term {
                 // Case 3
                 taint.extend(target.input_vars());
+                taint.extend(HashSet::<&Variable>::from_iter(
+                    var_at_end_of_block.get(&blk.tid).unwrap().iter(),
+                ));
+            }
+            if let Jmp::Return { .. } = &jmp.term {
+                // Case 5
+                println!(
+                    "Adding: At End of block: {:#?}",
+                    var_at_end_of_block.get(&blk.tid)
+                );
                 taint.extend(HashSet::<&Variable>::from_iter(
                     var_at_end_of_block.get(&blk.tid).unwrap().iter(),
                 ));

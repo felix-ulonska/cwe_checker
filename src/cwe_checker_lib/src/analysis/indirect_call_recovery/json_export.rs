@@ -5,7 +5,7 @@ use crate::intermediate_representation::{Jmp, Program};
 #[derive(Serialize, Debug)]
 pub struct Call {
     pub from_instr: u64,
-    pub to_instr: u64,
+    pub to_instr: Option<u64>,
     pub is_indirect: bool,
 }
 
@@ -27,11 +27,6 @@ pub fn export_json(program: &Program) {
 
     let mut calls = vec![];
 
-    //program
-    //    .subs
-    //    .iter()
-    //    .for_each(|sub| println!("{}", sub.1.name));
-
     for blk in program.blocks() {
         for jmp in blk.jmps() {
             if let Jmp::Call { target, .. } = &jmp.term {
@@ -46,7 +41,7 @@ pub fn export_json(program: &Program) {
                         .try_into()
                         .expect(&format!("Call should have addr, {}", jmp.tid)),
                     // If this panics, we test that some lines above
-                    to_instr: target.address().try_into().unwrap(),
+                    to_instr: target.address().try_into().ok(),
                     is_indirect: false,
                 })
             }
@@ -54,10 +49,7 @@ pub fn export_json(program: &Program) {
                 if let Some(call_targets) = blk.ind_call_targets() {
                     let call_targets = call_targets.map(|call_target| Call {
                         from_instr: jmp.tid.address().try_into().expect("Call should have addr"),
-                        to_instr: call_target
-                            .address()
-                            .try_into()
-                            .expect(&format!("Target should have addr, {}", call_target)),
+                        to_instr: call_target.address().try_into().ok(),
                         is_indirect: true,
                     });
                     calls.extend(call_targets);

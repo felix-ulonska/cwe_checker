@@ -386,12 +386,11 @@ impl ValueTracking<'_> {
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and
     pub fn run_value_tracking_with_debug(&mut self) {
-        self.convert();
         eprintln!("Starting to run ascent_prog");
         self.ascent_prog.run();
         //self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
         println!("{}", self.ascent_prog.scc_times_summary());
-        //self.debug_print();
+        self.debug_print();
         self.print_results();
     }
 

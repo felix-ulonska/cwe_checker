@@ -79,6 +79,8 @@ pub enum CliDebugMode {
     Pi,
     /// Recovery of Indirect Calls
     ICallRec,
+    /// Recovery of Indirect Calls
+    ICallRecVSA,
 }
 
 impl From<&CliDebugMode> for debug::Stage {
@@ -115,7 +117,8 @@ impl From<&CliDebugMode> for debug::Stage {
             Cg => debug::Stage::CallGraph,
             Cfg => debug::Stage::ControlFlowGraph,
             Pi => debug::Stage::Pi,
-            ICallRec => debug::Stage::ICallRec,
+            ICallRec => debug::Stage::ICallRec(false),
+            ICallRecVSA => debug::Stage::ICallRec(true),
         }
     }
 }
@@ -289,6 +292,9 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
         read_config_file("config.json")?
     };
 
+    // Compute BPA
+    run_icall_recovery(&mut project, &debug_settings, &config["Memory"]);
+
     // Generate the control flow graph of the program
     let control_flow_graph = graph::get_program_cfg_with_logs(&project.program);
     debug_settings.print_compact_json(control_flow_graph.deref(), debug::Stage::ControlFlowGraph);
@@ -300,9 +306,6 @@ fn run_with_ghidra(args: &CmdlineArgs) -> Result<(), Error> {
         "CWE119", "CWE134", "CWE190", "CWE252", "CWE337", "CWE416", "CWE476", "CWE789", "Memory",
     ]);
 
-    // Compute BPA
-    run_icall_recovery(&mut project, &debug_settings, &config["Memory"]);
-    exit(0);
     let string_abstraction_needed = modules
         .iter()
         .any(|module| modules_depending_on_string_abstraction.contains(&module.name));
