@@ -390,7 +390,8 @@ impl ValueTracking<'_> {
         eprintln!("Starting to run ascent_prog");
         self.ascent_prog.run();
         //self.ascent_prog.run_timeout(Duration::from_secs(60 * 10));
-        self.debug_print();
+        println!("{}", self.ascent_prog.scc_times_summary());
+        //self.debug_print();
         self.print_results();
     }
 
@@ -538,9 +539,9 @@ impl Display for ValueTracking<'_> {
         write!(f, "Printing Program")?;
 
         for sub in &self.program.subs {
-            if sub.1.name != "main" && !sub.1.name.starts_with("test") {
-                continue;
-            }
+            //if sub.1.name != "main" && !sub.1.name.starts_with("test") {
+            //    continue;
+            //}
             write!(f, "==== {} ====", sub.1.name)?;
             for blk in sub.1.blocks() {
                 writeln!(f, "Block: {}:", blk.tid)?;
