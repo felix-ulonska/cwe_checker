@@ -206,6 +206,11 @@ impl ValueTracking<'_> {
                     // AssignReg
                     Def::Assign { var, value } => {
                         if let Expression::Phi(vars) = &value {
+                            // SKIP all RSP phi instructions.
+                            // This optimization might be unsound
+                            if var.name.contains("RSP") {
+                                continue;
+                            }
                             self.ascent_prog.reg_to_block.push((
                                 Reg {
                                     var: self.var_cache.get(var),
@@ -231,6 +236,30 @@ impl ValueTracking<'_> {
                                 Blk(self.blk_cache.get(&blk.tid)),
                             ));
                             let out_expr = self.expression_to_value_tracking(&value);
+                            // Idea: if rsp_X = rsp_Y and rsp_X has an assigned stack block, skip
+                            // this assigment.
+                            let mut found_regs = 0;
+                            let mut found_stack_vars = 0;
+                            for expr in out_expr.to_iter() {
+                                if let Exp::Reg(reg) = expr {
+                                    found_regs += 1;
+                                    // TODO: architectreu specfic
+                                    if reg.var.name.contains("RSP") {
+                                        found_stack_vars += 1;
+                                    }
+                                }
+                            }
+                            // SKIP if rsp_X = rsp_Y + empty
+                            if found_stack_vars == 1
+                                && found_regs == 1
+                                && self
+                                    .block_memory
+                                    .stack
+                                    .map_register_to_stack
+                                    .contains_key(&var)
+                            {
+                                continue;
+                            }
                             self.ascent_prog.assign_reg.push((
                                 Reg {
                                     var: self.var_cache.get(var),

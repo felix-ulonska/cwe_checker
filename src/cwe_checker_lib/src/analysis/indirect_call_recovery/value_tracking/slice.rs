@@ -327,10 +327,6 @@ fn taint<'a>(program: &'a Program, var_at_end_of_block: &VarsAtEndOfBlock) -> Ha
             }
             if let Jmp::Return { .. } = &jmp.term {
                 // Case 5
-                println!(
-                    "Adding: At End of block: {:#?}",
-                    var_at_end_of_block.get(&blk.tid)
-                );
                 taint.extend(HashSet::<&Variable>::from_iter(
                     var_at_end_of_block.get(&blk.tid).unwrap().iter(),
                 ));
