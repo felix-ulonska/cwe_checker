@@ -5,10 +5,7 @@ pub mod slice;
 
 use std::{fmt::Display, sync::Arc};
 
-use crate::{
-    intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
-    prelude::Tid,
-};
+use crate::{intermediate_representation::Variable, prelude::Tid};
 
 use ascent::ascent_par;
 use itertools::Itertools;

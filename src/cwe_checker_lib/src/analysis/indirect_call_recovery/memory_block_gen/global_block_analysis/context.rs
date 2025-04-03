@@ -250,19 +250,7 @@ pub fn fill_vsa_result_maps<'b>(
                     }
                 }
             }
-            Node::BlkEnd(blk, _sub) => {
-                let node_state = match computation.get_node_value(node) {
-                    Some(value) => value,
-                    _ => continue,
-                };
-                for jmp in &blk.term.jmps {
-                    //states_at_tids
-                    //    .insert(jmp.tid.clone(), RegisterState {
-                    //        register: node_state.register.clone()
-
-                    //    });
-                }
-            }
+            Node::BlkEnd(_blk, _sub) => {}
             Node::CallSource { .. } => (),
             Node::CallReturn {
                 call: (_caller_blk, _caller_sub),
@@ -290,8 +278,6 @@ impl Display for State<'_> {
 impl AbstractDomain for State<'_> {
     /// Merge two states
     fn merge(&self, other: &Self) -> Self {
-        //let merged_memory_objects = self.memory.merge(&other.memory);
-        let new_register = self.register.merge(&other.register);
         State {
             register: self.register.merge(&other.register),
             memory_segments: self.memory_segments.clone(),
@@ -338,21 +324,14 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         let mut new_state = state.clone();
 
         match &def.term {
-            Def::Store { address, value } => {
-                //self.log_debug(
-                //    new_state.handle_store(address, value, &self.project.runtime_memory_image),
-                //    Some(&def.tid),
-                //);
-                //Some(new_state)
-                Some(new_state)
-            }
+            Def::Store { .. } => Some(new_state),
             Def::Assign { var, value } => {
                 if self.taint.contains(var) {
                     new_state.handle_register_assign(var, value);
                 }
                 Some(new_state)
             }
-            Def::Load { var, address } => Some(new_state),
+            Def::Load { .. } => Some(new_state),
         }
     }
 
@@ -395,7 +374,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
     /// This analysis is intraprocedural
     fn update_call_stub(
         &self,
-        value: &Self::Value,
+        _value: &Self::Value,
         _call: &crate::prelude::Term<crate::intermediate_representation::Jmp>,
     ) -> Option<Self::Value> {
         None
@@ -405,7 +384,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         &self,
         state: &Self::Value,
         condition: &crate::intermediate_representation::Expression,
-        block_before_condition: &crate::prelude::Term<crate::intermediate_representation::Blk>,
+        _block_before_condition: &crate::prelude::Term<crate::intermediate_representation::Blk>,
         is_true: bool,
     ) -> Option<Self::Value> {
         let mut specialized_state = state.clone();

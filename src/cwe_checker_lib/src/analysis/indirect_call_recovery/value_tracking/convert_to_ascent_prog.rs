@@ -21,8 +21,7 @@ use crate::{
 };
 
 use super::{
-    arc_cache::ArcCache, build_union_of_vars_as_deref, slice::slice_program, AscentProgram, Exp,
-    Gblk, Mloc, Sblk,
+    arc_cache::ArcCache, build_union_of_vars_as_deref, AscentProgram, Exp, Gblk, Mloc, Sblk,
 };
 
 pub struct ValueTracking<'a> {

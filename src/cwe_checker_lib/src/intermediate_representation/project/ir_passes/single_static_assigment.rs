@@ -267,7 +267,7 @@ impl IrPass for SingleStaticAssigment {
     type Input = Program;
     type ConstructionInput = Project;
 
-    fn new(construction_input: &Self::ConstructionInput) -> Self {
+    fn new(_: &Self::ConstructionInput) -> Self {
         return SingleStaticAssigment {
             active_var_at_end_of_block: VarsAtEndOfBlock::new(),
         };

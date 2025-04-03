@@ -1,8 +1,10 @@
-
 use std::collections::HashMap;
 
-
-use crate::{abstract_domain::{DomainMap, UnionMergeStrategy}, analysis::vsa_results::VsaResult, intermediate_representation::Variable, prelude::Tid};
+use crate::{
+    abstract_domain::{DomainMap, UnionMergeStrategy},
+    intermediate_representation::Variable,
+    prelude::Tid,
+};
 
 use super::context::Data;
 
@@ -27,25 +29,31 @@ pub struct GlobalBlockAnalysisResult {
 }
 
 impl GlobalBlockAnalysisResult {
-    pub fn new(values_at_defs: HashMap<Tid, Data>, addresses_at_defs: HashMap<Tid, Data>, states_at_tids: HashMap<Tid, RegisterState>) -> GlobalBlockAnalysisResult {
+    pub fn new(
+        values_at_defs: HashMap<Tid, Data>,
+        addresses_at_defs: HashMap<Tid, Data>,
+        states_at_tids: HashMap<Tid, RegisterState>,
+    ) -> GlobalBlockAnalysisResult {
         GlobalBlockAnalysisResult {
             values_at_defs,
             addresses_at_defs,
-            states_at_tids
+            states_at_tids,
         }
     }
     pub fn new_empty() -> GlobalBlockAnalysisResult {
         GlobalBlockAnalysisResult {
             values_at_defs: HashMap::new(),
             addresses_at_defs: HashMap::new(),
-            states_at_tids: HashMap::new()
+            states_at_tids: HashMap::new(),
         }
     }
 
     pub fn merge(&self, other: &GlobalBlockAnalysisResult) -> GlobalBlockAnalysisResult {
         let mut new_self = self.clone();
         new_self.states_at_tids.extend(other.states_at_tids.clone());
-        new_self.addresses_at_defs.extend(other.addresses_at_defs.clone());
+        new_self
+            .addresses_at_defs
+            .extend(other.addresses_at_defs.clone());
         new_self.values_at_defs.extend(other.values_at_defs.clone());
 
         new_self

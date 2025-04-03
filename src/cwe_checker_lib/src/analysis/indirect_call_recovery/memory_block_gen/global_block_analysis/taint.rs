@@ -26,7 +26,10 @@ pub fn simple_taint<'a>(program: &'a Term<Sub>) -> HashSet<&'a Variable> {
 
     for jmp in program.jmps() {
         match &jmp.term {
-            crate::intermediate_representation::Jmp::CBranch { target, condition } => {
+            crate::intermediate_representation::Jmp::CBranch {
+                target: _target,
+                condition,
+            } => {
                 taint.extend(condition.input_vars());
             }
             _ => (),

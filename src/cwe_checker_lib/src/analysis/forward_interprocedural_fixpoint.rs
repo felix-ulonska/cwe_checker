@@ -142,24 +142,7 @@ impl<'a, T: Context<'a>> GeneralFPContext for GeneralizedContext<'a, T> {
                     self.context.merge(v1, v2)
                 }),
             },
-            (
-                Value(value1),
-                CallFlowCombinator {
-                    call_stub: call1,
-                    interprocedural_flow: flow,
-                },
-            ) => {
-                panic!("Bad Match1")
-            }
-            (
-                CallFlowCombinator {
-                    call_stub: call1,
-                    interprocedural_flow: flow,
-                },
-                Value(value1),
-            ) => {
-                panic!("Bad Match2")
-            } //_ => panic!("Malformed CFG in fixpoint computation"),
+            _ => panic!("Malformed CFG in fixpoint computation"),
         }
     }
 

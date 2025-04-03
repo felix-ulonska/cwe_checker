@@ -1,7 +1,5 @@
 use std::fmt;
 
-use ascent::hashbrown::HashSet;
-
 use super::{CastOpType, Expression, Variable};
 use crate::prelude::*;
 
