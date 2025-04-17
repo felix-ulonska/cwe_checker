@@ -36,8 +36,8 @@ pub fn export_json(program: &Program) {
 
     for (sub_tid, sub) in &program.subs {
         functions.push(Function {
-            name: sub.name,
-            address: sub.code_range().0
+            name: sub.name.clone(),
+            address: sub.code_range().0,
         });
     }
 
@@ -78,7 +78,7 @@ pub fn export_json(program: &Program) {
     let metadata = Metadata {
         address_base_offset: program.address_base_offset,
         indirect_call_sites,
-        functions
+        functions,
     };
 
     let call_graph = ExportCallGraph { metadata, calls };
