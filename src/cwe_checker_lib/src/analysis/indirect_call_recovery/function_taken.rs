@@ -40,6 +40,7 @@ pub fn get_at_functions(project: &Project) -> HashSet<Function> {
             first_instruction: function.code_range().0,
             first_block_tid: first_block.tid.clone(),
             name: function.name.clone(),
+            // TODO: add actually check that this is an AT Function?
             is_at_function: false,
         });
     }

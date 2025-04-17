@@ -10,9 +10,16 @@ pub struct Call {
 }
 
 #[derive(Serialize, Debug)]
+pub struct Function {
+    pub name: String,
+    pub address: u64,
+}
+
+#[derive(Serialize, Debug)]
 pub struct Metadata {
     pub address_base_offset: u64,
     pub indirect_call_sites: Vec<u64>,
+    pub functions: Vec<Function>,
 }
 
 #[derive(Serialize, Debug)]
@@ -24,6 +31,15 @@ pub struct ExportCallGraph {
 /// Exports the callgraph to json, also if a call is indirect or direct
 pub fn export_json(program: &Program) {
     let mut indirect_call_sites: Vec<u64> = vec![];
+
+    let mut functions = vec![];
+
+    for (sub_tid, sub) in &program.subs {
+        functions.push(Function {
+            name: sub.name,
+            address: sub.code_range().0
+        });
+    }
 
     let mut calls = vec![];
 
@@ -62,6 +78,7 @@ pub fn export_json(program: &Program) {
     let metadata = Metadata {
         address_base_offset: program.address_base_offset,
         indirect_call_sites,
+        functions
     };
 
     let call_graph = ExportCallGraph { metadata, calls };
