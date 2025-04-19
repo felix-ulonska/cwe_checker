@@ -361,8 +361,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         _target: &crate::analysis::graph::Node,
         _calling_convention: &Option<String>,
     ) -> Option<Self::Value> {
-        let new_state = _value.clone();
-        Some(new_state)
+        None
     }
 
     /// This analysis is intraprocedural
@@ -374,7 +373,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         _return_term: &crate::prelude::Term<crate::intermediate_representation::Jmp>,
         _calling_convention: &Option<String>,
     ) -> Option<Self::Value> {
-        _value.cloned()
+        None
     }
 
     /// This analysis is intraprocedural
@@ -383,7 +382,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         _value: &Self::Value,
         _call: &crate::prelude::Term<crate::intermediate_representation::Jmp>,
     ) -> Option<Self::Value> {
-        Some(_value.clone())
+        None
     }
 
     fn specialize_conditional(
