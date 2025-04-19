@@ -53,10 +53,11 @@ pub struct State<'a> {
 impl<'a> State<'a> {
     pub fn new(
         function_tid: Tid,
+        stack_register: Variable,
         runtime_memory_image: &'a RuntimeMemoryImage,
         variable_size: ByteSize,
     ) -> State {
-        let register = DomainMap::from(BTreeMap::new());
+        let mut register = DomainMap::from(BTreeMap::new());
         let mut memory_segements = vec![];
         for segment in &runtime_memory_image.memory_segments {
             memory_segements.push(MemorySegmentWithInterval {
@@ -68,6 +69,20 @@ impl<'a> State<'a> {
                 segment,
             });
         }
+
+        let stack_id = AbstractIdentifier::new(
+            function_tid.clone(),
+            AbstractLocation::from_var(&stack_register).unwrap(),
+        );
+
+        register.insert(
+            stack_register.clone(),
+            Data::from_target(
+                stack_id.clone(),
+                Bitvector::zero(apint::BitWidth::from(stack_register.size)).into(),
+            ),
+        );
+
         State {
             register,
             memory_segments: memory_segements,

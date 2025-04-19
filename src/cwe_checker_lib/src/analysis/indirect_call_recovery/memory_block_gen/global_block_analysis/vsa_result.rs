@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    abstract_domain::{DomainMap, TryToInterval, UnionMergeStrategy},
+    abstract_domain::{AbstractLocation, DomainMap, TryToInterval, UnionMergeStrategy},
     intermediate_representation::Variable,
     prelude::Tid,
 };
@@ -96,7 +96,28 @@ impl Display for GlobalBlockAnalysisResult {
             if let Ok(interval) = addrs.try_to_offset_interval() {
                 writeln!(f, "{}: {:?}", place, interval)?;
             } else {
-                writeln!(f, "{}: None", place)?;
+                writeln!(f, "{}: {:?}", place, addrs)?;
+            }
+            if let Some(stack_val) = addrs.get_relative_values().iter().find_map(|rel_val| {
+                if let AbstractLocation::Register(var) = rel_val.0.get_location() {
+                    if var.name.contains("RSP") {
+                        Some(rel_val.1)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }) {
+                if let Ok(stack_val) = stack_val.try_to_interval() {
+                    write!(f, "Stk: {}", place)?;
+                    writeln!(
+                        f,
+                        "[{}-{}]",
+                        stack_val.start.try_to_i64().unwrap(),
+                        stack_val.end.try_to_i64().unwrap()
+                    )?;
+                }
             }
         }
         writeln!(f, "VALUES")?;
@@ -104,7 +125,29 @@ impl Display for GlobalBlockAnalysisResult {
             if let Ok(interval) = addrs.try_to_offset_interval() {
                 writeln!(f, "{}: {:?}", place, interval)?;
             } else {
-                writeln!(f, "{}: None", place)?;
+                writeln!(f, "{}: {:?}", place, addrs)?;
+            }
+            if let Some(stack_val) = addrs.get_relative_values().iter().find_map(|rel_val| {
+                if let AbstractLocation::Register(var) = rel_val.0.get_location() {
+                    if var.name.contains("RSP") {
+                        Some(rel_val.1)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }) {
+                writeln!(f, "Stk: {}: {:?}", place, stack_val.try_to_interval())?;
+                if let Ok(stack_val) = stack_val.try_to_interval() {
+                    write!(f, "Stk: {}", place)?;
+                    writeln!(
+                        f,
+                        "[{}-{}]",
+                        stack_val.start.try_to_i64().unwrap(),
+                        stack_val.end.try_to_i64().unwrap()
+                    )?;
+                }
             }
         }
         Ok(())

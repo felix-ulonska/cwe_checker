@@ -1,6 +1,7 @@
 pub mod global_block;
 pub mod heap_block;
 pub mod stack_block;
+pub mod stack_block_v2;
 
 pub mod global_block_analysis;
 
@@ -33,6 +34,7 @@ pub fn build_memory_blocks(
         &project.runtime_memory_image,
         project.register_set.first().unwrap().size,
     );
+    println!("GlobalAnalysis: {}", global_analysis);
     eprintln!(
         "Finished Global Analysis within: {:02?}",
         start_time.elapsed()
