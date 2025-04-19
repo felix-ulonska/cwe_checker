@@ -138,8 +138,7 @@ impl<'a, T: Context<'a>> GeneralFPContext for GeneralizedContext<'a, T> {
         let graph = self.context.get_graph();
         let (start_node, end_node) = graph.edge_endpoints(edge).unwrap();
 
-        println!("GC: node_value: {:?}", node_value);
-        let out = match graph.edge_weight(edge).unwrap() {
+        match graph.edge_weight(edge).unwrap() {
             Edge::Block => {
                 let block_term = graph.node_weight(start_node).unwrap().get_block();
                 let value = node_value;
@@ -192,9 +191,7 @@ impl<'a, T: Context<'a>> GeneralFPContext for GeneralizedContext<'a, T> {
                 }
             }
             _ => Some(node_value.clone()),
-        };
-        println!("GC: out node_value: {:?}", out);
-        out
+        }
     }
 }
 
