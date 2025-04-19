@@ -221,7 +221,7 @@ pub fn fill_vsa_result_maps<'b>(
                 let mut state = node_state.clone();
                 for def in &blk.term.defs {
                     match &def.term {
-                        Def::Assign { var: _, value } => {
+                        Def::Assign { var: _var, value } => {
                             let evaled = state.eval(value);
                             if is_interval_global(&evaled) {
                                 values_at_defs.insert(def.tid.clone(), evaled);
@@ -266,7 +266,11 @@ impl Display for State<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (reg, value) in self.register.iter() {
             let Some(value) = value.get_absolute_value() else {
-                write!(f, "{}: [-]", reg.name)?;
+                if let Ok(interval) = value.try_to_offset_interval() {
+                    write!(f, "{}: [{}-{}]", reg.name, interval.0, interval.1)?;
+                } else {
+                    write!(f, "{}: {:?}", reg.name, value)?;
+                }
                 continue;
             };
             write!(f, "{}:{}", reg.name, value)?;
@@ -301,6 +305,7 @@ impl<'a> AnalysisContext<'a> {
     pub fn new(program: &'a Program, sub: &'a Term<Sub>) -> AnalysisContext<'a> {
         let cfg = IntraproceduralCfg::new(program, sub);
         let taint = simple_taint(sub);
+
         AnalysisContext { cfg, taint }
     }
 }
@@ -356,7 +361,8 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         _target: &crate::analysis::graph::Node,
         _calling_convention: &Option<String>,
     ) -> Option<Self::Value> {
-        None
+        let new_state = _value.clone();
+        Some(new_state)
     }
 
     /// This analysis is intraprocedural
@@ -368,7 +374,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         _return_term: &crate::prelude::Term<crate::intermediate_representation::Jmp>,
         _calling_convention: &Option<String>,
     ) -> Option<Self::Value> {
-        None
+        _value.cloned()
     }
 
     /// This analysis is intraprocedural
@@ -377,7 +383,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         _value: &Self::Value,
         _call: &crate::prelude::Term<crate::intermediate_representation::Jmp>,
     ) -> Option<Self::Value> {
-        None
+        Some(_value.clone())
     }
 
     fn specialize_conditional(
@@ -395,14 +401,14 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
             }
         }
         if !has_taint {
-            return None;
+            return Some(state.clone());
         }
         match specialized_state
             .specialize_by_expression_result(condition, Bitvector::from_u8(is_true as u8).into())
         {
             Ok(_) => Some(specialized_state),
             // State is unsatisfiable
-            Err(_) => None,
+            Err(_) => Some(state.clone()),
         }
     }
 }

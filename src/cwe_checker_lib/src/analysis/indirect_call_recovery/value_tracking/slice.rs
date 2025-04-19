@@ -56,6 +56,9 @@ fn remove_instructions_without_tainted_vars(
                         return true;
                     }
                 }
+                if let Def::Store { .. } | Def::Load { .. } = def.term {
+                    return true;
+                }
                 return false;
             })
             .map(|def| def.clone())

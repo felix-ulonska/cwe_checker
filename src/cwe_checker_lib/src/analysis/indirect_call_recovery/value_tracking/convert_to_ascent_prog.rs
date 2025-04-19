@@ -141,135 +141,139 @@ impl ValueTracking<'_> {
     }
 
     fn convert_def_to_ascent(&mut self) {
-        for blk in self.program.blocks() {
-            for def in blk.defs() {
-                let _tid = self.def_cache.get(&def.tid);
-                match &def.term {
-                    // AssignReg
-                    Def::Load { var, address } => {
-                        if let Some(interval) =
-                            self.block_memory.global.get_interval_of_def(def.clone())
-                        {
-                            let var = self.var_cache.get(var);
-                            self.ascent_prog.assign_reg.push((
-                                Reg { var: var.clone() },
-                                Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone()))),
-                                self.def_cache.get(&def.tid),
-                            ));
-                            self.ascent_prog.reg_to_block.push((
-                                Reg { var: var.clone() },
-                                Blk(self.blk_cache.get(&blk.tid)),
-                            ));
-                            continue;
-                        }
-
-                        let inputs_vars = address.input_vars();
-                        // if inputs_vars.len() == 1 {
-                        self.ascent_prog.assign_reg.push((
-                            Reg {
-                                var: self.var_cache.get(var),
-                            },
-                            build_union_of_vars_as_deref(&inputs_vars),
-                            //Exp::Deref(Reg {
-                            //    var: inputs_vars[0].clone().into(),
-                            //}),
-                            self.def_cache.get(&def.tid),
-                        ));
-                    }
-                    // AssignMloc
-                    Def::Store { address, value } => {
-                        if let Some(interval) =
-                            self.block_memory.global.get_interval_of_def(def.clone())
-                        {
-                            let out_expr = self.expression_to_value_tracking(&value);
-                            self.ascent_prog.assign_mloc.push((
-                                Mloc::Gblk(Gblk(interval.clone())),
-                                out_expr,
-                                self.def_cache.get(&def.tid),
-                            ));
-                            continue;
-                        }
-
-                        // TODO: refactor code dupl
-                        let input_vars = address.input_vars();
-                        for input_var in input_vars {
-                            let out_expr = self.expression_to_value_tracking(&value);
-                            self.ascent_prog.assing_deref_reg.push((
-                                Reg {
-                                    var: self.var_cache.get(input_var),
-                                },
-                                out_expr,
-                                self.def_cache.get(&def.tid),
-                            ));
-                        }
-                    }
-                    // AssignReg
-                    Def::Assign { var, value } => {
-                        if let Expression::Phi(vars) = &value {
-                            // SKIP all RSP phi instructions.
-                            // This optimization might be unsound
-                            if var.name.contains("RSP") {
+        for sub in &self.program.subs {
+            let mut first_block = true;
+            for blk in sub.1.blocks() {
+                for def in blk.defs() {
+                    let _tid = self.def_cache.get(&def.tid);
+                    match &def.term {
+                        // AssignReg
+                        Def::Load { var, address } => {
+                            if let Some(interval) =
+                                self.block_memory.global.get_interval_of_def(def.clone())
+                            {
+                                let var = self.var_cache.get(var);
+                                self.ascent_prog.assign_reg.push((
+                                    Reg { var: var.clone() },
+                                    Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone()))),
+                                    self.def_cache.get(&def.tid),
+                                ));
+                                self.ascent_prog.reg_to_block.push((
+                                    Reg { var: var.clone() },
+                                    Blk(self.blk_cache.get(&blk.tid)),
+                                ));
                                 continue;
                             }
-                            self.ascent_prog.reg_to_block.push((
+
+                            let inputs_vars = address.input_vars();
+                            // if inputs_vars.len() == 1 {
+                            self.ascent_prog.assign_reg.push((
                                 Reg {
                                     var: self.var_cache.get(var),
                                 },
-                                Blk(self.blk_cache.get(&blk.tid)),
+                                build_union_of_vars_as_deref(&inputs_vars),
+                                //Exp::Deref(Reg {
+                                //    var: inputs_vars[0].clone().into(),
+                                //}),
+                                self.def_cache.get(&def.tid),
                             ));
-                            for source_var in vars {
-                                self.ascent_prog.phi.push((
+                        }
+                        // AssignMloc
+                        Def::Store { address, value } => {
+                            if let Some(interval) =
+                                self.block_memory.global.get_interval_of_def(def.clone())
+                            {
+                                let out_expr = self.expression_to_value_tracking(&value);
+                                self.ascent_prog.assign_mloc.push((
+                                    Mloc::Gblk(Gblk(interval.clone())),
+                                    out_expr,
+                                    self.def_cache.get(&def.tid),
+                                ));
+                                continue;
+                            }
+
+                            // TODO: refactor code dupl
+                            let input_vars = address.input_vars();
+                            for input_var in input_vars {
+                                let out_expr = self.expression_to_value_tracking(&value);
+                                self.ascent_prog.assing_deref_reg.push((
+                                    Reg {
+                                        var: self.var_cache.get(input_var),
+                                    },
+                                    out_expr,
+                                    self.def_cache.get(&def.tid),
+                                ));
+                            }
+                        }
+                        // AssignReg
+                        Def::Assign { var, value } => {
+                            if let Expression::Phi(vars) = &value {
+                                // SKIP all RSP phi instructions.
+                                // This optimization might be unsound
+                                if var.name.contains("RSP") && first_block {
+                                    continue;
+                                }
+                                self.ascent_prog.reg_to_block.push((
                                     Reg {
                                         var: self.var_cache.get(var),
                                     },
-                                    Reg {
-                                        var: self.var_cache.get(source_var),
-                                    },
-                                    Blk(blk.tid.clone().into()),
+                                    Blk(self.blk_cache.get(&blk.tid)),
                                 ));
-                            }
-                        } else {
-                            self.ascent_prog.reg_to_block.push((
-                                Reg {
-                                    var: self.var_cache.get(var),
-                                },
-                                Blk(self.blk_cache.get(&blk.tid)),
-                            ));
-                            let out_expr = self.expression_to_value_tracking(&value);
-                            // Idea: if rsp_X = rsp_Y and rsp_X has an assigned stack block, skip
-                            // this assigment.
-                            let mut found_regs = 0;
-                            let mut found_stack_vars = 0;
-                            for expr in out_expr.to_iter() {
-                                if let Exp::Reg(reg) = expr {
-                                    found_regs += 1;
-                                    // TODO: architectreu specfic
-                                    if reg.var.name.contains("RSP") {
-                                        found_stack_vars += 1;
+                                for source_var in vars {
+                                    self.ascent_prog.phi.push((
+                                        Reg {
+                                            var: self.var_cache.get(var),
+                                        },
+                                        Reg {
+                                            var: self.var_cache.get(source_var),
+                                        },
+                                        Blk(blk.tid.clone().into()),
+                                    ));
+                                }
+                            } else {
+                                self.ascent_prog.reg_to_block.push((
+                                    Reg {
+                                        var: self.var_cache.get(var),
+                                    },
+                                    Blk(self.blk_cache.get(&blk.tid)),
+                                ));
+                                let out_expr = self.expression_to_value_tracking(&value);
+                                // Idea: if rsp_X = rsp_Y and rsp_X has an assigned stack block, skip
+                                // this assigment.
+                                let mut found_regs = 0;
+                                let mut found_stack_vars = 0;
+                                for expr in out_expr.to_iter() {
+                                    if let Exp::Reg(reg) = expr {
+                                        found_regs += 1;
+                                        // TODO: architectreu specfic
+                                        if reg.var.name.contains("RSP") {
+                                            found_stack_vars += 1;
+                                        }
                                     }
                                 }
+                                // SKIP if rsp_X = rsp_Y + empty
+                                if found_stack_vars == 1
+                                    && found_regs == 1
+                                    && self
+                                        .block_memory
+                                        .stack
+                                        .map_register_to_stack
+                                        .contains_key(&var)
+                                {
+                                    continue;
+                                }
+                                self.ascent_prog.assign_reg.push((
+                                    Reg {
+                                        var: self.var_cache.get(var),
+                                    },
+                                    out_expr,
+                                    self.def_cache.get(&def.tid),
+                                ));
                             }
-                            // SKIP if rsp_X = rsp_Y + empty
-                            if found_stack_vars == 1
-                                && found_regs == 1
-                                && self
-                                    .block_memory
-                                    .stack
-                                    .map_register_to_stack
-                                    .contains_key(&var)
-                            {
-                                continue;
-                            }
-                            self.ascent_prog.assign_reg.push((
-                                Reg {
-                                    var: self.var_cache.get(var),
-                                },
-                                out_expr,
-                                self.def_cache.get(&def.tid),
-                            ));
                         }
                     }
                 }
+                first_block = false;
             }
         }
     }

@@ -14,6 +14,7 @@ use super::graph::*;
 
 use crate::intermediate_representation::*;
 
+use std::fmt;
 use std::marker::PhantomData;
 
 use petgraph::graph::EdgeIndex;
@@ -31,7 +32,7 @@ use petgraph::graph::NodeIndex;
 /// For example, this can be used to indicate edges that can never been taken.
 pub trait Context<'a> {
     /// The type of the values that are assigned to nodes during the fixpoint computation.
-    type Value: PartialEq + Eq + Clone;
+    type Value: PartialEq + Eq + Clone + fmt::Debug;
 
     /// Get a reference to the graph that the fixpoint is computed on.
     fn get_graph(&self) -> &Graph<'a>;
@@ -137,7 +138,8 @@ impl<'a, T: Context<'a>> GeneralFPContext for GeneralizedContext<'a, T> {
         let graph = self.context.get_graph();
         let (start_node, end_node) = graph.edge_endpoints(edge).unwrap();
 
-        match graph.edge_weight(edge).unwrap() {
+        println!("GC: node_value: {:?}", node_value);
+        let out = match graph.edge_weight(edge).unwrap() {
             Edge::Block => {
                 let block_term = graph.node_weight(start_node).unwrap().get_block();
                 let value = node_value;
@@ -186,11 +188,13 @@ impl<'a, T: Context<'a>> GeneralFPContext for GeneralizedContext<'a, T> {
                         graph[end_node].get_block(),
                     )
                 } else {
-                    None
+                    Some(node_value.clone())
                 }
             }
-            _ => None,
-        }
+            _ => Some(node_value.clone()),
+        };
+        println!("GC: out node_value: {:?}", out);
+        out
     }
 }
 

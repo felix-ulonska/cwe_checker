@@ -25,7 +25,6 @@ pub fn infer_global_ptr(
         .par_iter()
         .map(|sub| {
             eprintln!("Started for sub {}", sub.1.name);
-            //println!("Start for sub {}", sub.1);
             let start_time = Instant::now();
             let analysis = AnalysisContext::new(program, sub.1);
 
@@ -54,6 +53,7 @@ pub fn infer_global_ptr(
         //.fold(GlobalBlockAnalysisResult::new_empty(), |acc, item| {
         //    acc.merge(&item)
         //})
+        //
         .fold(
             || GlobalBlockAnalysisResult::new_empty(),
             |acc, item| acc.merge(&item),
