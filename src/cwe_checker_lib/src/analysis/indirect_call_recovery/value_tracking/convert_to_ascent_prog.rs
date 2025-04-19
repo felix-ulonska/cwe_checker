@@ -211,6 +211,15 @@ impl ValueTracking<'_> {
                                 // SKIP all RSP phi instructions.
                                 // This optimization might be unsound
                                 if var.name.contains("RSP") && first_block {
+                                    first_block = false;
+                                    continue;
+                                }
+                                if self
+                                    .block_memory
+                                    .stack
+                                    .map_register_to_stack
+                                    .contains_key(&var)
+                                {
                                     continue;
                                 }
                                 self.ascent_prog.reg_to_block.push((
@@ -252,6 +261,9 @@ impl ValueTracking<'_> {
                                     }
                                 }
                                 // SKIP if rsp_X = rsp_Y + empty
+                                // If the register has a stack block assgined to it, prevent
+                                // propogation via RSP value tracking. RSP_{X+1} = RSP_X - 8. Values
+                                // from RSP_X should not propogate
                                 if found_stack_vars == 1
                                     && found_regs == 1
                                     && self
@@ -273,7 +285,6 @@ impl ValueTracking<'_> {
                         }
                     }
                 }
-                first_block = false;
             }
         }
     }
