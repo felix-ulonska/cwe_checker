@@ -1,7 +1,10 @@
 //! Indirect Call Target recovery, inspired by BPA.
 pub mod json_export;
 
-use std::process::exit;
+use std::{
+    process::exit,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     ghidra_pcode::ir_passes::IrPass,
@@ -40,6 +43,17 @@ fn statistics(prog: &Program) {
     println!("\t {} instructions", instr_counter);
 }
 
+fn print_benchmark_time(msg: &str) {
+    println!(
+        "[BENCH], {}: {}",
+        msg,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+}
+
 // Helper method to drop all structs information that is only constructed to build the ascent_prog
 fn build_ascent_prog(
     project: &Project,
@@ -48,23 +62,28 @@ fn build_ascent_prog(
 ) -> AscentProgram {
     eprintln!("Starting SSA");
     let mut ssa_program = project.program.clone();
+    print_benchmark_time("SSA");
 
     let config: Config = serde_json::from_value(config.clone()).unwrap();
     let mut pass = <SingleStaticAssigment>::new(&project);
     pass.run(&mut ssa_program);
 
     eprintln!("Building Block mem");
+    print_benchmark_time("BuildMem");
     let block_memory_model = build_memory_blocks(&ssa_program, &project, &config);
-    eprintln!("Get AT funcs");
+    print_benchmark_time("GetAt");
     let at_functions = get_at_functions(project);
 
     let mut sliced_program = ssa_program.clone();
     statistics(&ssa_program);
+    print_benchmark_time("Slice");
     let rename_table = slice_program(&mut sliced_program, &pass.active_var_at_end_of_block);
     ssa_program = sliced_program;
-    //statistics(&ssa_program);
+    println!("Sliced:");
+    statistics(&ssa_program);
 
     eprintln!("Start Value Tracking");
+    print_benchmark_time("BuildValTracking");
     let mut value_tracking = ValueTracking::new(
         &ssa_program,
         &block_memory_model,
@@ -93,9 +112,11 @@ pub fn run_icall_recovery(
     let mut ascent_prog = build_ascent_prog(project, debug_settings, config);
     // Run this, if the ascent_prog is not already run in the build_ascent_prog. This is done to
     // drop all the helper structs to build the prog.
+    print_benchmark_time("RunValTracking");
     if !debug_settings.should_debug(debug::Stage::ICallRec(true)) {
         ascent_prog.run();
     }
+    print_benchmark_time("Done");
     let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
     indirect_calls.add_to_program(&mut project.program);
     println!("{}", ascent_prog.scc_times_summary());
