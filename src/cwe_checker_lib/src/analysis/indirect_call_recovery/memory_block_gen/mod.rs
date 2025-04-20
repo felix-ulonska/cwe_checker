@@ -14,6 +14,7 @@ use stack_block::{build_stack_block, StackBlockBoundaries};
 use crate::{
     analysis::pointer_inference::Config,
     intermediate_representation::{Program, Project},
+    prelude::ByteSize,
 };
 
 pub struct BlockMemoryModel {
@@ -31,7 +32,8 @@ pub fn build_memory_blocks(
     let global_analysis = infer_global_ptr(
         ssa_program,
         &project.runtime_memory_image,
-        project.register_set.first().unwrap().size,
+        //project.register_set.first().unwrap().size,
+        ByteSize::new(8),
     );
     eprintln!(
         "Finished Global Analysis within: {:02?}",
