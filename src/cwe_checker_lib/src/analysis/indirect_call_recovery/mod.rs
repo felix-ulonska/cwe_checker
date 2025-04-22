@@ -119,7 +119,7 @@ pub fn run_icall_recovery(
     print_benchmark_time("Done");
     let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
     indirect_calls.add_to_program(&mut project.program);
-    println!("{}", ascent_prog.scc_times_summary());
+    //println!("{}", ascent_prog.scc_times_summary());
 
     if debug_settings.should_debug(debug::Stage::ICallRec(false))
         || debug_settings.should_debug(debug::Stage::ICallRec(true))
