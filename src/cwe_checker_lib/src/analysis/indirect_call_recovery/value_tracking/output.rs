@@ -34,6 +34,7 @@ impl IndirectCalls {
             .par_iter_mut()
             .for_each(|blk| {
                 let Some(targets) = self.indirect_calls.get(&Blk(blk.tid.clone().into())) else {
+                    blk.set_ind_call_targets(vec![]);
                     return;
                 };
                 blk.set_ind_call_targets(targets.iter().map(|func| func.tid.clone()));
