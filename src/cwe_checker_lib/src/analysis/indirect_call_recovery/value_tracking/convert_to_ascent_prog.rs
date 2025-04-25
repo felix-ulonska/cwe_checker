@@ -10,7 +10,7 @@ use crate::{
         memory_block_gen::{stack_block::StackBlock, BlockMemoryModel},
         value_tracking::{build_union_of_vars, Blk, Hblk, Loc, Reg},
     },
-    intermediate_representation::{ir_passes::SPLIT_SYMBOL, Variable},
+    intermediate_representation::{ir_passes::SPLIT_SYMBOL, Project, Variable},
     prelude::Tid,
 };
 use std::{collections::HashSet, fmt::Display, sync::Arc, vec::Vec};
@@ -26,6 +26,7 @@ use super::{
 
 pub struct ValueTracking<'a> {
     program: &'a Program,
+    project: &'a Project,
     block_memory: &'a BlockMemoryModel,
     at_functions: &'a HashSet<Function>,
     at_functions_by_addr: HashMap<u64, Function>,
@@ -113,6 +114,7 @@ impl ValueTracking<'_> {
 
     pub fn new<'a>(
         program: &'a Program,
+        project: &'a Project,
         block_memory: &'a BlockMemoryModel,
         at_functions: &'a HashSet<Function>,
         active_var_at_end_of_block: &'a VarsAtEndOfBlock,
@@ -126,6 +128,7 @@ impl ValueTracking<'_> {
         let prog = AscentProgram::default();
         ValueTracking {
             program,
+            project,
             block_memory,
             at_functions,
             at_functions_by_addr,
@@ -137,6 +140,22 @@ impl ValueTracking<'_> {
             blk_cache: ArcCache::new(),
             def_cache: ArcCache::new(),
             stkblk_cache: ArcCache::new(),
+        }
+    }
+
+    fn add_code_ptr_in_global_blocks(&mut self) {
+        for code_ref in &self.project.code_references {
+            println!("Global ptr: {} -> {}", code_ref.from, code_ref.to);
+            let Some(interval) = self.block_memory.global.get_interval(code_ref.from) else {
+                continue;
+            };
+            let Some(at_fn) = self.at_functions_by_addr.get(&(code_ref.to as u64)) else {
+                continue;
+            };
+            self.ascent_prog.aloc_val.push((
+                Loc::Mloc(Mloc::Gblk(Gblk(interval))),
+                Exp::RefFunc(self.fn_cache.get(at_fn)),
+            ));
         }
     }
 
@@ -425,6 +444,8 @@ impl ValueTracking<'_> {
         eprintln!("Converted Return");
         self.fill_base_reg_mapping();
         eprintln!("Converted fill_base_reg_mapping");
+        self.add_code_ptr_in_global_blocks();
+        eprintln!("Add global code pointer");
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and

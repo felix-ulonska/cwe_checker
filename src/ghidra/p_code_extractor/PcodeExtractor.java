@@ -19,6 +19,7 @@ import ghidra.program.model.listing.Parameter;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.listing.FunctionManager;
 import ghidra.program.util.VarnodeContext;
+import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.lang.PrototypeModel;
 import ghidra.program.model.data.FloatDataType;
 import ghidra.program.model.data.IntegerDataType;
@@ -198,22 +199,21 @@ public class PcodeExtractor extends GhidraScript {
         CodeUnitIterator codeUnits = listing.getCodeUnits(true);
 
         ArrayList<CodeRef> codeRefs = new ArrayList<>();
+        FunctionManager functionManager = currentProgram.getFunctionManager();
+        FunctionIterator functions = functionManager.getFunctions(true);
 
-        while (codeUnits.hasNext()) {
-            CodeUnit codeUnit = codeUnits.next();
-            Address address = codeUnit.getAddress();
+        while (functions.hasNext()) {
+            ghidra.program.model.listing.Function func = functions.next();
+            Address address = func.getEntryPoint();
 
             // Get all references from this address
-            Reference[] references = currentProgram.getReferenceManager().getReferencesFrom(address);
+            ghidra.program.model.symbol.ReferenceIterator references = currentProgram.getReferenceManager().getReferencesTo(address);
             for (Reference ref: references) {
                 Address toAddress = ref.getToAddress();
-                MemoryBlock block = currentProgram.getMemory().getBlock(address);
+                Address fromAddress = ref.getFromAddress();
 
-                if (block != null && block.isExecute()) {
-                    codeRefs.add(new CodeRef(address.getOffset(), toAddress.getOffset()));
-                    println("Found code pointer reference: " + address + " -> " + toAddress);
-                }
-            }
+                codeRefs.add(new CodeRef(fromAddress.getOffset(), toAddress.getOffset()));
+                println("Found code pointer reference: " + fromAddress + " -> " + toAddress); }
         }
         return codeRefs;
     }

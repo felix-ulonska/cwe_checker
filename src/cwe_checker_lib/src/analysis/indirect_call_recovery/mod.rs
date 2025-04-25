@@ -86,6 +86,7 @@ fn build_ascent_prog(
     print_benchmark_time("BuildValTracking");
     let mut value_tracking = ValueTracking::new(
         &ssa_program,
+        &project,
         &block_memory_model,
         &at_functions,
         &pass.active_var_at_end_of_block,
