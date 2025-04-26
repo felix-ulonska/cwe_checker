@@ -7,8 +7,11 @@ use itertools::Itertools;
 use petgraph::visit::EdgeRef;
 
 use crate::{
-    analysis::graph::{get_program_cfg, Edge, Node},
-    intermediate_representation::{Def, Expression, Project, Variable},
+    analysis::{
+        function_signature::stubs::return_value_stubs::param_plus_unknown_offset,
+        graph::{get_program_cfg, Edge, Node},
+    },
+    intermediate_representation::{CallingConvention, Def, Expression, Project, Variable},
     prelude::{Term, Tid},
     utils::debug::IrForm,
 };
@@ -44,6 +47,7 @@ pub type VarsAtEndOfBlock = HashMap<Tid, Vec<Variable>>;
 
 pub struct SingleStaticAssigment {
     pub active_var_at_end_of_block: VarsAtEndOfBlock,
+    calling_convention: CallingConvention,
 }
 
 fn add_ssa_index_to_name(name: &str, index: &i64) -> String {
@@ -88,14 +92,29 @@ impl SingleStaticAssigment {
     }
 }
 
-fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet<String>> {
+#[derive(Hash, Eq, PartialEq)]
+struct SsaEdge {
+    edge_type: EdgeType,
+    src: String,
+}
+
+#[derive(Hash, Eq, PartialEq)]
+enum EdgeType {
+    InterReturn,
+    InterCall,
+    Intra,
+    // Connection from blk to blk skipping a call
+    IntraCallStub,
+}
+
+fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet<SsaEdge>> {
     let mut cfg = get_program_cfg(program);
     cfg.reverse();
     let cfg_unreversed = get_program_cfg(program);
     // Saves the incoming edges for each block
-    let mut incoming_edge_for_each_block = HashMap::<String, HashSet<String>>::new();
+    let mut incoming_edge_for_each_block = HashMap::<String, HashSet<SsaEdge>>::new();
     for block in program.blocks() {
-        incoming_edge_for_each_block.insert(block.tid.to_string(), HashSet::<String>::new());
+        incoming_edge_for_each_block.insert(block.tid.to_string(), HashSet::<SsaEdge>::new());
     }
 
     for node in cfg.node_indices() {
@@ -108,7 +127,10 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet
                         let incoming_edges = incoming_edge_for_each_block
                             .get_mut(&cfg[edge.source()].get_block().tid.to_string())
                             .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
-                        incoming_edges.insert(blk.tid.to_string());
+                        incoming_edges.insert(SsaEdge {
+                            edge_type: EdgeType::Intra,
+                            src: blk.tid.to_string(),
+                        });
                     }
                 }
             }
@@ -118,7 +140,10 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet
                 let incoming_edges = incoming_edge_for_each_block
                     .get_mut(&target.to_string())
                     .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
-                incoming_edges.insert(source.to_string());
+                incoming_edges.insert(SsaEdge {
+                    edge_type: EdgeType::InterCall,
+                    src: source.to_string(),
+                });
             }
             Node::CallReturn { return_, .. } => {
                 for edge in cfg_unreversed.edges(node) {
@@ -128,7 +153,10 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet
                         let incoming_edges = incoming_edge_for_each_block
                             .get_mut(&target.to_string())
                             .expect("Blk had no key in incoming_edge_for_each_block, should never happen");
-                        incoming_edges.insert(source.to_string());
+                        incoming_edges.insert(SsaEdge {
+                            edge_type: EdgeType::InterReturn,
+                            src: source.to_string(),
+                        });
                     }
                 }
             }
@@ -156,7 +184,10 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet
                     incoming_edge_for_each_block
                         .get_mut(&return_.to_string())
                         .unwrap()
-                        .insert(block.tid.to_string().clone());
+                        .insert(SsaEdge {
+                            edge_type: EdgeType::IntraCallStub,
+                            src: block.tid.to_string().clone(),
+                        });
                     ()
                 }
                 _ => (),
@@ -257,9 +288,25 @@ impl SingleStaticAssigment {
 
 fn fix_phi_functions(
     program: &mut Program,
-    incoming_edge_for_each_block: HashMap<String, HashSet<String>>,
+    calling_convention: &CallingConvention,
+    incoming_edge_for_each_block: HashMap<String, HashSet<SsaEdge>>,
     active_var_at_end_of_block: HashMap<String, HashMap<String, i64>>,
 ) {
+    let callee_saved_regs = calling_convention
+        .callee_saved_register
+        .iter()
+        .map(|var| var.name.clone())
+        .collect_vec();
+    let ret_registers = calling_convention
+        .get_all_return_register()
+        .iter()
+        .map(|var| var.name.clone())
+        .collect_vec();
+    let param_registers = calling_convention
+        .get_all_parameter_register()
+        .iter()
+        .map(|var| var.name.clone())
+        .collect_vec();
     for block in program.blocks_mut() {
         for incoming_edge_name in &incoming_edge_for_each_block[&block.tid.to_string()] {
             for def in block.defs_mut() {
@@ -273,10 +320,21 @@ fn fix_phi_functions(
                 } = def
                 {
                     let original_name = var.name.split(SPLIT_SYMBOL).take(1).collect_vec()[0];
+                    let skip = match incoming_edge_name.edge_type {
+                        EdgeType::InterReturn => ret_registers.contains(&original_name.to_owned()),
+                        EdgeType::InterCall => param_registers.contains(&original_name.to_owned()),
+                        EdgeType::Intra => true,
+                        EdgeType::IntraCallStub => {
+                            callee_saved_regs.contains(&original_name.to_owned())
+                        }
+                    };
+                    if skip {
+                        continue;
+                    }
                     inputs.push(Variable {
                         name: add_ssa_index_to_name(
                             original_name,
-                            &active_var_at_end_of_block[&*incoming_edge_name][original_name],
+                            &active_var_at_end_of_block[&*(incoming_edge_name.src)][original_name],
                         ),
                         size: var.size,
                         is_temp: var.is_temp,
@@ -295,9 +353,10 @@ impl IrPass for SingleStaticAssigment {
     type Input = Program;
     type ConstructionInput = Project;
 
-    fn new(_: &Self::ConstructionInput) -> Self {
+    fn new(input: &Self::ConstructionInput) -> Self {
         return SingleStaticAssigment {
             active_var_at_end_of_block: VarsAtEndOfBlock::new(),
+            calling_convention: input.get_standard_calling_convention().unwrap().clone(),
         };
     }
 
@@ -332,6 +391,7 @@ impl IrPass for SingleStaticAssigment {
 
         fix_phi_functions(
             program,
+            &self.calling_convention,
             incoming_edge_for_each_block,
             active_var_at_end_of_block,
         );
