@@ -136,6 +136,34 @@ fn get_incoming_edges_for_each_blk(program: &Program) -> HashMap<String, HashSet
         }
     }
 
+    // For calls: Add the edge, directly from callsite to return back.
+    // Effectifly, follow CRCallStub Edge but it is more easy to access the edge this way.
+    for block in program.blocks() {
+        for jmp in block.jmps() {
+            match &jmp.term {
+                crate::intermediate_representation::Jmp::CallInd {
+                    return_: Some(return_),
+                    ..
+                }
+                | crate::intermediate_representation::Jmp::CallOther {
+                    return_: Some(return_),
+                    ..
+                }
+                | crate::intermediate_representation::Jmp::Call {
+                    return_: Some(return_),
+                    ..
+                } => {
+                    incoming_edge_for_each_block
+                        .get_mut(&return_.to_string())
+                        .unwrap()
+                        .insert(block.tid.to_string().clone());
+                    ()
+                }
+                _ => (),
+            }
+        }
+    }
+
     incoming_edge_for_each_block
 }
 
@@ -433,7 +461,7 @@ mod tests {
         assert_phi_function_content(
             "phi_sub1_blk2_RAX",
             &project.program.term,
-            format!("RAX{}5", SPLIT_SYMBOL).to_string(),
+            format!("RAX{}2,RAX{}5", SPLIT_SYMBOL, SPLIT_SYMBOL).to_string(),
         );
         assert_phi_function_content(
             "phi_sub2_blk1_RAX",
@@ -468,8 +496,10 @@ mod tests {
                     let inputs = inputs.iter().map(|v| v.name.clone()).sorted().collect_vec();
                     assert!(
                         inputs.iter().zip(&has_inputs).all(|(a, b)| a == b),
-                        "Missing input in Phi function {}",
-                        phi_tid
+                        "Missing input in Phi function {}. Got: {:?}, expected: {:?}",
+                        phi_tid,
+                        inputs,
+                        has_inputs
                     );
                     return;
                 }
