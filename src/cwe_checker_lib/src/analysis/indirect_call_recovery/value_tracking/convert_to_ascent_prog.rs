@@ -396,9 +396,14 @@ impl ValueTracking<'_> {
 
     fn add_stack_aloc_val(&mut self) {
         for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
-            let var = self.replace_var_from_rename_table_and_get_cache(stack_target_var.clone());
+            // This may be unsound.
+            //let var = self.replace_var_from_rename_table_and_get_cache(stack_target_var.clone());
+            println!("Adding for {} the {}", stack_target_var, stack_blk);
             self.ascent_prog.aloc_val.push((
-                Reg { var }.into(),
+                Reg {
+                    var: stack_target_var.clone().into(),
+                }
+                .into(),
                 Exp::RefMLoc(Mloc::Sblk(Sblk(self.stkblk_cache.get(stack_blk)))),
             ));
         }
