@@ -320,7 +320,7 @@ fn fix_phi_functions(
                 } = def
                 {
                     let original_name = var.name.split(SPLIT_SYMBOL).take(1).collect_vec()[0];
-                    let skip = match incoming_edge_name.edge_type {
+                    let not_skip = match incoming_edge_name.edge_type {
                         EdgeType::InterReturn => ret_registers.contains(&original_name.to_owned()),
                         EdgeType::InterCall => param_registers.contains(&original_name.to_owned()),
                         EdgeType::Intra => true,
@@ -328,7 +328,7 @@ fn fix_phi_functions(
                             callee_saved_regs.contains(&original_name.to_owned())
                         }
                     };
-                    if skip {
+                    if !not_skip {
                         continue;
                     }
                     inputs.push(Variable {
@@ -521,7 +521,7 @@ mod tests {
         assert_phi_function_content(
             "phi_sub1_blk2_RAX",
             &project.program.term,
-            format!("RAX{}2,RAX{}5", SPLIT_SYMBOL, SPLIT_SYMBOL).to_string(),
+            format!("RAX{}5", SPLIT_SYMBOL).to_string(),
         );
         assert_phi_function_content(
             "phi_sub2_blk1_RAX",
