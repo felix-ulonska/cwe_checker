@@ -607,7 +607,7 @@ impl Display for ValueTracking<'_> {
         write!(f, "Printing Program")?;
 
         for sub in &self.program.subs {
-            //if sub.1.name != "main" && !sub.1.name.starts_with("test") {
+            //if sub.1.name != "newline" && !sub.1.name.starts_with("test") {
             //    continue;
             //}
             write!(f, "==== {} ====", sub.1.name)?;
@@ -756,25 +756,25 @@ impl Display for ValueTracking<'_> {
             }
         }
 
-        let mut all_locs = HashSet::new();
-        for (loc, _) in &self.ascent_prog.aloc_val {
-            all_locs.insert(loc);
-        }
+        //let mut all_locs = HashSet::new();
+        //for (loc, _) in &self.ascent_prog.aloc_val {
+        //    all_locs.insert(loc);
+        //}
 
-        for loc in all_locs {
-            writeln!(f, "{}: ", loc)?;
-            let Some(exps) = self
-                .ascent_prog
-                .aloc_val_indices_0
-                .unwrap_unfrozen()
-                .get(&(loc.clone(),))
-            else {
-                continue;
-            };
-            for exp in exps.iter() {
-                writeln!(f, "'\t{}: ", exp.0)?;
-            }
-        }
+        //for loc in all_locs {
+        //    writeln!(f, "{}: ", loc)?;
+        //    let Some(exps) = self
+        //        .ascent_prog
+        //        .aloc_val_indices_0
+        //        .unwrap_unfrozen()
+        //        .get(&(loc.clone(),))
+        //    else {
+        //        continue;
+        //    };
+        //    for exp in exps.iter() {
+        //        writeln!(f, "'\t{}: ", exp.0)?;
+        //    }
+        //}
 
         Ok(())
     }

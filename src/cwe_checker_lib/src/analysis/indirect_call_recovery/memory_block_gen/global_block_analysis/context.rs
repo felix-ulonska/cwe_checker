@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
 };
 
+use apint::ApInt;
 use ascent::hashbrown::HashSet;
 use itertools::Itertools;
 
@@ -20,7 +21,7 @@ use crate::{
     intermediate_representation::{
         BinOpType, Def, Expression, Program, RuntimeMemoryImage, Sub, Variable,
     },
-    prelude::{Bitvector, ByteSize, Term, Tid},
+    prelude::{Bitvector, BitvectorExtended, ByteSize, Term, Tid},
     utils::binary::MemorySegment,
 };
 
@@ -120,6 +121,66 @@ impl<'a> State<'a> {
         )
     }
 
+    pub fn is_global_mem(&self, constant: &ApInt) -> bool {
+        for segment in &self.memory_segments {
+            if segment.interval.bytesize() != constant.bytesize() {
+                continue;
+            }
+            if segment.interval.contains(constant) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn get_global_const_vals(&self, value: &Expression) -> Vec<ApInt> {
+        match value {
+            Expression::Var(_) | Expression::Unknown { .. } | Expression::Phi(_) => vec![],
+            Expression::Const(constval) => {
+                if self.is_global_mem(constval) {
+                    vec![constval.clone()]
+                } else {
+                    vec![]
+                }
+            }
+            Expression::BinOp { lhs, rhs, .. } => [
+                self.get_global_const_vals(&*lhs),
+                self.get_global_const_vals(&*rhs),
+            ]
+            .concat(),
+            Expression::UnOp { arg, .. }
+            | Expression::Cast { arg, .. }
+            | Expression::Subpiece { arg, .. } => self.get_global_const_vals(&*arg),
+        }
+    }
+
+    fn get_pab(&self, value: &Expression) -> Option<Data> {
+        let mut min_val: Option<ApInt> = None;
+        for const_val in self.get_global_const_vals(value) {
+            if min_val == None
+                || min_val.clone().unwrap().try_to_u64().unwrap() > const_val.try_to_u64().unwrap()
+            {
+                min_val = Some(const_val);
+            }
+        }
+
+        if let Some(min_val) = min_val {
+            return Some(self.replace_if_global_pointer(min_val.into()));
+        }
+        None
+    }
+
+    fn extend_interval_by_pab(&self, expr: &Expression, value: &Data) -> Data {
+        //println!("checking expr: {} with value {:?}", expr, value);
+        if let Some(pab) = self.get_pab(expr) {
+            //println!("Got pab {:?}", pab);
+            value.merge(&pab)
+        } else {
+            //println!("No pab");
+            value.clone()
+        }
+    }
+
     /// If the input value is a constant that is also the address of a global variable known to the function
     /// then replace it with a value relative to the global memory ID of the state.
     fn replace_if_global_pointer(&self, mut value: Data) -> Data {
@@ -151,7 +212,11 @@ impl<'a> State<'a> {
                     return Bitvector::zero(apint::BitWidth::from(lhs.bytesize())).into();
                 }
                 let (left, right) = (self.eval_recursive(lhs), self.eval_recursive(rhs));
-                left.bin_op(*op, &right)
+                let output = left.bin_op(*op, &right);
+                let output = self.extend_interval_by_pab(lhs, &output);
+                let output = self.extend_interval_by_pab(rhs, &output);
+
+                output
             }
             UnOp { op, arg } => self.eval_recursive(arg).un_op(*op),
             Cast { op, size, arg } => self.eval_recursive(arg).cast(*op, *size),
@@ -220,21 +285,25 @@ pub fn fill_vsa_result_maps<'b>(
                 };
                 let mut state = node_state.clone();
                 for def in &blk.term.defs {
+                    //println!("Def: {}", def);
                     match &def.term {
                         Def::Assign { var: _var, value } => {
                             let evaled = state.eval(value);
+                            let evaled = state.extend_interval_by_pab(value, &evaled);
                             if is_interval_global(&evaled) {
                                 values_at_defs.insert(def.tid.clone(), evaled);
                             }
                         }
                         Def::Load { var: _var, address } => {
                             let evaled = state.eval(address);
+                            let evaled = state.extend_interval_by_pab(address, &evaled);
                             if is_interval_global(&evaled) {
                                 addresses_at_defs.insert(def.tid.clone(), evaled);
                             }
                         }
                         Def::Store { address, value } => {
                             let evaled = state.eval(value);
+                            let evaled = state.extend_interval_by_pab(value, &evaled);
                             if is_interval_global(&evaled) {
                                 values_at_defs.insert(def.tid.clone(), evaled);
                             }

@@ -93,18 +93,26 @@ impl Display for GlobalBlockAnalysisResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (place, addrs) in self.addresses_at_defs.clone() {
             writeln!(f, "Place: {}", place)?;
-            if let Ok(interval) = addrs.try_to_offset_interval() {
-                writeln!(f, "{}: {:?}", place, interval)?;
+            if let Some((_, interval)) = addrs.get_if_unique_target() {
+                writeln!(f, "{}: {}", place, interval)?;
             } else {
-                writeln!(f, "{}: None", place)?;
+                if !addrs.get_relative_values().is_empty() {
+                    writeln!(f, "{}: {:?}", place, addrs)?;
+                } else {
+                    writeln!(f, "{}: None", place)?;
+                }
             }
         }
         writeln!(f, "VALUES")?;
         for (place, addrs) in self.values_at_defs.clone() {
-            if let Ok(interval) = addrs.try_to_offset_interval() {
+            if let Ok(interval) = addrs.try_to_interval() {
                 writeln!(f, "{}: {:?}", place, interval)?;
             } else {
-                writeln!(f, "{}: None", place)?;
+                if !addrs.get_relative_values().is_empty() {
+                    writeln!(f, "{}: {:?}", place, addrs)?;
+                } else {
+                    writeln!(f, "{}: None", place)?;
+                }
             }
         }
         Ok(())

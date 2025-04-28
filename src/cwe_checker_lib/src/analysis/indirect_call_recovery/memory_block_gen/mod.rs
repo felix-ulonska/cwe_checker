@@ -40,6 +40,7 @@ pub fn build_memory_blocks(
         start_time.elapsed()
     );
     start_time = Instant::now();
+    println!("global, analysis: {}", global_analysis);
     let global_boundaries = build_global_memory_blocks(
         ssa_program,
         &global_analysis, //analysis
