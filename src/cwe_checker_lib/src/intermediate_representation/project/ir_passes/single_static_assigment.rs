@@ -313,7 +313,6 @@ fn fix_phi_functions(
     );
     for block in program.blocks_mut() {
         for incoming_edge_name in &incoming_edge_for_each_block[&block.tid.to_string()] {
-            println!("Investiage Block {}", block.tid);
             for def in block.defs_mut() {
                 if let Term {
                     term:
@@ -333,10 +332,6 @@ fn fix_phi_functions(
                             callee_saved_regs.contains(&original_name.to_owned())
                         }
                     };
-                    println!(
-                        "\t from {} for {} and not_skipping: {}",
-                        incoming_edge_name.src, var, not_skip
-                    );
                     if !not_skip {
                         //continue;
                     }

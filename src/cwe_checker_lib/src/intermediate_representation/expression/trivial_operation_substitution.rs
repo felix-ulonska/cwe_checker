@@ -390,7 +390,8 @@ impl Expression {
         self.substitute_and_xor_or_with_constant();
         self.substitute_equivalent_comparison_ops();
         self.substitute_complicated_a_less_than_b();
-        self.substitute_arithmetics_with_constants();
+        // Skip as it destorys memory tracking for global memory
+        //self.substitute_arithmetics_with_constants();
     }
 
     /// Substitute some trivial expressions with their result.
@@ -529,7 +530,7 @@ impl Expression {
                 rhs.substitute_trivial_operations();
                 self.substitute_trivial_binops();
             }
-            Expression::Phi(_) => todo!("Encountered unexpected Phi Instructions")
+            Expression::Phi(_) => todo!("Encountered unexpected Phi Instructions"),
         }
     }
 }

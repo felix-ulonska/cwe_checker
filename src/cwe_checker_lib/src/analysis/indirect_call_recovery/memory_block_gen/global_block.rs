@@ -110,7 +110,7 @@ impl GlobalMemorySeperation {
             };
             for test_interval in &intervals {
                 if test_interval.contains(&interval) {
-                    map_def_to_interval.insert(tid, interval);
+                    map_def_to_interval.insert(tid, test_interval.clone());
                     break;
                 }
             }
