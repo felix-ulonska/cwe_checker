@@ -192,6 +192,12 @@ ascent_par! {
     // Block at which end is a return statement
     relation block_with_return_of_at_function(Blk, Arc<Function>);
 
+    // Relation with all stack registers
+    relation stack_registers(Reg);
+
+    // Maps a block to a function
+    relation block_to_func(Blk, Arc<Tid>);
+
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg
     assign(reg.into(), exp, id) <-- assign_reg(reg, exp, id);
@@ -290,10 +296,22 @@ ascent_par! {
         aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
         vset_deref_ireg!(val, exp);
 
-    // Phi
+    // Phi for no nstack
     aloc_val(Loc::Reg(target_reg.clone()), val) <--
-        phi(target_reg, source_reg, _),
-        aloc_val(Loc::Reg(source_reg.clone()), val);
+        phi(target_reg, source_reg, target_blk),
+        aloc_val(Loc::Reg(source_reg.clone()), val),
+        !stack_registers(target_reg);
+
+    // Phi for stack vars
+    aloc_val(Loc::Reg(target_reg.clone()), val) <--
+        phi(target_reg, source_reg, target_blk),
+        aloc_val(Loc::Reg(source_reg.clone()), val),
+        stack_registers(target_reg),
+        reg_to_block(source_reg, source_blk),
+        block_to_func(source_blk, source_fn),
+        block_to_func(target_blk, target_fn),
+        if let Exp::RefMLoc(Mloc::Sblk(stack_block)) = val,
+        if target_fn == source_fn || (stack_block.0.min < 0 && stack_block.0.func_tid == **source_fn); 
 
     func_call_targets(blk, func) <--
         aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),

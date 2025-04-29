@@ -227,12 +227,6 @@ impl ValueTracking<'_> {
                         // AssignReg
                         Def::Assign { var, value } => {
                             if let Expression::Phi(vars) = &value {
-                                // SKIP all RSP phi instructions.
-                                // This optimization might be unsound
-                                if var.name.contains("RSP") && first_block {
-                                    first_block = false;
-                                    continue;
-                                }
                                 if self
                                     .block_memory
                                     .stack
@@ -274,7 +268,7 @@ impl ValueTracking<'_> {
                                     if let Exp::Reg(reg) = expr {
                                         found_regs += 1;
                                         // TODO: architectreu specfic
-                                        if reg.var.name.contains("RSP") {
+                                        if reg.var.name.contains("RSP") || reg.var.name.contains("RBP") {
                                             found_stack_vars += 1;
                                         }
                                     }
@@ -379,6 +373,14 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn add_block_to_func(&mut self) {
+        for (sub_tid, sub) in &self.program.subs {
+            for blk in &sub.blocks {
+                self.ascent_prog.block_to_func.push((Blk(self.blk_cache.get(&blk.tid)), sub_tid.clone().into()));
+            }
+        }
+    }
+
     fn add_heap_aloc_val(&mut self) {
         // inject heap values:
         //      Orignal: target_reg <- &heap
@@ -406,6 +408,14 @@ impl ValueTracking<'_> {
                 .into(),
                 Exp::RefMLoc(Mloc::Sblk(Sblk(self.stkblk_cache.get(stack_blk)))),
             ));
+        }
+
+        for (_, vars) in self.active_var_at_end_of_block {
+            for var in vars {
+                if ["RSP", "RBP"].contains(&var.name.split_once(SPLIT_SYMBOL).unwrap().0) {
+                    self.ascent_prog.stack_registers.push((Reg{var: self.var_cache.get(var)},));
+                }
+            }
         }
     }
 
@@ -451,6 +461,7 @@ impl ValueTracking<'_> {
         eprintln!("Converted fill_base_reg_mapping");
         self.add_code_ptr_in_global_blocks();
         eprintln!("Add global code pointer");
+        self.add_block_to_func();
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and

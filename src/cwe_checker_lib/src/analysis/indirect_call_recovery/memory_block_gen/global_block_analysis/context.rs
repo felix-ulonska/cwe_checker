@@ -171,16 +171,13 @@ impl<'a> State<'a> {
     }
 
     fn extend_interval_by_pab(&self, expr: &Expression, value: &Data) -> Data {
-        println!("checking expr: {} with value {:?}", expr, value);
         if let Some(pab) = self.get_pab(expr) {
-            //println!("Got pab {:?}", pab);
             if value.bytesize() == pab.bytesize() {
                 value.merge(&pab)
             } else {
                 value.clone()
             }
         } else {
-            //println!("No pab");
             value.clone()
         }
     }
