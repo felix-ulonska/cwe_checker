@@ -25,7 +25,10 @@ use crate::{
     utils::binary::MemorySegment,
 };
 
-use super::{taint::simple_taint, vsa_result::GlobalBlockAnalysisResult};
+use super::{
+    taint::simple_taint, utils::build_mem_segments_with_interval,
+    vsa_result::GlobalBlockAnalysisResult,
+};
 
 pub type ValueDomain = IntervalDomain;
 
@@ -34,8 +37,8 @@ pub type Data = DataDomain<ValueDomain>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MemorySegmentWithInterval<'a> {
-    interval: Interval,
-    segment: &'a MemorySegment,
+    pub interval: Interval,
+    pub segment: &'a MemorySegment,
 }
 
 // A lot of the following is taken from the pointer interference, however this only includes the
@@ -49,6 +52,7 @@ pub struct State<'a> {
     memory_segments: Vec<MemorySegmentWithInterval<'a>>,
     function_tid: Tid,
     var_size: ByteSize,
+    is_little_endian: bool,
 }
 
 impl<'a> State<'a> {
@@ -58,22 +62,14 @@ impl<'a> State<'a> {
         variable_size: ByteSize,
     ) -> State {
         let register = DomainMap::from(BTreeMap::new());
-        let mut memory_segements = vec![];
-        for segment in &runtime_memory_image.memory_segments {
-            memory_segements.push(MemorySegmentWithInterval {
-                interval: Interval::new(
-                    segment.base_address.into(),
-                    (segment.base_address + segment.bytes.len() as u64).into(),
-                    1,
-                ),
-                segment,
-            });
-        }
+        let memory_segements = build_mem_segments_with_interval(runtime_memory_image);
         State {
             register,
             memory_segments: memory_segements,
             function_tid,
             var_size: variable_size,
+            // TODO
+            is_little_endian: true,
         }
     }
 
@@ -180,6 +176,32 @@ impl<'a> State<'a> {
         } else {
             value.clone()
         }
+    }
+
+    pub fn read(&self, address: &Bitvector, size: ByteSize) -> Option<Bitvector> {
+        let address = address.try_to_u64().unwrap();
+        for segment in self.memory_segments.iter() {
+            let segment = segment.segment;
+            if address >= segment.base_address
+                && u64::from(size) <= segment.base_address + segment.bytes.len() as u64
+                && address <= segment.base_address + segment.bytes.len() as u64 - u64::from(size)
+            {
+                let index = (address - segment.base_address) as usize;
+                let mut bytes = segment.bytes[index..index + u64::from(size) as usize].to_vec();
+                if self.is_little_endian {
+                    bytes = bytes.into_iter().rev().collect();
+                }
+                let mut bytes = bytes.into_iter();
+                let mut bitvector = Bitvector::from_u8(bytes.next().unwrap());
+                for byte in bytes {
+                    let new_byte = Bitvector::from_u8(byte);
+                    bitvector = bitvector.bin_op(BinOpType::Piece, &new_byte).unwrap();
+                }
+                return Some(bitvector);
+            }
+        }
+        // No segment fully contains the read.
+        None
     }
 
     /// If the input value is a constant that is also the address of a global variable known to the function
@@ -357,6 +379,7 @@ impl AbstractDomain for State<'_> {
             memory_segments: self.memory_segments.clone(),
             function_tid: self.function_tid.clone(),
             var_size: self.var_size,
+            is_little_endian: self.is_little_endian,
         }
     }
 
@@ -406,7 +429,33 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
                 }
                 Some(new_state)
             }
-            Def::Load { .. } => Some(new_state),
+            Def::Load { var, address } => {
+                if let Some((_global_id, interval)) = new_state.eval(address).get_if_unique_target()
+                {
+                    if let Ok(bitvec) = interval.try_to_bitvec() {
+                        for mem_segment in &state.memory_segments {
+                            if mem_segment.interval.contains(&bitvec) {
+                                let loaded_val = state.read(&bitvec, var.size);
+                                if let Some(loaded_val) = loaded_val {
+                                    println!(
+                                        "Setting Reg {} with {:?}",
+                                        var,
+                                        new_state
+                                            .replace_if_global_pointer(loaded_val.clone().into())
+                                    );
+                                    new_state.set_register(
+                                        var,
+                                        new_state.replace_if_global_pointer(loaded_val.into()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Some(new_state)
+                } else {
+                    Some(new_state)
+                }
+            }
         }
     }
 

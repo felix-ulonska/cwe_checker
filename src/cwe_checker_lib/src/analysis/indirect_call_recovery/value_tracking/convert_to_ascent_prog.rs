@@ -7,7 +7,7 @@ use itertools::Itertools;
 use crate::{
     analysis::indirect_call_recovery::{
         function_taken::Function,
-        memory_block_gen::{stack_block::StackBlock, BlockMemoryModel},
+        memory_block_gen::{global_block::Interval, stack_block::StackBlock, BlockMemoryModel},
         value_tracking::{build_union_of_vars, Blk, Hblk, Loc, Reg},
     },
     intermediate_representation::{ir_passes::SPLIT_SYMBOL, Project, Variable},
@@ -122,6 +122,10 @@ impl ValueTracking<'_> {
     ) -> ValueTracking<'a> {
         let mut at_functions_by_addr = HashMap::new();
         for func in at_functions {
+            println!(
+                "Adding AtFunction {} name {}",
+                func.first_instruction, func.name
+            );
             at_functions_by_addr.insert(func.first_instruction, func.clone());
         }
 
@@ -159,9 +163,17 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn interval_to_expr(&mut self, interval: &Interval) -> Exp {
+        // Gblk is actually a atfunction
+        if let Some(at_func) = self.at_functions_by_addr.get(&(interval.begin as u64)) {
+            Exp::RefFunc(self.fn_cache.get(at_func))
+        } else {
+            Exp::DerefMloc(Mloc::Gblk(Gblk(interval.clone())))
+        }
+    }
+
     fn convert_def_to_ascent(&mut self) {
         for sub in &self.program.subs {
-            let mut first_block = true;
             for blk in sub.1.blocks() {
                 for def in blk.defs() {
                     let _tid = self.def_cache.get(&def.tid);
@@ -172,9 +184,10 @@ impl ValueTracking<'_> {
                                 self.block_memory.global.get_interval_of_def(def.clone())
                             {
                                 let var = self.var_cache.get(var);
+                                let expr = self.interval_to_expr(&interval);
                                 self.ascent_prog.assign_reg.push((
                                     Reg { var: var.clone() },
-                                    Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone()))),
+                                    expr,
                                     self.def_cache.get(&def.tid),
                                 ));
                                 self.ascent_prog.reg_to_block.push((
@@ -268,11 +281,27 @@ impl ValueTracking<'_> {
                                     if let Exp::Reg(reg) = expr {
                                         found_regs += 1;
                                         // TODO: architectreu specfic
-                                        if reg.var.name.contains("RSP") || reg.var.name.contains("RBP") {
+                                        if reg.var.name.contains("RSP")
+                                            || reg.var.name.contains("RBP")
+                                        {
                                             found_stack_vars += 1;
                                         }
                                     }
                                 }
+
+                                if let Some(interval) =
+                                    self.block_memory.global.get_interval_of_def(def.clone())
+                                {
+                                    println!("Got expr for {}: {}", def.tid, interval);
+                                    let exp = self.interval_to_expr(&interval);
+                                    self.ascent_prog.aloc_val.push((
+                                        Loc::Reg(Reg {
+                                            var: self.var_cache.get(var),
+                                        }),
+                                        exp,
+                                    ));
+                                }
+
                                 // SKIP if rsp_X = rsp_Y + empty
                                 // If the register has a stack block assgined to it, prevent
                                 // propogation via RSP value tracking. RSP_{X+1} = RSP_X - 8. Values
@@ -376,7 +405,9 @@ impl ValueTracking<'_> {
     fn add_block_to_func(&mut self) {
         for (sub_tid, sub) in &self.program.subs {
             for blk in &sub.blocks {
-                self.ascent_prog.block_to_func.push((Blk(self.blk_cache.get(&blk.tid)), sub_tid.clone().into()));
+                self.ascent_prog
+                    .block_to_func
+                    .push((Blk(self.blk_cache.get(&blk.tid)), sub_tid.clone().into()));
             }
         }
     }
@@ -413,7 +444,9 @@ impl ValueTracking<'_> {
         for (_, vars) in self.active_var_at_end_of_block {
             for var in vars {
                 if ["RSP", "RBP"].contains(&var.name.split_once(SPLIT_SYMBOL).unwrap().0) {
-                    self.ascent_prog.stack_registers.push((Reg{var: self.var_cache.get(var)},));
+                    self.ascent_prog.stack_registers.push((Reg {
+                        var: self.var_cache.get(var),
+                    },));
                 }
             }
         }
@@ -562,6 +595,7 @@ impl ValueTracking<'_> {
                 }
                 //Exp::Mloc(mloc) => refered_values.push(mloc.into()),
                 Exp::Deref(_) => (),
+                Exp::DerefMloc(_) => (),
                 Exp::RefMLoc(mloc) => refered_values.push(mloc.into()),
                 Exp::RefFunc(_) => (),
                 Exp::Union(_, _) => (),
@@ -571,13 +605,14 @@ impl ValueTracking<'_> {
         refered_values
     }
 
-    fn get_assign(&self, tid: &Tid) -> Option<(Loc, Exp, Arc<Tid>)> {
+    fn get_assigns(&self, tid: &Tid) -> Vec<(Loc, Exp, Arc<Tid>)> {
+        let mut assigns = vec![];
         for assign in &self.ascent_prog.assign {
             if *assign.2 == *tid {
-                return Some(assign.clone());
+                assigns.push(assign.clone());
             }
         }
-        return None;
+        return assigns;
     }
 
     fn _refed_values(&self, f: &mut std::fmt::Formatter, exp: &Exp) -> std::fmt::Result {
@@ -628,7 +663,7 @@ impl Display for ValueTracking<'_> {
                     writeln!(f, "\t{}", def)?;
                     match &def.term {
                         Def::Load { var, address } => {
-                            if let Some(assign) = self.get_assign(&def.tid) {
+                            for assign in self.get_assigns(&def.tid) {
                                 writeln!(f, "\t\t[!]{} := {}", assign.0, assign.1)?;
                             }
                             write!(f, "\t\t{} <-- ", var.name)?;
@@ -666,7 +701,7 @@ impl Display for ValueTracking<'_> {
                             }
                         }
                         Def::Store { address, value } => {
-                            if let Some(assign) = self.get_assign(&def.tid) {
+                            for assign in self.get_assigns(&def.tid) {
                                 writeln!(f, "\t\t[!]{} := {}", assign.0, assign.1)?;
                             }
                             write!(
@@ -727,8 +762,8 @@ impl Display for ValueTracking<'_> {
                                 }
                                 writeln!(f, ")")?;
                             }
-                            if let Some(assign) = self.get_assign(&def.tid) {
-                                writeln!(f, "[!]\t\t{} := {}", assign.0, assign.1)?;
+                            for assign in self.get_assigns(&def.tid) {
+                                writeln!(f, "\t\t[!]{} := {}", assign.0, assign.1)?;
                             }
                             let Some(exps) =
                                 self.ascent_prog.aloc_val_indices_0.unwrap_unfrozen().get(&(

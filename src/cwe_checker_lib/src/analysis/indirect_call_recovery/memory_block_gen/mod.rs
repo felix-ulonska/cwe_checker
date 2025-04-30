@@ -33,14 +33,13 @@ pub fn build_memory_blocks(
         ssa_program,
         &project.runtime_memory_image,
         //project.register_set.first().unwrap().size,
-        ByteSize::new(8),
+        project.stack_pointer_register.size.clone(),
     );
     eprintln!(
         "Finished Global Analysis within: {:02?}",
         start_time.elapsed()
     );
     start_time = Instant::now();
-    println!("global, analysis: {}", global_analysis);
     let global_boundaries = build_global_memory_blocks(
         ssa_program,
         &global_analysis, //analysis
@@ -52,7 +51,7 @@ pub fn build_memory_blocks(
         start_time.elapsed()
     );
     start_time = Instant::now();
-    let stack_boundaries = build_stack_block(ssa_program);
+    let stack_boundaries = build_stack_block(ssa_program, project);
     eprintln!(
         "Finished Stack Block Analysis within: {:02?}",
         start_time.elapsed()

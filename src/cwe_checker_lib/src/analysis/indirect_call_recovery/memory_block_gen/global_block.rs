@@ -16,8 +16,8 @@ use super::global_block_analysis::vsa_result::SmallVsaResult;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Interval {
-    begin: i64,
-    end: i64,
+    pub begin: i64,
+    pub end: i64,
 }
 
 impl Display for Interval {
@@ -29,6 +29,10 @@ impl Display for Interval {
 impl Interval {
     pub fn contains(&self, other: &Interval) -> bool {
         self.begin <= other.begin && other.end <= self.end
+    }
+
+    pub fn contains_i64(&self, other: i64) -> bool {
+        self.begin <= other && other <= self.end
     }
 }
 
@@ -87,10 +91,15 @@ impl GlobalMemorySeperation {
                 }
                 // Case 2: new_interval_canidate and current interval overlap => extend interval
                 Some(ref mut existing_interval) => {
-                    existing_interval.end = end;
+                    // Attention: The list is not sorted by end
+                    if end > existing_interval.end {
+                        existing_interval.end = end;
+                    }
                 }
                 // Case 3: We are in the first iteration, set new_interval_canidate
-                None => new_interval_canidate = Some(Interval { begin, end }),
+                None => {
+                    new_interval_canidate = Some(Interval { begin, end });
+                }
             }
         }
         // We are done, we need to add the last canidate

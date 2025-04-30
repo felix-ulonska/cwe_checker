@@ -11,18 +11,19 @@ use crate::{
         AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec,
     },
     intermediate_representation::{
-        ir_passes::SPLIT_SYMBOL, BinOpType, Def, Expression, Program, Sub as Function, Variable,
+        ir_passes::SPLIT_SYMBOL, BinOpType, Def, Expression, Program, Project, Sub as Function,
+        Variable,
     },
-    prelude::{Bitvector, ByteSize, Term, Tid},
+    prelude::{Bitvector, BitvectorExtended, Term, Tid},
 };
 
-pub fn build_stack_block(program: &Program) -> StackBlockBoundaries {
+pub fn build_stack_block(program: &Program, project: &Project) -> StackBlockBoundaries {
     let mut boundaries = StackBlockBoundaries::new();
     let analysees: Vec<StackAnalysis> = program
         .subs
         .par_iter()
         .map(|sub| {
-            let mut analysis = StackAnalysis::new(sub.1);
+            let mut analysis = StackAnalysis::new(sub.1, project.stack_pointer_register.clone());
             analysis.analyze_block();
             analysis
         })
@@ -149,18 +150,20 @@ struct StackAnalysis<'a> {
     function: &'a Term<Function>,
     state: State,
     boundaries: HashSet<BoundaryCanidate>,
+    stack_register: Variable,
 }
 
 type BoundaryCanidate = DataDomain<BitvectorDomain>;
 
 impl<'a> StackAnalysis<'a> {
-    pub fn new(function: &'a Term<Function>) -> StackAnalysis<'a> {
+    pub fn new(function: &'a Term<Function>, stack_register: Variable) -> StackAnalysis<'a> {
         return StackAnalysis {
             function,
             state: State {
                 register_state: HashMap::new(),
             },
             boundaries: HashSet::new(),
+            stack_register,
         };
     }
 
@@ -168,7 +171,8 @@ impl<'a> StackAnalysis<'a> {
         let blocks = &self.function.blocks;
         for def in blocks[0].defs() {
             if let Def::Assign { var, .. } = &def.term {
-                if var.name.split(SPLIT_SYMBOL).collect_vec()[0] == "RSP" {
+                if var.name.split(SPLIT_SYMBOL).collect_vec()[0] == self.stack_register.name.clone()
+                {
                     return var.clone();
                 }
             }
@@ -213,7 +217,7 @@ impl<'a> StackAnalysis<'a> {
                     .all(|val| val[0] == val[1]);
                 if inputs.len() == 0 || !all_values_same {
                     // TODO use correct size
-                    return BoundaryCanidate::new_top(ByteSize::new(8));
+                    return BoundaryCanidate::new_top(self.stack_register.size.clone());
                 }
                 self.state.get_register(&inputs[0])
             }
@@ -274,12 +278,14 @@ impl<'a> StackAnalysis<'a> {
             crate::abstract_domain::AbstractLocation::from_stack_position(
                 &stack_reg,
                 0,
-                ByteSize::new(8),
+                self.stack_register.size.clone(),
             ),
         );
         let init_rsp = BoundaryCanidate::from_target(
             abstract_stack_pointer,
-            BitvectorDomain::Value(Bitvector::from_u64(0)),
+            BitvectorDomain::Value(
+                Bitvector::from_u64(0).into_resize_signed(self.stack_register.size.clone()),
+            ),
         );
         self.state.change_register(stack_reg, init_rsp);
 
@@ -427,8 +433,14 @@ mod tests {
             "term_2: RSP__2:8 = RSP__1:8 + 0x08:8",
             "term_3: RAX__1:8 = RSP__2:8 + 0x08:8"
         ]);
-        let mut stack_analysis =
-            StackAnalysis::new(&project.program.term.subs.first_key_value().unwrap().1);
+        let mut stack_analysis = StackAnalysis::new(
+            &project.program.term.subs.first_key_value().unwrap().1,
+            Variable {
+                name: "RSP".to_string(),
+                size: ByteSize::new(8),
+                is_temp: false,
+            },
+        );
         stack_analysis.analyze_block();
         assert!(stack_analysis.state.register_state.len() == 3);
         assert!(stack_analysis.state.register_state.len() == 3);

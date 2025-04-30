@@ -425,7 +425,9 @@ impl Interval {
         if self.start == *bitvec {
             return true;
         }
-        self.start.checked_sle(bitvec).unwrap() && self.end.checked_sge(bitvec).unwrap() && {
+
+        let bitvec = bitvec.clone().into_resize_unsigned(self.bytesize());
+        self.start.checked_sle(&bitvec).unwrap() && self.end.checked_sge(&bitvec).unwrap() && {
             if let Ok(diff) = (bitvec - &self.start).try_to_u64() {
                 self.stride > 0 && diff % self.stride == 0
             } else {

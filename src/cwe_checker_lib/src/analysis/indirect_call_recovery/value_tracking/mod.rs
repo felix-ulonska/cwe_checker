@@ -102,6 +102,7 @@ pub enum Exp {
     Reg(Reg),
     //Mloc(Mloc),
     Deref(Reg),
+    DerefMloc(Mloc),
     RefMLoc(Mloc),
     RefFunc(Arc<Function>),
     Union(Arc<Exp>, Arc<Exp>),
@@ -114,6 +115,7 @@ impl Display for Exp {
             Exp::Reg(reg) => write!(f, "{}", reg.var.name),
             //Exp::Mloc(mloc) => write!(f, "{}", mloc),
             Exp::Deref(deref) => write!(f, "*{}", deref.var.name),
+            Exp::DerefMloc(mloc) => write!(f, "*{}", mloc),
             Exp::RefMLoc(ref_mloc) => write!(f, "&{}", ref_mloc),
             Exp::RefFunc(ref_func) => write!(f, "&{}", ref_func),
             Exp::Union(exp1, exp2) => write!(f, "{} U {}", exp1, exp2),
@@ -236,6 +238,12 @@ ascent_par! {
     // IReg and Mloc
     aloc_val(loc, val) <-- assign(loc, ?Exp::Reg(src_reg), _), aloc_val(Loc::Reg(src_reg.clone()), val);
     aloc_val(loc, val) <-- assign(loc, ?Exp::RefMLoc(src_loc), _), aloc_val(Loc::Mloc(src_loc.clone()), val);
+
+    // Deref Of Global Mem
+    aloc_val(loc, val) <--
+        assign(loc, ?Exp::DerefMloc(src_mloc), _),
+        aloc_val(Loc::Mloc(src_mloc.clone()), val);
+
     // DIreg
     aloc_val(loc, val) <--
         assign(loc, ?Exp::Deref(src_reg), _),
@@ -311,7 +319,14 @@ ascent_par! {
         block_to_func(source_blk, source_fn),
         block_to_func(target_blk, target_fn),
         if let Exp::RefMLoc(Mloc::Sblk(stack_block)) = val,
-        if target_fn == source_fn || (stack_block.0.min < 0 && stack_block.0.func_tid == **source_fn); 
+        if *target_fn == *source_fn || (stack_block.0.min < 0 && stack_block.0.func_tid == **source_fn);
+
+    // Phi for stack vars
+    aloc_val(Loc::Reg(target_reg.clone()), val) <--
+        phi(target_reg, source_reg, target_blk),
+        aloc_val(Loc::Reg(source_reg.clone()), val),
+        stack_registers(target_reg),
+        if !matches!(val, Exp::RefMLoc(Mloc::Sblk(stack_block)));
 
     func_call_targets(blk, func) <--
         aloc_val(?Loc::Reg(ireg), ?ref_func@Exp::RefFunc(func)),
