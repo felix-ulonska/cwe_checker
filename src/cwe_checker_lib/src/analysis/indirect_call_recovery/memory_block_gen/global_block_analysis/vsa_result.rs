@@ -19,7 +19,7 @@ pub struct RegisterState {
 pub struct GlobalBlockAnalysisResult {
     /// Maps the TIDs of assignment, load or store [`Def`] instructions to the computed value data.
     /// The map will be filled after the fixpoint computation finished.
-    values_at_defs: HashMap<Tid, Data>,
+    pub values_at_defs: HashMap<Tid, Data>,
     /// Maps the TIDs of load or store [`Def`] instructions to the computed address data.
     /// The map will be filled after the fixpoint computation finished.
     addresses_at_defs: HashMap<Tid, Data>,

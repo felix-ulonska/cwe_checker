@@ -7,7 +7,11 @@ use itertools::Itertools;
 use crate::{
     analysis::indirect_call_recovery::{
         function_taken::Function,
-        memory_block_gen::{global_block::Interval, stack_block::StackBlock, BlockMemoryModel},
+        memory_block_gen::{
+            global_block::{self, Interval},
+            stack_block::StackBlock,
+            BlockMemoryModel,
+        },
         value_tracking::{build_union_of_vars, Blk, Hblk, Loc, Reg},
     },
     intermediate_representation::{ir_passes::SPLIT_SYMBOL, Project, Variable},
@@ -331,6 +335,35 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn add_values_from_global_analysis(&mut self) {
+        for blk in self.program.blocks() {
+            for def in blk.defs() {
+                let (Def::Load { var, .. } | Def::Assign { var, .. }) = &def.term else {
+                    continue;
+                };
+                let Some(val) = self.block_memory.global_values.values_at_defs.get(&def.tid) else {
+                    continue;
+                };
+                let Some(val) = global_block::Interval::try_from_data_domain(val.clone()) else {
+                    continue;
+                };
+                let expr = if let Some(at_func) = self.at_functions_by_addr.get(&(val.begin as u64))
+                {
+                    Exp::RefFunc(self.fn_cache.get(at_func))
+                } else {
+                    Exp::RefMLoc(Mloc::Gblk(Gblk(val.clone())))
+                };
+                self.ascent_prog.assign_reg.push((
+                    Reg {
+                        var: self.var_cache.get(var),
+                    },
+                    expr,
+                    self.def_cache.get(&def.tid),
+                ));
+            }
+        }
+    }
+
     fn add_return_statements(&mut self) {
         for (tid, term) in &self.program.subs {
             let Some(at_func) = self
@@ -495,6 +528,8 @@ impl ValueTracking<'_> {
         self.add_code_ptr_in_global_blocks();
         eprintln!("Add global code pointer");
         self.add_block_to_func();
+        eprintln!("Add val from global analysis");
+        self.add_values_from_global_analysis();
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and

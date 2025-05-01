@@ -204,6 +204,24 @@ impl<'a> State<'a> {
         None
     }
 
+    fn process_load(&self, var: &Variable, address: &Expression) -> Option<Data> {
+        if let Some((_global_id, interval)) = self.eval(address).get_if_unique_target() {
+            if let Ok(bitvec) = interval.try_to_bitvec() {
+                // This clone is annoying but everything inside a pointers so it's fine.
+                for mem_segment in &self.memory_segments.clone() {
+                    if mem_segment.interval.contains(&bitvec) {
+                        let loaded_val = self.read(&bitvec, var.size);
+                        if let Some(loaded_val) = loaded_val {
+                            let replaced_val = self.replace_if_global_pointer(loaded_val.into());
+                            return Some(replaced_val);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// If the input value is a constant that is also the address of a global variable known to the function
     /// then replace it with a value relative to the global memory ID of the state.
     fn replace_if_global_pointer(&self, mut value: Data) -> Data {
@@ -317,11 +335,16 @@ pub fn fill_vsa_result_maps<'b>(
                                 values_at_defs.insert(def.tid.clone(), evaled);
                             }
                         }
-                        Def::Load { var: _var, address } => {
+                        Def::Load { var, address } => {
                             let evaled = state.eval(address);
                             let evaled = state.extend_interval_by_pab(address, &evaled);
                             if is_interval_global(&evaled) {
                                 addresses_at_defs.insert(def.tid.clone(), evaled);
+                            }
+                            if let Some(loaded_val) = state.process_load(var, address) {
+                                if is_interval_global(&loaded_val) {
+                                    values_at_defs.insert(def.tid.clone(), loaded_val);
+                                }
                             }
                         }
                         Def::Store { address, value } => {
@@ -331,6 +354,7 @@ pub fn fill_vsa_result_maps<'b>(
                                 values_at_defs.insert(def.tid.clone(), evaled);
                             }
                             let evaled = state.eval(address);
+                            let evaled = state.extend_interval_by_pab(address, &evaled);
                             if is_interval_global(&evaled) {
                                 addresses_at_defs.insert(def.tid.clone(), evaled);
                             }
@@ -430,31 +454,10 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
                 Some(new_state)
             }
             Def::Load { var, address } => {
-                if let Some((_global_id, interval)) = new_state.eval(address).get_if_unique_target()
-                {
-                    if let Ok(bitvec) = interval.try_to_bitvec() {
-                        for mem_segment in &state.memory_segments {
-                            if mem_segment.interval.contains(&bitvec) {
-                                let loaded_val = state.read(&bitvec, var.size);
-                                if let Some(loaded_val) = loaded_val {
-                                    println!(
-                                        "Setting Reg {} with {:?}",
-                                        var,
-                                        new_state
-                                            .replace_if_global_pointer(loaded_val.clone().into())
-                                    );
-                                    new_state.set_register(
-                                        var,
-                                        new_state.replace_if_global_pointer(loaded_val.into()),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Some(new_state)
-                } else {
-                    Some(new_state)
+                if let Some(loaded_val) = new_state.process_load(var, address) {
+                    new_state.set_register(var, loaded_val);
                 }
+                Some(new_state)
             }
         }
     }

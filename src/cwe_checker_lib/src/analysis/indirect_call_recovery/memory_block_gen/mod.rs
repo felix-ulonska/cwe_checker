@@ -7,20 +7,20 @@ pub mod global_block_analysis;
 use std::time::Instant;
 
 use global_block::{build_global_memory_blocks, GlobalMemorySeperation};
-use global_block_analysis::infer_global_ptr;
+use global_block_analysis::{infer_global_ptr, vsa_result::GlobalBlockAnalysisResult};
 use heap_block::{build_heap_blocks, HeapAnalysis};
 use stack_block::{build_stack_block, StackBlockBoundaries};
 
 use crate::{
     analysis::pointer_inference::Config,
     intermediate_representation::{Program, Project},
-    prelude::ByteSize,
 };
 
 pub struct BlockMemoryModel {
     pub heap: HeapAnalysis,
     pub global: GlobalMemorySeperation,
     pub stack: StackBlockBoundaries,
+    pub global_values: GlobalBlockAnalysisResult,
 }
 
 pub fn build_memory_blocks(
@@ -66,6 +66,7 @@ pub fn build_memory_blocks(
     BlockMemoryModel {
         heap: heap_analysis,
         global: global_boundaries,
+        global_values: global_analysis,
         stack: stack_boundaries,
     }
 }

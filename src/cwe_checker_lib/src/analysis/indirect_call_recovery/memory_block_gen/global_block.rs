@@ -34,6 +34,27 @@ impl Interval {
     pub fn contains_i64(&self, other: i64) -> bool {
         self.begin <= other && other <= self.end
     }
+
+    pub fn try_from_data_domain(data: DataDomain<IntervalDomain>) -> Option<Self> {
+        if let Some((abstract_location, interval)) = data.get_if_unique_target() {
+            match abstract_location.get_location() {
+                AbstractLocation::GlobalAddress { address: _, .. } => {
+                    let Ok(data) = interval.try_to_offset_interval() else {
+                        return None;
+                    };
+
+                    return Some(Self {
+                        begin: data.0,
+                        end: data.1,
+                    });
+                }
+                // Global Pointer is not inherently useful.
+                AbstractLocation::GlobalPointer(..) => {}
+                _ => (),
+            }
+        }
+        None
+    }
 }
 
 /// Reprsents disjunct intervals.
