@@ -244,14 +244,14 @@ impl ValueTracking<'_> {
                         // AssignReg
                         Def::Assign { var, value } => {
                             if let Expression::Phi(vars) = &value {
-                                if self
-                                    .block_memory
-                                    .stack
-                                    .map_register_to_stack
-                                    .contains_key(&var)
-                                {
-                                    continue;
-                                }
+                                //if self
+                                //    .block_memory
+                                //    .stack
+                                //    .map_register_to_stack
+                                //    .contains_key(&var)
+                                //{
+                                //    continue;
+                                //}
                                 self.ascent_prog.reg_to_block.push((
                                     Reg {
                                         var: self.var_cache.get(var),
@@ -310,16 +310,16 @@ impl ValueTracking<'_> {
                                 // If the register has a stack block assgined to it, prevent
                                 // propogation via RSP value tracking. RSP_{X+1} = RSP_X - 8. Values
                                 // from RSP_X should not propogate
-                                if found_stack_vars == 1
-                                    && found_regs == 1
-                                    && self
-                                        .block_memory
-                                        .stack
-                                        .map_register_to_stack
-                                        .contains_key(&var)
-                                {
-                                    continue;
-                                }
+                                //if found_stack_vars == 1
+                                //    && found_regs == 1
+                                //    && self
+                                //        .block_memory
+                                //        .stack
+                                //        .map_register_to_stack
+                                //        .contains_key(&var)
+                                //{
+                                //    continue;
+                                //}
                                 self.ascent_prog.assign_reg.push((
                                     Reg {
                                         var: self.var_cache.get(var),
@@ -437,6 +437,7 @@ impl ValueTracking<'_> {
 
     fn add_block_to_func(&mut self) {
         for (sub_tid, sub) in &self.program.subs {
+            println!("added funcID {}", sub_tid);
             for blk in &sub.blocks {
                 self.ascent_prog
                     .block_to_func
