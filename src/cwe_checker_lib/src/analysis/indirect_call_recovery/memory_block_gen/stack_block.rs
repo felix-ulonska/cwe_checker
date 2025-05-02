@@ -251,7 +251,8 @@ impl<'a> StackAnalysis<'a> {
                 None => continue,
             };
 
-            let is_case_1_or_2 = offset_to_rsp <= 0;
+            // TODO, check orrentation
+            let is_case_1_or_2 = offset_to_rsp >= 0;
             let is_case_3 = variable.is_physical_register()
                 && !(variable.name.contains("RSP") || variable.name.contains("RBP"));
             if is_case_1_or_2 || is_case_3 {
