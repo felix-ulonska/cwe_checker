@@ -166,7 +166,7 @@ impl From<&Mloc> for Loc {
 
 //ascent_par! {
 ascent_par! {
-    #![measure_rule_times]
+    //#![measure_rule_times]
     //#![generate_run_timeout]
     // ID is for tracking
     relation assign_reg(Reg, Exp, Arc<Tid>);
