@@ -464,7 +464,6 @@ impl ValueTracking<'_> {
         for (stack_target_var, stack_blk) in &self.block_memory.stack.map_register_to_stack {
             // This may be unsound.
             //let var = self.replace_var_from_rename_table_and_get_cache(stack_target_var.clone());
-            println!("Adding for {} the {}", stack_target_var, stack_blk);
             self.ascent_prog.aloc_val.push((
                 Reg {
                     var: stack_target_var.clone().into(),
@@ -530,6 +529,14 @@ impl ValueTracking<'_> {
         self.add_block_to_func();
         eprintln!("Add val from global analysis");
         self.add_values_from_global_analysis();
+        self.statistic();
+    }
+
+    fn statistic(&self) {
+        println!(
+            "PRE_EVAL size \n{}",
+            self.ascent_prog.relation_sizes_summary()
+        );
     }
 
     // We need to mantain a mapping of tid to int ids. We need to have copabale things, and

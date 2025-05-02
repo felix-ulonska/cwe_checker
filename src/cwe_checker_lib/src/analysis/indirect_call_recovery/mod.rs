@@ -17,12 +17,16 @@ use function_taken::get_at_functions;
 use itertools::Itertools;
 use json_export::export_json;
 use memory_block_gen::build_memory_blocks;
+use petgraph::algo::connected_components;
 use value_tracking::{
     convert_to_ascent_prog::ValueTracking, output::IndirectCalls, slice::slice_program,
     AscentProgram,
 };
 
-use super::pointer_inference::Config;
+use super::{
+    graph::{get_program_cfg, intraprocedural_cfg::IntraproceduralCfg, Edge, Graph, Node},
+    pointer_inference::Config,
+};
 
 pub mod function_taken;
 pub mod value_tracking;
@@ -54,12 +58,37 @@ fn print_benchmark_time(msg: &str) {
     );
 }
 
+// From properties.rs
+fn cyclomatic_complexity(graph: &Graph) -> u32 {
+    let p = connected_components(graph) as i64;
+    let e = graph.edge_count() as i64;
+    let n = graph.node_count() as i64;
+
+    let cc = e - n + 2 * p;
+
+    if cc >= 1 && cc < u32::MAX as i64 {
+        cc as u32
+    } else {
+        panic!(
+            "CFG with invalid cyclomatic complexity: cc={}, e={}, n={}, p={}",
+            cc, e, n, p
+        )
+    }
+}
+
+fn statistics_program(program: &Program) {
+    let cfg = get_program_cfg(program);
+    println!("Complexity: {}", cyclomatic_complexity(&cfg));
+}
+
 // Helper method to drop all structs information that is only constructed to build the ascent_prog
 fn build_ascent_prog(
     project: &Project,
     debug_settings: &debug::Settings,
     config: &serde_json::Value,
 ) -> AscentProgram {
+    print!("Pre-SSA|");
+    statistics_program(&project.program);
     eprintln!("Starting SSA");
     let mut ssa_program = project.program.clone();
     print_benchmark_time("SSA");
@@ -67,6 +96,8 @@ fn build_ascent_prog(
     let config: Config = serde_json::from_value(config.clone()).unwrap();
     let mut pass = <SingleStaticAssigment>::new(&project);
     pass.run(&mut ssa_program);
+    print!("Post-SSA|");
+    statistics_program(&ssa_program);
 
     eprintln!("Building Block mem");
     print_benchmark_time("BuildMem");
@@ -79,6 +110,8 @@ fn build_ascent_prog(
     print_benchmark_time("Slice");
     let rename_table = slice_program(&mut sliced_program, &pass.active_var_at_end_of_block);
     ssa_program = sliced_program;
+    print!("Post-Sliced|");
+    statistics_program(&ssa_program);
     println!("Sliced:");
     statistics(&ssa_program);
 
@@ -120,7 +153,9 @@ pub fn run_icall_recovery(
     print_benchmark_time("Done");
     let indirect_calls = IndirectCalls::from_ascent_prog(&mut ascent_prog);
     indirect_calls.add_to_program(&mut project.program);
-    //println!("{}", ascent_prog.scc_times_summary());
+    println!("Post");
+    println!("{}", ascent_prog.scc_times_summary());
+    println!("{}", ascent_prog.relation_sizes_summary());
 
     if debug_settings.should_debug(debug::Stage::ICallRec(false))
         || debug_settings.should_debug(debug::Stage::ICallRec(true))
