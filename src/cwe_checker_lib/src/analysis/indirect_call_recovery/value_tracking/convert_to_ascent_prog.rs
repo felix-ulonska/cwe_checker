@@ -34,7 +34,7 @@ pub struct ValueTracking<'a> {
     block_memory: &'a BlockMemoryModel,
     at_functions: &'a HashSet<Function>,
     at_functions_by_addr: HashMap<u64, Function>,
-    rename_table: &'a HashMap<Variable, Variable>,
+    rename_table: &'a std::collections::HashMap<Variable, Variable>,
     active_var_at_end_of_block: &'a VarsAtEndOfBlock,
     var_cache: ArcCache<Variable>,
     blk_cache: ArcCache<Tid>,
@@ -122,7 +122,7 @@ impl ValueTracking<'_> {
         block_memory: &'a BlockMemoryModel,
         at_functions: &'a HashSet<Function>,
         active_var_at_end_of_block: &'a VarsAtEndOfBlock,
-        rename_table: &'a HashMap<Variable, Variable>,
+        rename_table: &'a std::collections::HashMap<Variable, Variable>,
     ) -> ValueTracking<'a> {
         let mut at_functions_by_addr = HashMap::new();
         for func in at_functions {
@@ -536,6 +536,18 @@ impl ValueTracking<'_> {
         println!(
             "PRE_EVAL size \n{}",
             self.ascent_prog.relation_sizes_summary()
+        );
+        println!(
+            "Global Blocks: {}",
+            self.block_memory.global_values.count_blocks()
+        );
+        println!(
+            "Heap Blocks: {}",
+            self.block_memory.heap.count_heap_blocks()
+        );
+        println!(
+            "Stack Blocks: {}",
+            self.block_memory.stack.count_stack_blocks()
         );
     }
 

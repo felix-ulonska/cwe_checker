@@ -10,6 +10,7 @@ use crate::{
     abstract_domain::{
         AbstractIdentifier, BitvectorDomain, DataDomain, RegisterDomain, SizedDomain, TryToBitvec,
     },
+    analysis::indirect_call_recovery::USE_SINGLE_STACK_FRAME,
     intermediate_representation::{
         ir_passes::SPLIT_SYMBOL, BinOpType, Def, Expression, Program, Project, Sub as Function,
         Variable,
@@ -61,6 +62,10 @@ impl StackBlockBoundaries {
         }
     }
 
+    pub fn count_stack_blocks(&self) -> usize {
+        self.map_register_to_stack.values().unique().count()
+    }
+
     fn add_analysis_result(&mut self, analysis_result: &StackAnalysis) {
         let boundaries_storted = analysis_result
             .boundaries
@@ -78,30 +83,44 @@ impl StackBlockBoundaries {
 
         let mut curr_stack_block = None;
 
-        // Build boundary blocks
-        for boundary in boundaries_storted {
-            if let None = curr_stack_block {
+        if USE_SINGLE_STACK_FRAME {
+            // On Stack block for params, and one for stack vars
+            stack_blocks.push(StackBlock {
+                func_tid: analysis_result.function.tid.clone(),
+                min: i64::MIN,
+                max: 0,
+            });
+            stack_blocks.push(StackBlock {
+                func_tid: analysis_result.function.tid.clone(),
+                min: 0,
+                max: i64::MAX,
+            });
+        } else {
+            // Build boundary blocks
+            for boundary in boundaries_storted {
+                if let None = curr_stack_block {
+                    curr_stack_block = Some(StackBlock {
+                        func_tid: analysis_result.function.tid.clone(),
+                        min: i64::MIN,
+                        max: boundary,
+                    });
+                    continue;
+                }
+
+                if let Some(mut stack_block) = curr_stack_block {
+                    stack_block.max = boundary;
+                    stack_blocks.push(stack_block);
+                }
                 curr_stack_block = Some(StackBlock {
                     func_tid: analysis_result.function.tid.clone(),
-                    min: i64::MIN,
-                    max: boundary,
-                });
-                continue;
+                    min: boundary + 1,
+                    max: i64::MAX,
+                })
             }
 
-            if let Some(mut stack_block) = curr_stack_block {
-                stack_block.max = boundary;
+            if let Some(stack_block) = curr_stack_block {
                 stack_blocks.push(stack_block);
             }
-            curr_stack_block = Some(StackBlock {
-                func_tid: analysis_result.function.tid.clone(),
-                min: boundary + 1,
-                max: i64::MAX,
-            })
-        }
-
-        if let Some(stack_block) = curr_stack_block {
-            stack_blocks.push(stack_block);
         }
 
         for (var, state) in &analysis_result.state.register_state {
@@ -252,7 +271,7 @@ impl<'a> StackAnalysis<'a> {
             };
 
             // TODO, check orrentation
-            let is_case_1_or_2 = offset_to_rsp >= 0;
+            let is_case_1_or_2 = offset_to_rsp <= 0;
             let is_case_3 = variable.is_physical_register()
                 && !(variable.name.contains("RSP") || variable.name.contains("RBP"));
             if is_case_1_or_2 || is_case_3 {

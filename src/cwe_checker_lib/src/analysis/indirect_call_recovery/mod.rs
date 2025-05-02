@@ -24,9 +24,11 @@ use value_tracking::{
 };
 
 use super::{
-    graph::{get_program_cfg, intraprocedural_cfg::IntraproceduralCfg, Edge, Graph, Node},
+    graph::{get_program_cfg, Graph},
     pointer_inference::Config,
 };
+
+const USE_SINGLE_STACK_FRAME: bool = false;
 
 pub mod function_taken;
 pub mod value_tracking;
@@ -108,7 +110,11 @@ fn build_ascent_prog(
     let mut sliced_program = ssa_program.clone();
     statistics(&ssa_program);
     print_benchmark_time("Slice");
-    let rename_table = slice_program(&mut sliced_program, &pass.active_var_at_end_of_block);
+    let rename_table = slice_program(
+        &mut sliced_program,
+        &pass.active_var_at_end_of_block,
+        project.get_standard_calling_convention().unwrap(),
+    );
     ssa_program = sliced_program;
     print!("Post-Sliced|");
     statistics_program(&ssa_program);

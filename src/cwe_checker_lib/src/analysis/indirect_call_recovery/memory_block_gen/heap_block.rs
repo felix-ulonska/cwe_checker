@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ascent::hashbrown::HashMap;
 use itertools::Itertools;
 
@@ -19,6 +21,16 @@ pub struct HeapBlock {
 pub struct HeapAnalysis {
     /// SSA register mapped to heapID
     pub register_with_heap: HashMap<Variable, HeapBlock>,
+}
+
+impl HeapAnalysis {
+    pub fn count_heap_blocks(&self) -> usize {
+        let mut heapblocks = HashSet::new();
+        for heapblock in self.register_with_heap.values() {
+            heapblocks.insert(heapblock);
+        }
+        heapblocks.len()
+    }
 }
 
 /// We changed the algorithm for global memory. We use the PI and then build a set where no

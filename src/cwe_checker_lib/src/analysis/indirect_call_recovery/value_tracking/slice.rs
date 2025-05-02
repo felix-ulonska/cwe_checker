@@ -1,16 +1,15 @@
-use ascent::{
-    hashbrown::{HashMap, HashSet},
-    rayon::{
-        iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
-        slice::ParallelSlice,
-    },
+use std::collections::{HashMap, HashSet};
+
+use ascent::rayon::{
+    iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
+    slice::ParallelSlice,
 };
 use itertools::Itertools;
 
 use crate::{
     intermediate_representation::{
         ir_passes::{VarsAtEndOfBlock, SPLIT_SYMBOL},
-        Def, Expression, Jmp, Program, Variable,
+        CallingConvention, Def, Expression, Jmp, Program, Variable,
     },
     prelude::Tid,
 };
@@ -30,12 +29,13 @@ use crate::{
 pub fn slice_program(
     ssa_program: &mut Program,
     var_at_end_of_block: &VarsAtEndOfBlock,
+    calling_convention: &CallingConvention,
 ) -> HashMap<Variable, Variable> {
-    let blocks_with_full_phi = build_blocks_without_changes(ssa_program);
+    let blocks_with_full_phi = build_blocks_without_changes(ssa_program, calling_convention);
     eprintln!("Removing unused Instructions");
     let rename_table = remove_unused_instructions(ssa_program, &blocks_with_full_phi);
     eprintln!("Start taint analysis");
-    let tainted_vars = taint(ssa_program, var_at_end_of_block);
+    let tainted_vars = taint(ssa_program, var_at_end_of_block, &blocks_with_full_phi);
     eprintln!("Remove Instruction WIthout taint");
     remove_instructions_without_tainted_vars(ssa_program, tainted_vars);
 
@@ -117,25 +117,59 @@ fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
     input.extend(updates);
 }
 
-fn build_blocks_without_changes(ssa_program: &Program) -> HashSet<Tid> {
+struct SpecialBlocks {
+    returned_to_blocks: HashSet<Tid>,
+    return_blocks: HashSet<Tid>,
+    called_blocks: HashSet<Tid>,
+    calling_convention: CallingConvention,
+}
+
+impl SpecialBlocks {
+    fn is_ssa_var_ret_reg(&self, var: &Variable) -> bool {
+        self.calling_convention
+            .get_all_return_register()
+            .iter()
+            .any(|ret_var| var.name.contains(&ret_var.name))
+    }
+
+    fn is_ssa_var_callee_saved(&self, var: &Variable) -> bool {
+        self.calling_convention
+            .callee_saved_register
+            .iter()
+            .any(|ret_var| var.name.contains(&ret_var.name))
+    }
+
+    fn is_ssa_var_param(&self, var: &Variable) -> bool {
+        self.calling_convention
+            .get_all_parameter_register()
+            .iter()
+            .any(|ret_var| var.name.contains(&ret_var.name))
+    }
+}
+
+fn build_blocks_without_changes(
+    ssa_program: &Program,
+    calling_convention: &CallingConvention,
+) -> SpecialBlocks {
     // Blocks where phi functions are not shorted
-    let mut block_with_full_phi = HashSet::new();
+    let mut return_blocks = HashSet::new();
+    let mut returned_to_blocks = HashSet::new();
 
     // Fill block_with_full_phi for blocks in which no optimization are done
     for blk in ssa_program.blocks() {
         for jmp in blk.jmps() {
             if let Jmp::CallInd { return_, .. } = &jmp.term {
                 if let Some(return_) = return_ {
-                    block_with_full_phi.insert(return_.clone());
+                    returned_to_blocks.insert(return_.clone());
                 }
             }
             if let Jmp::Return { .. } = &jmp.term {
-                block_with_full_phi.insert(blk.tid.clone());
+                return_blocks.insert(blk.tid.clone());
             }
         }
     }
 
-    let first_blocks = ssa_program
+    let called_blocks = ssa_program
         .subs
         .par_iter()
         .map(|sub| {
@@ -144,34 +178,46 @@ fn build_blocks_without_changes(ssa_program: &Program) -> HashSet<Tid> {
         })
         .collect::<std::collections::HashSet<_>>();
 
-    block_with_full_phi.extend(first_blocks);
-
-    block_with_full_phi
+    SpecialBlocks {
+        called_blocks,
+        returned_to_blocks,
+        return_blocks,
+        calling_convention: calling_convention.clone(),
+    }
 }
 
 // Essentially the Dead Var eliminiation with some extra rules
 // All Assigments with one input var, get inlined. That should be the phi instructions
 fn remove_unused_instructions(
     ssa_program: &mut Program,
-    blocks_with_full_phi: &HashSet<Tid>,
+    special_blocks: &SpecialBlocks,
 ) -> HashMap<Variable, Variable> {
     eprintln!("1");
 
+    let mut local_rename_table = HashMap::new();
+    let mut def_to_remove = HashSet::new();
     // rename First to Second Element
-    let mut rename_table = ssa_program
+    ssa_program
         .blocks_mut()
         .collect_vec()
-        .par_iter_mut()
-        .map(|blk| {
-            let mut local_rename_table = HashMap::new();
-            let mut def_to_remove = HashSet::new();
+        .iter_mut()
+        .for_each(|blk| {
             // Skip blocks which can be returnted to or are at the start of a function.
-            if blocks_with_full_phi.contains(&blk.tid) {
-                return local_rename_table;
-            }
 
             for def in blk.defs() {
                 if let Def::Assign { var, value } = &def.term {
+                    if special_blocks.returned_to_blocks.contains(&blk.tid)
+                        && (special_blocks.is_ssa_var_ret_reg(var)
+                            || special_blocks.is_ssa_var_callee_saved(var))
+                    {
+                        continue;
+                    }
+
+                    if special_blocks.called_blocks.contains(&blk.tid)
+                        && special_blocks.is_ssa_var_param(var)
+                    {
+                        continue;
+                    }
                     let inputs = value.input_vars();
                     // Single Input var: Can be replaced with original value
                     // Phi instruction can have the same input as output if within a loop; do not
@@ -217,28 +263,13 @@ fn remove_unused_instructions(
                 .filter(|def| !def_to_remove.contains(&def.tid))
                 .map(|def| def.clone())
                 .collect_vec();
-
-            local_rename_table
-        })
-        .fold(
-            || HashMap::new(),
-            |mut acc, item| {
-                acc.extend(item);
-                acc
-            },
-        )
-        .reduce(
-            || HashMap::new(),
-            |mut acc, item| {
-                acc.extend(item);
-                acc
-            },
-        );
+            ()
+        });
     eprintln!("2");
-    remove_intermediate_steps(&mut rename_table);
+    remove_intermediate_steps(&mut local_rename_table);
     eprintln!("3");
 
-    let rename_table_clone = rename_table.clone();
+    let rename_table_clone = local_rename_table.clone();
     let rename_table_keys: HashSet<&Variable> = HashSet::from_iter(rename_table_clone.keys());
 
     eprintln!("4");
@@ -266,7 +297,7 @@ fn remove_unused_instructions(
                     let used_old_vars = rename_table_keys.intersection(&used_vars);
 
                     for old_var in used_old_vars {
-                        let new_variable = rename_table.get(*old_var).unwrap();
+                        let new_variable = local_rename_table.get(*old_var).unwrap();
                         if new_variable == *old_var {
                             continue;
                         }
@@ -283,7 +314,7 @@ fn remove_unused_instructions(
                     let used_old_vars = rename_table_keys.intersection(&used_vars);
 
                     for old_var in used_old_vars {
-                        let new_variable = rename_table.get(*old_var).unwrap();
+                        let new_variable = local_rename_table.get(*old_var).unwrap();
                         let new_expr = &Expression::Var((*new_variable).clone());
                         if new_variable == *old_var {
                             continue;
@@ -295,10 +326,14 @@ fn remove_unused_instructions(
             }
         });
 
-    rename_table
+    local_rename_table
 }
 
-fn taint<'a>(program: &'a Program, var_at_end_of_block: &VarsAtEndOfBlock) -> HashSet<Variable> {
+fn taint<'a>(
+    program: &'a Program,
+    var_at_end_of_block: &VarsAtEndOfBlock,
+    special_blocks: &SpecialBlocks,
+) -> HashSet<Variable> {
     let mut changes = true;
     let mut taint: HashSet<&Variable> = HashSet::new();
     let mut checked = HashSet::new();
@@ -325,13 +360,21 @@ fn taint<'a>(program: &'a Program, var_at_end_of_block: &VarsAtEndOfBlock) -> Ha
                 // Case 3
                 taint.extend(target.input_vars());
                 taint.extend(HashSet::<&Variable>::from_iter(
-                    var_at_end_of_block.get(&blk.tid).unwrap().iter(),
+                    var_at_end_of_block
+                        .get(&blk.tid)
+                        .unwrap()
+                        .iter()
+                        .filter(|var| special_blocks.is_ssa_var_param(var)),
                 ));
             }
             if let Jmp::Return { .. } = &jmp.term {
                 // Case 5
                 taint.extend(HashSet::<&Variable>::from_iter(
-                    var_at_end_of_block.get(&blk.tid).unwrap().iter(),
+                    var_at_end_of_block
+                        .get(&blk.tid)
+                        .unwrap()
+                        .iter()
+                        .filter(|var| special_blocks.is_ssa_var_ret_reg(var)),
                 ));
             }
         }
