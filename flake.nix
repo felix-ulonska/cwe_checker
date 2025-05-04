@@ -61,12 +61,25 @@
       ln -s ${cwe-ghidra-json} $out/ghidra.json
       '';
       # target bin for nix run .#
-      cwe-checker = pkgs.writeScriptBin "cwe-checker" ''
+      cwe-checker = pkgs.stdenv.mkDerivation {
+    pname = "cwe-checker";
+    version = "1.0"; # You can set the actual version here
+
+    src = null;
+
+    phases = [ "installPhase" ];
+
+    installPhase = ''
+      mkdir -p $out/bin
+      cat > $out/bin/cwe-checker <<EOF
       #!/bin/sh
-      CWE_CHECKER_CONFIGS_PATH=${cwe-checker-configs} \
-      CWE_CHECKER_GHIDRA_PLUGINS_PATH=${cwe-checker-ghidra-plugins} \
-      ${cwe-checker-bins}/bin/cwe_checker $@;
-      '';
+      CWE_CHECKER_CONFIGS_PATH=${cwe-checker-configs} \\
+      CWE_CHECKER_GHIDRA_PLUGINS_PATH=${cwe-checker-ghidra-plugins} \\
+      ${cwe-checker-bins}/bin/cwe_checker "\$@"
+      EOF
+      chmod +x $out/bin/cwe-checker
+    '';
+  };
     in
     {
       devShell.x86_64-linux = pkgs.mkShell {

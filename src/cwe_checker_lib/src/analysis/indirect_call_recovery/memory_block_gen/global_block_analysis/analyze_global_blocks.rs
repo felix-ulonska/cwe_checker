@@ -1,12 +1,13 @@
+use ascent::hashbrown::HashMap;
+
 use crate::{
     analysis::indirect_call_recovery::memory_block_gen::global_block::Interval,
     intermediate_representation::Project, prelude::Bitvector,
 };
 
 use super::{
-    context::{Data, MemorySegmentWithInterval},
-    utils::build_mem_segments_with_interval,
-    vsa_result::GlobalBlockAnalysisResult,
+    context::MemorySegmentWithInterval,
+    utils::build_mem_segments_with_interval
 };
 
 pub fn bytes_to_u64(bytes: &[u8], is_little_endia: bool) -> u64 {
@@ -29,36 +30,52 @@ fn is_ptr(constant: u64, memory_segments: &Vec<MemorySegmentWithInterval>) -> bo
     false
 }
 
-fn analyze_global_blks(
-    project: &Project,
-    global_block_analysis: GlobalBlockAnalysisResult,
-    intervals: &Vec<Interval>,
-) {
-    let memory_segements = build_mem_segments_with_interval(&project.runtime_memory_image);
-    let ptr_byte_size = project.get_pointer_bytesize().as_bit_length() / 8;
-    for mem_segment in &project.runtime_memory_image.memory_segments {
-        // check aligned
-        let start_addr = mem_segment.base_address;
-        let mut curr_addr = start_addr;
-        for potential_ptr in mem_segment.bytes.chunks_exact(ptr_byte_size) {
-            // Check if global ptr
-            let ptr_as_num = bytes_to_u64(
-                potential_ptr,
-                project.runtime_memory_image.is_little_endian_byte_order(),
-            );
+pub struct GlobalMemContent {
+    content_global_mem: HashMap<Interval, Vec<u64>>
+}
 
-            if !is_ptr(ptr_as_num, &memory_segements) {
-                continue;
+impl GlobalMemContent {
+    pub fn new(
+        project: &Project,
+        intervals: &Vec<Interval>,
+    ) -> Self {
+        let memory_segements = build_mem_segments_with_interval(&project.runtime_memory_image);
+        let ptr_byte_size = project.get_pointer_bytesize().as_bit_length() / 8;
+        let mut global_content = HashMap::new();
+
+
+        for mem_segment in &project.runtime_memory_image.memory_segments {
+            // check aligned
+            let start_addr = mem_segment.base_address;
+            let mut curr_addr = start_addr;
+            for potential_ptr in mem_segment.bytes.chunks_exact(ptr_byte_size) {
+                // Check if global ptr
+                let ptr_as_num = bytes_to_u64(
+                    potential_ptr,
+                    project.runtime_memory_image.is_little_endian_byte_order(),
+                );
+
+                if !is_ptr(ptr_as_num, &memory_segements) {
+                    continue;
+                }
+
+                // Check if global mem section
+                if let Some(curr_interval) = intervals
+                    .iter()
+                    .find(|interval| interval.contains_i64(curr_addr as i64))
+                {
+                    global_content.entry(curr_interval.clone()).or_insert_with(Vec::new).push(ptr_as_num);
+                };
+                curr_addr += ptr_byte_size as u64;
             }
-
-            // Check if global mem section
-            let Some(curr_interval) = intervals
-                .iter()
-                .find(|interval| interval.contains_i64(curr_addr as i64))
-            else {
-                continue;
-            };
-            curr_addr += ptr_byte_size as u64;
         }
+
+        Self {
+            content_global_mem: global_content
+        }
+    }
+
+    pub fn iter_content(&self) -> ascent::hashbrown::hash_map::Iter<'_, Interval, Vec<u64>> {
+        self.content_global_mem.iter()
     }
 }

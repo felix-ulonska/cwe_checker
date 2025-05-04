@@ -351,7 +351,11 @@ impl ValueTracking<'_> {
                 {
                     Exp::RefFunc(self.fn_cache.get(at_func))
                 } else {
-                    Exp::RefMLoc(Mloc::Gblk(Gblk(val.clone())))
+                    if let Some(interval) = self.block_memory.global.get_interval(val.begin) {
+                        Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone())))
+                    } else {
+                        continue;
+                    }
                 };
                 self.ascent_prog.assign_reg.push((
                     Reg {
@@ -360,6 +364,23 @@ impl ValueTracking<'_> {
                     expr,
                     self.def_cache.get(&def.tid),
                 ));
+            }
+        }
+    }
+
+    fn add_vals_from_global_content_analysis(&mut self) {
+        for (global_block, content_vec) in self.block_memory.global.iter_content() {
+            for content in content_vec {
+                let content_expr = if let Some(at_func) = self.at_functions_by_addr.get(content) {
+                    Exp::RefFunc(self.fn_cache.get(at_func))
+                } else {
+                    if let Some(interval) = self.block_memory.global.get_interval(*content as i64) {
+                        Exp::DerefMloc(Mloc::Gblk(Gblk(interval.clone())))
+                    } else {
+                        continue;
+                    }
+                };
+                self.ascent_prog.aloc_val.push((Loc::Mloc(Mloc::Gblk(Gblk(global_block.clone()))), content_expr));
             }
         }
     }
@@ -530,6 +551,7 @@ impl ValueTracking<'_> {
         self.add_block_to_func();
         eprintln!("Add val from global analysis");
         self.add_values_from_global_analysis();
+        self.add_vals_from_global_content_analysis();
         self.statistic();
     }
 
@@ -540,7 +562,7 @@ impl ValueTracking<'_> {
         );
         println!(
             "Global Blocks: {}",
-            self.block_memory.global_values.count_blocks()
+            self.block_memory.global.count_blocks()
         );
         println!(
             "Heap Blocks: {}",

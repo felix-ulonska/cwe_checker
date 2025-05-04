@@ -8,11 +8,11 @@ use itertools::Itertools;
 
 use crate::{
     abstract_domain::{AbstractLocation, DataDomain, IntervalDomain, TryToInterval},
-    intermediate_representation::{Def, Program},
+    intermediate_representation::{Def, Program, Project},
     prelude::{Term, Tid},
 };
 
-use super::global_block_analysis::vsa_result::SmallVsaResult;
+use super::global_block_analysis::{analyze_global_blocks::GlobalMemContent, vsa_result::SmallVsaResult};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Interval {
@@ -37,7 +37,7 @@ impl Interval {
 
     pub fn try_from_data_domain(data: DataDomain<IntervalDomain>) -> Option<Self> {
         if let Some((abstract_location, interval)) = data.get_if_unique_target() {
-            match abstract_location.get_location() {
+       match abstract_location.get_location() {
                 AbstractLocation::GlobalAddress { address: _, .. } => {
                     let Ok(data) = interval.try_to_offset_interval() else {
                         return None;
@@ -61,11 +61,20 @@ impl Interval {
 pub struct GlobalMemorySeperation {
     intervals: Vec<Interval>,
     map_def_to_interval: HashMap<Tid, Interval>,
+    global_mem_content: GlobalMemContent,
 }
 
 impl GlobalMemorySeperation {
     fn _get_interval_for_def(&self, def: Term<Def>) -> Option<Interval> {
         self.map_def_to_interval.get(&def.tid).cloned()
+    }
+
+    pub fn count_blocks(&self) -> usize {
+        self.intervals.iter().unique().count()
+    }
+
+    pub fn iter_all_blocks(&self) -> std::slice::Iter<'_, Interval> {
+        self.intervals.iter()
     }
 }
 
@@ -83,7 +92,7 @@ impl Display for GlobalMemorySeperation {
 impl GlobalMemorySeperation {
     // Parses the Vec<IntervalDomain> and constructs disjunct intervals with every overlapping
     // interval.
-    fn new(in_intervals: Vec<(Tid, IntervalDomain)>) -> GlobalMemorySeperation {
+    fn new(in_intervals: Vec<(Tid, IntervalDomain)>, project: &Project) -> GlobalMemorySeperation {
         // Idea, we iterate sorted over the intervals. We look behind. If the prev and current
         // element overlap, do not create new section.
         let mut intervals = vec![];
@@ -146,10 +155,16 @@ impl GlobalMemorySeperation {
             }
         }
 
+        let global_mem_content = GlobalMemContent::new(project, &intervals);
         GlobalMemorySeperation {
             intervals,
             map_def_to_interval,
+            global_mem_content
         }
+    }
+
+    pub fn iter_content(&self) -> ascent::hashbrown::hash_map::Iter<'_, Interval, Vec<u64>> {
+        self.global_mem_content.iter_content()
     }
 
     /// Returns interval, if an interval is mapped to def
@@ -159,7 +174,6 @@ impl GlobalMemorySeperation {
 
     /// [index] is the key. Will return the interval which has index within (begin, end)
     pub fn get_interval(&self, index: i64) -> Option<Interval> {
-        // TODO: Do fancy bin search here:
         for interval in &self.intervals {
             if interval.begin <= index && interval.end >= index {
                 return Some(interval.clone());
@@ -174,6 +188,7 @@ impl GlobalMemorySeperation {
 /// overlapping address ranges.
 pub fn build_global_memory_blocks(
     program: &Program,
+    project: &Project,
     value_sets: &impl SmallVsaResult<ValueDomain = DataDomain<IntervalDomain>>,
 ) -> GlobalMemorySeperation {
     let mut intervals = vec![];
@@ -196,7 +211,7 @@ pub fn build_global_memory_blocks(
         }
     }
 
-    GlobalMemorySeperation::new(intervals)
+    GlobalMemorySeperation::new(intervals, project)
 }
 
 #[cfg(test)]
@@ -204,8 +219,7 @@ mod tests {
     use apint::ApInt;
 
     use crate::{
-        abstract_domain::{self, IntervalDomain},
-        prelude::Tid,
+        abstract_domain::{self, IntervalDomain}, analysis::string_abstraction::tests::mock_project_with_intraprocedural_control_flow, intermediate_representation::Project, prelude::Tid
     };
 
     use super::GlobalMemorySeperation;
@@ -230,7 +244,7 @@ mod tests {
             build_interval(22, 25),
         ];
 
-        let global_mem = GlobalMemorySeperation::new(intervals);
+        let global_mem = GlobalMemorySeperation::new(intervals, &Project::mock_x64());
         assert_eq!(global_mem.intervals.len(), 2);
 
         let inter = global_mem.get_interval(18).unwrap();

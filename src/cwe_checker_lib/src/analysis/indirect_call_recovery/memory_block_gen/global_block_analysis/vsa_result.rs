@@ -1,7 +1,5 @@
 use std::{collections::HashMap, fmt::Display};
 
-use itertools::Itertools;
-
 use crate::{
     abstract_domain::{DomainMap, TryToInterval, UnionMergeStrategy},
     intermediate_representation::Variable,
@@ -59,10 +57,6 @@ impl GlobalBlockAnalysisResult {
         new_self.values_at_defs.extend(other.values_at_defs.clone());
 
         new_self
-    }
-
-    pub fn count_blocks(&self) -> usize {
-        self.addresses_at_defs.values().unique().count()
     }
 }
 

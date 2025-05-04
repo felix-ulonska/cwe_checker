@@ -10,7 +10,7 @@ use crate::{
     prelude::ByteSize,
 };
 
-mod analyze_global_blocks;
+pub mod analyze_global_blocks;
 mod context;
 pub mod taint;
 mod utils;

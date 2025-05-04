@@ -42,6 +42,7 @@ pub fn build_memory_blocks(
     start_time = Instant::now();
     let global_boundaries = build_global_memory_blocks(
         ssa_program,
+        &project,
         &global_analysis, //analysis
                           //    .pointer_inference
                           //    .expect("Pointer Interference is needed for BPA"),
