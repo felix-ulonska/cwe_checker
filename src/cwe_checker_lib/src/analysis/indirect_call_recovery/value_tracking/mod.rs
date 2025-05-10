@@ -207,7 +207,6 @@ ascent_par! {
     assign(mloc.into(), exp, id) <-- assign_mloc(mloc, exp, id);
     assign(mloc.into(), exp, id) <-- assing_deref_reg(reg, exp, id), aloc_val(Loc::Reg(reg.clone()), ?Exp::RefMLoc(mloc));
 
-
     // v in exp
     macro vset_mloc_func($v: ident, $exp: ident) {
         for $v in $exp.to_iter(),
@@ -250,60 +249,10 @@ ascent_par! {
         aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
         aloc_val(Loc::Mloc(mloc.clone()), val);
 
-    // Direg but not with refmloc, might be bad?
-    aloc_val(loc, val) <--
-        assign(loc, ?Exp::Deref(src_reg), _),
-        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
-        aloc_val(Loc::Mloc(mloc.clone()), val);
-
     aloc_val(loc, v) <--
         assign(loc, union, _),
-        if let Exp::Union(exp1, exp2) = union,
-        vset_mloc_func!(v, union);
-
-    // Vset(ireg)
-    aloc_val(loc, v) <--
-        assign(loc, union, _),
-        if let Exp::Union(exp1, exp2) = union,
-        vset_ireg!(v, union);
-
-    // Vset(mloc)
-    aloc_val(loc, v) <--
-        assign(loc, union, _),
-        if let Exp::Union(exp1, exp2) = union,
-        vset_mloc!(v, union);
-
-    // Vset(*ireg)
-    aloc_val(loc, v) <--
-        assign(loc, union, _),
-        if let Exp::Union(exp1, exp2) = union,
-        vset_deref_ireg!(v, union);
-
-    // UpdMloc
-    // Vset(&mloc) and Vset(&func)
-    aloc_val(mloc.into(), v) <--
-        assing_deref_reg(ireg, exp, _),
-        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
-        vset_mloc_func!(v, exp);
-
-    // Vset(ireg)
-    aloc_val(Loc::Mloc(mloc.clone()), val) <--
-        assing_deref_reg(ireg, exp, _),
-        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
-        vset_ireg!(val, exp);
-
-    // Vset(mloc)
-    aloc_val(Loc::Mloc(mloc.clone()), val) <--
-        assing_deref_reg(ireg, exp, _),
-        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
-        vset_mloc!(val, exp);
-
-    // Vset(*ireg)
-    aloc_val(Loc::Mloc(mloc.clone()), val) <--
-        assing_deref_reg(ireg, exp, _),
-        aloc_val(Loc::Reg(ireg.clone()), ?Exp::RefMLoc(mloc)),
-        vset_deref_ireg!(val, exp);
-
+        (vset_mloc_func!(v, union) | vset_ireg!(v, union) | vset_mloc!(v, union) | vset_deref_ireg!(v, union));
+    
     // Phi for no nstack
     aloc_val(Loc::Reg(target_reg.clone()), val) <--
         phi(target_reg, source_reg, target_blk),
