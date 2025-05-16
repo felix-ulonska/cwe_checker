@@ -51,7 +51,7 @@ impl Display for Hblk {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Gblk(Interval);
+pub struct Gblk(Arc<Interval>);
 
 impl Display for Gblk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -232,22 +232,10 @@ ascent_par! {
         aloc_val(Loc::Mloc(mloc.clone()), $v)
     }
 
-    // AddrMloc and AddrFunc
-    aloc_val(loc, mloc) <-- assign(loc, ?mloc@(Exp::RefMLoc(_) | Exp::RefFunc(_)), _);
-    // IReg and Mloc
-    aloc_val(loc, val) <-- assign(loc, ?Exp::Reg(src_reg), _), aloc_val(Loc::Reg(src_reg.clone()), val);
-    aloc_val(loc, val) <-- assign(loc, ?Exp::RefMLoc(src_loc), _), aloc_val(Loc::Mloc(src_loc.clone()), val);
-
-    // Deref Of Global Mem
+    // Special: Load case
     aloc_val(loc, val) <--
         assign(loc, ?Exp::DerefMloc(src_mloc), _),
         aloc_val(Loc::Mloc(src_mloc.clone()), val);
-
-    // DIreg
-    aloc_val(loc, val) <--
-        assign(loc, ?Exp::Deref(src_reg), _),
-        aloc_val(Loc::Reg(src_reg.clone()), ?Exp::RefMLoc(mloc)),
-        aloc_val(Loc::Mloc(mloc.clone()), val);
 
     aloc_val(loc, v) <--
         assign(loc, union, _),
@@ -270,7 +258,7 @@ ascent_par! {
         if let Exp::RefMLoc(Mloc::Sblk(stack_block)) = val,
         if *target_fn == *source_fn || (stack_block.0.min < 0 && stack_block.0.func_tid == **source_fn);
 
-    // Phi for stack vars
+    // Phi for non stack vars
     aloc_val(Loc::Reg(target_reg.clone()), val) <--
         phi(target_reg, source_reg, target_blk),
         aloc_val(Loc::Reg(source_reg.clone()), val),

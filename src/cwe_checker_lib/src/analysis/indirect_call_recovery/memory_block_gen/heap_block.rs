@@ -68,6 +68,7 @@ pub fn build_heap_blocks(program: &Program, config: &Config) -> HeapAnalysis {
                     continue;
                 };
                 // check that it is the rax phi instruction
+                // TODO: use calling convention
                 let Some(("RAX", _)) = var.name.split(SPLIT_SYMBOL).collect_tuple() else {
                     continue;
                 };

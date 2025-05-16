@@ -41,6 +41,7 @@ pub struct ValueTracking<'a> {
     def_cache: ArcCache<Tid>,
     fn_cache: ArcCache<Function>,
     stkblk_cache: ArcCache<StackBlock>,
+    interval_cache: ArcCache<Interval>,
     pub ascent_prog: AscentProgram,
 }
 
@@ -56,12 +57,14 @@ impl ValueTracking<'_> {
         }
 
         if let Some(interval) = self.block_memory.global.get_interval(val as i64) {
-            return Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone())));
+            return Exp::RefMLoc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval))));
         }
 
         Exp::Empty
     }
 
+    // THis can convert the bitvector to an exp without a mut reference because it does not utilize
+    // caching
     fn parse_const_slow(&self, bitvector: &Bitvector) -> Exp {
         let Ok(val) = bitvector.try_to_u64() else {
             return Exp::Empty;
@@ -72,7 +75,7 @@ impl ValueTracking<'_> {
         }
 
         if let Some(interval) = self.block_memory.global.get_interval(val as i64) {
-            return Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone())));
+            return Exp::RefMLoc(Mloc::Gblk(Gblk(interval.into())));
         }
 
         Exp::Empty
@@ -147,6 +150,7 @@ impl ValueTracking<'_> {
             var_cache: ArcCache::new(),
             blk_cache: ArcCache::new(),
             def_cache: ArcCache::new(),
+            interval_cache: ArcCache::new(),
             stkblk_cache: ArcCache::new(),
         }
     }
@@ -161,7 +165,7 @@ impl ValueTracking<'_> {
                 continue;
             };
             self.ascent_prog.aloc_val.push((
-                Loc::Mloc(Mloc::Gblk(Gblk(interval))),
+                Loc::Mloc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval)))),
                 Exp::RefFunc(self.fn_cache.get(at_fn)),
             ));
         }
@@ -172,7 +176,7 @@ impl ValueTracking<'_> {
         if let Some(at_func) = self.at_functions_by_addr.get(&(interval.begin as u64)) {
             Exp::RefFunc(self.fn_cache.get(at_func))
         } else {
-            Exp::DerefMloc(Mloc::Gblk(Gblk(interval.clone())))
+            Exp::DerefMloc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval))))
         }
     }
 
@@ -221,7 +225,7 @@ impl ValueTracking<'_> {
                             {
                                 let out_expr = self.expression_to_value_tracking(&value);
                                 self.ascent_prog.assign_mloc.push((
-                                    Mloc::Gblk(Gblk(interval.clone())),
+                                    Mloc::Gblk(Gblk(self.interval_cache.get(&interval))),
                                     out_expr,
                                     self.def_cache.get(&def.tid),
                                 ));
@@ -352,7 +356,7 @@ impl ValueTracking<'_> {
                     Exp::RefFunc(self.fn_cache.get(at_func))
                 } else {
                     if let Some(interval) = self.block_memory.global.get_interval(val.begin) {
-                        Exp::RefMLoc(Mloc::Gblk(Gblk(interval.clone())))
+                        Exp::RefMLoc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval))))
                     } else {
                         continue;
                     }
@@ -375,12 +379,12 @@ impl ValueTracking<'_> {
                     Exp::RefFunc(self.fn_cache.get(at_func))
                 } else {
                     if let Some(interval) = self.block_memory.global.get_interval(*content as i64) {
-                        Exp::DerefMloc(Mloc::Gblk(Gblk(interval.clone())))
+                        Exp::DerefMloc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval))))
                     } else {
                         continue;
                     }
                 };
-                self.ascent_prog.aloc_val.push((Loc::Mloc(Mloc::Gblk(Gblk(global_block.clone()))), content_expr));
+                self.ascent_prog.aloc_val.push((Loc::Mloc(Mloc::Gblk(Gblk(self.interval_cache.get(&global_block)))), content_expr));
             }
         }
     }

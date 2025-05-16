@@ -219,7 +219,7 @@ mod tests {
     use apint::ApInt;
 
     use crate::{
-        abstract_domain::{self, IntervalDomain}, analysis::string_abstraction::tests::mock_project_with_intraprocedural_control_flow, intermediate_representation::Project, prelude::Tid
+        abstract_domain::{self, IntervalDomain}, intermediate_representation::Project, prelude::Tid
     };
 
     use super::GlobalMemorySeperation;
