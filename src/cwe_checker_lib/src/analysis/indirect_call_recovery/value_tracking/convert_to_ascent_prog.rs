@@ -180,6 +180,25 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn inject_gblk_from_global(&mut self, def: &Tid, existing_expr: Exp) -> Exp {
+        let Some(val) = self.block_memory.global_values.values_at_defs.get(&def) else {
+            return existing_expr;
+        };
+        let Some(val) = global_block::Interval::try_from_data_domain(val.clone()) else {
+            return existing_expr;
+        };
+        if let Some(at_func) = self.at_functions_by_addr.get(&(val.begin as u64))
+        {
+            return Exp::Union(Arc::new(Exp::RefFunc(self.fn_cache.get(at_func))), Arc::new(existing_expr))
+        } else {
+            if let Some(interval) = self.block_memory.global.get_interval(val.begin) {
+            return Exp::Union(Arc::new( Exp::RefMLoc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval))))), Arc::new(existing_expr))
+            } else {
+                return existing_expr;
+            }
+        };
+    }
+
     fn convert_def_to_ascent(&mut self) {
         for sub in &self.program.subs {
             for blk in sub.1.blocks() {
@@ -224,6 +243,7 @@ impl ValueTracking<'_> {
                                 self.block_memory.global.get_interval_of_def(def.clone())
                             {
                                 let out_expr = self.expression_to_value_tracking(&value);
+                                let out_expr = self.inject_gblk_from_global(&_tid, out_expr);
                                 self.ascent_prog.assign_mloc.push((
                                     Mloc::Gblk(Gblk(self.interval_cache.get(&interval))),
                                     out_expr,
@@ -236,6 +256,7 @@ impl ValueTracking<'_> {
                             let input_vars = address.input_vars();
                             for input_var in input_vars {
                                 let out_expr = self.expression_to_value_tracking(&value);
+                                let out_expr = self.inject_gblk_from_global(&_tid, out_expr);
                                 self.ascent_prog.assing_deref_reg.push((
                                     Reg {
                                         var: self.var_cache.get(input_var),
