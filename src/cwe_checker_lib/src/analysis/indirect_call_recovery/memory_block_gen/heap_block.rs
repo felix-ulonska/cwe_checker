@@ -6,7 +6,7 @@ use itertools::Itertools;
 use crate::{
     analysis::pointer_inference::Config,
     intermediate_representation::{
-        ir_passes::SPLIT_SYMBOL, Def, Expression, Jmp, Program, Variable,
+        ir_passes::SPLIT_SYMBOL, CallingConvention, Def, Expression, Jmp, Program, Variable,
     },
     prelude::Term,
 };
@@ -35,7 +35,11 @@ impl HeapAnalysis {
 
 /// We changed the algorithm for global memory. We use the PI and then build a set where no
 /// overlapping address ranges.
-pub fn build_heap_blocks(program: &Program, config: &Config) -> HeapAnalysis {
+pub fn build_heap_blocks(
+    program: &Program,
+    config: &Config,
+    calling_convention: &CallingConvention,
+) -> HeapAnalysis {
     let mut register_with_heap = HashMap::<Variable, HeapBlock>::new();
     for block in program.blocks() {
         for jmp in block.jmps() {
@@ -69,16 +73,19 @@ pub fn build_heap_blocks(program: &Program, config: &Config) -> HeapAnalysis {
                 };
                 // check that it is the rax phi instruction
                 // TODO: use calling convention
-                let Some(("RAX", _)) = var.name.split(SPLIT_SYMBOL).collect_tuple() else {
-                    continue;
-                };
-
-                register_with_heap.insert(
-                    var.clone(),
-                    HeapBlock {
-                        id: jmp.tid.to_string() + "_heap",
-                    },
-                );
+                for ret_reg in &calling_convention.integer_return_register {
+                    let Some((base_reg, _)) = var.name.split(SPLIT_SYMBOL).collect_tuple() else {
+                        continue;
+                    };
+                    if ret_reg.name == base_reg {
+                        register_with_heap.insert(
+                            var.clone(),
+                            HeapBlock {
+                                id: jmp.tid.to_string() + "_heap",
+                            },
+                        );
+                    }
+                }
             }
         }
     }

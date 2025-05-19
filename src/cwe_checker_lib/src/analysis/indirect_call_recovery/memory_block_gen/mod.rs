@@ -58,7 +58,11 @@ pub fn build_memory_blocks(
         start_time.elapsed()
     );
     start_time = Instant::now();
-    let heap_analysis = build_heap_blocks(ssa_program, config);
+    let heap_analysis = build_heap_blocks(
+        ssa_program,
+        config,
+        project.get_standard_calling_convention().unwrap(),
+    );
     eprintln!(
         "Finished Heap Analysis within: {:02?}",
         start_time.elapsed()
