@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, env};
 
 use ascent::rayon::{
     iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
@@ -33,11 +33,23 @@ pub fn slice_program(
 ) -> HashMap<Variable, Variable> {
     let blocks_with_full_phi = build_blocks_without_changes(ssa_program, calling_convention);
     eprintln!("Removing unused Instructions");
-    let rename_table = remove_unused_instructions(ssa_program, &blocks_with_full_phi);
-    eprintln!("Start taint analysis");
-    let tainted_vars = taint(ssa_program, var_at_end_of_block, &blocks_with_full_phi);
-    eprintln!("Remove Instruction WIthout taint");
-    remove_instructions_without_tainted_vars(ssa_program, tainted_vars);
+    let rename_table = if env::var("CWE_CHECKER_PROFILING_DISBALE_EXPRESSION").is_ok() {
+        eprintln!("SKIPPING expression propagation");
+        println!("SKIPPING expression propagation");
+        HashMap::new()
+    } else {
+        remove_unused_instructions(ssa_program, &blocks_with_full_phi)
+    };
+
+    if env::var("CWE_CHECKER_PROFILING_DISBALE_SLICING").is_ok() {
+        eprintln!("SKIPPING taint analysis");
+        println!("SKIPPING taint analysis");
+    } else {
+        eprintln!("Start taint analysis");
+        let tainted_vars = taint(ssa_program, var_at_end_of_block, &blocks_with_full_phi);
+        eprintln!("Remove Instruction WIthout taint");
+        remove_instructions_without_tainted_vars(ssa_program, tainted_vars);
+    }
 
     rename_table
 }
