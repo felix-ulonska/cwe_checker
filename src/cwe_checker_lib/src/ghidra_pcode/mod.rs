@@ -1,7 +1,7 @@
 //! Translation from Pcode to the internal intermediate representation.
 
 use crate::intermediate_representation::{
-    CodeReference, Endian, Program as IrProgram, Project as IrProject, RuntimeMemoryImage, Term as IrTerm, Tid
+    CodeReference, Program as IrProgram, Project as IrProject, RuntimeMemoryImage, Term as IrTerm, Tid
 };
 use crate::utils::debug;
 use crate::utils::log::{LogMessage, WithLogs};
