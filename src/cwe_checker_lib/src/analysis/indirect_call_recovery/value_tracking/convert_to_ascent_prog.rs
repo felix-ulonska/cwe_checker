@@ -609,10 +609,16 @@ impl ValueTracking<'_> {
             results.entry(blk.clone()).or_default().push(func.clone());
         }
         println!("CallGraph:");
-        for (a, bs) in &results {
-            println!("{a}:");
-            for b in bs {
-                println!("  {b}");
+        for sub in &self.program.subs {
+            println!("{}:", sub.1.name);
+            for blk in sub.1.blocks() {
+                let Some(bs) = results.get(&Blk(blk.tid.clone().into())) else {
+                    continue;
+                };
+                println!("\t{}:", blk.tid);
+                for b in bs {
+                    println!("\t\t{b}");
+                }
             }
         }
     }
