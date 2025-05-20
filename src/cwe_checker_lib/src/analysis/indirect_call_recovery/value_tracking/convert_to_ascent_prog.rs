@@ -608,6 +608,7 @@ impl ValueTracking<'_> {
         for (blk, func) in &self.ascent_prog.func_call_targets {
             results.entry(blk.clone()).or_default().push(func.clone());
         }
+        println!("CallGraph:");
         for (a, bs) in &results {
             println!("{a}:");
             for b in bs {
@@ -885,7 +886,6 @@ impl Display for ValueTracking<'_> {
                     }
                 }
 
-                writeln!(f, "CallGraph:")?;
                 for jmp in blk.jmps() {
                     writeln!(f, "\t{}", jmp)?;
                     if let Jmp::CallInd { .. } = jmp.term {
