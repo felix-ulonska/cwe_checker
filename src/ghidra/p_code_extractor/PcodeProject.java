@@ -1,5 +1,7 @@
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.ArrayList;
+import ghidra.program.model.lang.Endian;
 
 /**
  * Wrapper class for all collected information.
@@ -19,10 +21,12 @@ public class PcodeProject {
     private String image_base;
     private ArrayList<MemoryBlk> mem_blocks;
     private ArrayList<CodeRef> code_refs;
+    private boolean is_big_endian;
 
     public PcodeProject(ArrayList<Function> functions,
             ArrayList<RegisterProperties> register_properties,
             String cpu_arch,
+            boolean is_big_endian,
             HashMap<String, ExternFunction> external_functions,
             ArrayList<String> entry_points,
             Varnode stack_pointer_register,
@@ -41,7 +45,6 @@ public class PcodeProject {
 	this.image_base = image_base;
         this.mem_blocks = memBlocks;
         this.code_refs = code_refs;
-
     }
 
 }

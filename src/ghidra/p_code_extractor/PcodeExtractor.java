@@ -41,6 +41,7 @@ import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.CodeUnitIterator;
 import com.google.gson.*;
 
+
 public class PcodeExtractor extends GhidraScript {
 
     /**
@@ -62,6 +63,7 @@ public class PcodeExtractor extends GhidraScript {
         SimpleBlockModel simpleBM = new SimpleBlockModel(ghidraProgram);
         Listing listing = ghidraProgram.getListing();
         Language language = ghidraProgram.getLanguage();
+
 
         // collect datatype properties
         DatatypeProperties dataTypeProperties = new DatatypeProperties(ghidraProgram);
@@ -165,7 +167,7 @@ public class PcodeExtractor extends GhidraScript {
         ArrayList<CodeRef> codeRefs = getAllReferences();
 
         // assembling everything together
-        PcodeProject project = new PcodeProject(functions, registerProperties, cpuArch, externalFunctions,
+        PcodeProject project = new PcodeProject(functions, registerProperties, cpuArch, language.isBigEndian(), externalFunctions,
                 entry_points, stackPointerRegister, callingConventions, dataTypeProperties, imageBase, memBlks,
                 codeRefs);
 

@@ -1,7 +1,7 @@
 //! Translation from Pcode to the internal intermediate representation.
 
 use crate::intermediate_representation::{
-    CodeReference, Program as IrProgram, Project as IrProject, RuntimeMemoryImage, Term as IrTerm, Tid
+    CodeReference, Endian, Program as IrProgram, Project as IrProject, RuntimeMemoryImage, Term as IrTerm, Tid
 };
 use crate::utils::debug;
 use crate::utils::log::{LogMessage, WithLogs};
@@ -69,6 +69,7 @@ pub struct PcodeProject {
     mem_blocks: Vec<MemoryBlock>,
     /// Code References
     code_refs: Vec<CodeRef>,
+    is_big_endian: bool,
 }
 
 impl Display for PcodeProject {
@@ -188,13 +189,13 @@ impl PcodeProject {
             datatype_properties: self.datatype_properties.into(),
             runtime_memory_image: RuntimeMemoryImage { 
                 memory_segments: self.mem_blocks.into_iter().map(|mem| mem.to_ir_memory_segment()).collect(),
-                is_little_endian: true,
+                is_little_endian: !self.is_big_endian,
                 is_lkm: false
             },
             code_references: self.code_refs.into_iter().map(|code_ref| CodeReference {
                 from: code_ref.from,
                 to: code_ref.to
-            }).collect_vec()
+            }).collect_vec(),
         };
 
         WithLogs::new(ir_project, logs)
