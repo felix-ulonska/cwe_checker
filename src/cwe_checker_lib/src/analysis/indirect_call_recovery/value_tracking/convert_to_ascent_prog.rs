@@ -187,12 +187,19 @@ impl ValueTracking<'_> {
         let Some(val) = global_block::Interval::try_from_data_domain(val.clone()) else {
             return existing_expr;
         };
-        if let Some(at_func) = self.at_functions_by_addr.get(&(val.begin as u64))
-        {
-            return Exp::Union(Arc::new(Exp::RefFunc(self.fn_cache.get(at_func))), Arc::new(existing_expr))
+        if let Some(at_func) = self.at_functions_by_addr.get(&(val.begin as u64)) {
+            return Exp::Union(
+                Arc::new(Exp::RefFunc(self.fn_cache.get(at_func))),
+                Arc::new(existing_expr),
+            );
         } else {
             if let Some(interval) = self.block_memory.global.get_interval(val.begin) {
-            return Exp::Union(Arc::new( Exp::RefMLoc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval))))), Arc::new(existing_expr))
+                return Exp::Union(
+                    Arc::new(Exp::RefMLoc(Mloc::Gblk(Gblk(
+                        self.interval_cache.get(&interval),
+                    )))),
+                    Arc::new(existing_expr),
+                );
             } else {
                 return existing_expr;
             }
@@ -302,21 +309,6 @@ impl ValueTracking<'_> {
                                     Blk(self.blk_cache.get(&blk.tid)),
                                 ));
                                 let out_expr = self.expression_to_value_tracking(&value);
-                                // Idea: if rsp_X = rsp_Y and rsp_X has an assigned stack block, skip
-                                // this assigment.
-                                let mut found_regs = 0;
-                                let mut found_stack_vars = 0;
-                                for expr in out_expr.to_iter() {
-                                    if let Exp::Reg(reg) = expr {
-                                        found_regs += 1;
-                                        // TODO: architectreu specfic
-                                        if reg.var.name.contains("RSP")
-                                            || reg.var.name.contains("RBP")
-                                        {
-                                            found_stack_vars += 1;
-                                        }
-                                    }
-                                }
 
                                 if let Some(interval) =
                                     self.block_memory.global.get_interval_of_def(def.clone())
@@ -405,7 +397,10 @@ impl ValueTracking<'_> {
                         continue;
                     }
                 };
-                self.ascent_prog.aloc_val.push((Loc::Mloc(Mloc::Gblk(Gblk(self.interval_cache.get(&global_block)))), content_expr));
+                self.ascent_prog.aloc_val.push((
+                    Loc::Mloc(Mloc::Gblk(Gblk(self.interval_cache.get(&global_block)))),
+                    content_expr,
+                ));
             }
         }
     }
@@ -522,7 +517,9 @@ impl ValueTracking<'_> {
 
         for (_, vars) in self.active_var_at_end_of_block {
             for var in vars {
-                if ["RSP", "RBP"].contains(&var.name.split_once(SPLIT_SYMBOL).unwrap().0) {
+                if self.project.stack_pointer_register.name
+                    == var.name.split_once(SPLIT_SYMBOL).unwrap().0
+                {
                     self.ascent_prog.stack_registers.push((Reg {
                         var: self.var_cache.get(var),
                     },));
@@ -585,10 +582,7 @@ impl ValueTracking<'_> {
             "PRE_EVAL size \n{}",
             self.ascent_prog.relation_sizes_summary()
         );
-        println!(
-            "Global Blocks: {}",
-            self.block_memory.global.count_blocks()
-        );
+        println!("Global Blocks: {}", self.block_memory.global.count_blocks());
         println!(
             "Heap Blocks: {}",
             self.block_memory.heap.count_heap_blocks()
@@ -891,6 +885,7 @@ impl Display for ValueTracking<'_> {
                     }
                 }
 
+                writeln!(f, "CallGraph:")?;
                 for jmp in blk.jmps() {
                     writeln!(f, "\t{}", jmp)?;
                     if let Jmp::CallInd { .. } = jmp.term {

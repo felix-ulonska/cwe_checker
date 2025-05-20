@@ -129,30 +129,86 @@ impl<'a> State<'a> {
         false
     }
 
-    fn get_global_const_vals(&self, value: &Expression) -> Vec<ApInt> {
+
+    fn all_subexpression(&self, value: &Expression) -> Vec<Expression> {
+        let mut all_exprs = vec![value.clone()];
+
         match value {
-            Expression::Var(_) | Expression::Unknown { .. } | Expression::Phi(_) => vec![],
-            Expression::Const(constval) => {
-                if self.is_global_mem(constval) {
-                    vec![constval.clone()]
-                } else {
-                    vec![]
-                }
-            }
-            Expression::BinOp { lhs, rhs, .. } => [
-                self.get_global_const_vals(&*lhs),
-                self.get_global_const_vals(&*rhs),
-            ]
-            .concat(),
+            Expression::Var(_) | Expression::Unknown { .. } | Expression::Phi(_) => (),
+            Expression::Const(_constval) => (),
+            Expression::BinOp { lhs, rhs, .. } => {
+                all_exprs.append(&mut self.all_subexpression(&*lhs));
+                all_exprs.append(&mut self.all_subexpression(&*rhs));
+            },
             Expression::UnOp { arg, .. }
             | Expression::Cast { arg, .. }
-            | Expression::Subpiece { arg, .. } => self.get_global_const_vals(&*arg),
+            | Expression::Subpiece { arg, .. } => all_exprs.append(&mut self.all_subexpression(&*arg)),
         }
+
+        all_exprs
+    }
+
+    fn get_global_const_vals(&self, value: &Expression) -> Vec<ApInt> {
+        let all_exprs = self.all_subexpression(value);
+        let mut possible_global: Vec<ApInt> = vec![];
+        for expr in all_exprs {
+            if let Ok(bitvec) = self.eval_simple(&expr).try_to_bitvec() {
+                if self.is_global_mem(&bitvec) {
+                    possible_global.push(bitvec);
+                }
+            }
+        }
+
+        possible_global
+    }
+
+    /// Should be used with get_global_const_vals. Does not use register, does not derefence
+    fn eval_simple(&self, expression: &Expression) -> Data {
+        use Expression::*;
+        let output = match expression {
+            Var(variable) => Data::new_top(ByteSize::new(1)),
+            Const(bitvector) => {
+                return self.replace_if_global_pointer(bitvector.clone().into());
+            }
+            BinOp { op, lhs, rhs } => {
+                if *op == BinOpType::IntXOr && lhs == rhs {
+                    // the result of `x XOR x` is always zero.
+                    return Bitvector::zero(apint::BitWidth::from(lhs.bytesize())).into();
+                }
+                let (left, right) = (self.eval_simple(lhs), self.eval_simple(rhs));
+                if left.is_top() || right.is_top() {
+                    return Data::new_top(ByteSize::new(1))
+                }
+                let output = left.bin_op(*op, &right);
+
+                output
+            }
+            UnOp { op, arg } => self.eval_simple(arg).un_op(*op),
+            Cast { op, size, arg } => self.eval_simple(arg).cast(*op, *size),
+            Unknown {
+                description: _,
+                size,
+            } => Data::new_top(ByteSize::new(1)),
+            Subpiece {
+                low_byte,
+                size,
+                arg,
+            } => {
+                let result = self.eval_simple(arg).subpiece(*low_byte, *size);
+                result
+            }
+            Phi(_) => Data::new_top(ByteSize::new(1))
+        };
+        output
     }
 
     fn get_pab(&self, value: &Expression) -> Option<Data> {
+        let forbidden_pab = [0x410000];
         let mut min_val: Option<ApInt> = None;
         for const_val in self.get_global_const_vals(value) {
+            if forbidden_pab.contains(&const_val.try_to_u64().unwrap()) {
+                continue;
+            }
             if min_val == None
                 || min_val.clone().unwrap().try_to_u64().unwrap() > const_val.try_to_u64().unwrap()
             {
