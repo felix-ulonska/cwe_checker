@@ -246,7 +246,6 @@ fn remove_unused_instructions(
                         // x_2 := x_1
                         // Without this check, we would have a loop x_1 => x_2 => x_1...
                         // We break the loop because we do not rename the first statement
-                        println!("input: {}", inputs[0].name);
                         if inputs[0]
                             .name
                             .split_once(SPLIT_SYMBOL)
