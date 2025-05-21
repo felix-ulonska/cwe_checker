@@ -235,7 +235,8 @@ fn remove_unused_instructions(
                     // Phi instruction can have the same input as output if within a loop; do not
                     // change
                     if inputs.len() == 1 {
-                        if inputs[0] == var {
+                        // On PowerPC xer_so sneak into the phi registers: we skip that
+                        if inputs[0] == var || inputs[0].name == "xer_so" {
                             continue;
                         }
                         // If loops exist there could recursion. If the new variable has a lower
@@ -245,6 +246,7 @@ fn remove_unused_instructions(
                         // x_2 := x_1
                         // Without this check, we would have a loop x_1 => x_2 => x_1...
                         // We break the loop because we do not rename the first statement
+                        println!("input: {}", inputs[0].name);
                         if inputs[0]
                             .name
                             .split_once(SPLIT_SYMBOL)
