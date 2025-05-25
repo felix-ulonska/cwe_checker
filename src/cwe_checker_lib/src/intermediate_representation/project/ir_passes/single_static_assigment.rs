@@ -333,7 +333,7 @@ fn fix_phi_functions(
                         }
                     };
                     if !not_skip {
-                        //continue;
+                        continue;
                     }
                     inputs.push(Variable {
                         name: add_ssa_index_to_name(
