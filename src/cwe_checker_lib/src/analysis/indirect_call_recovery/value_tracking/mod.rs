@@ -100,7 +100,6 @@ impl Display for Loc {
 pub enum Exp {
     Empty,
     Reg(Reg),
-    //Mloc(Mloc),
     Deref(Reg),
     DerefMloc(Mloc),
     RefMLoc(Mloc),
@@ -196,6 +195,11 @@ ascent_par! {
 
     // Relation with all stack registers
     relation stack_registers(Reg);
+    
+    // Relation with all stack registers
+    relation param_regs(Reg);
+    // Relation with all stack registers
+    relation ret_regs(Reg);
 
     // Maps a block to a function
     relation block_to_func(Blk, Arc<Tid>);
@@ -284,6 +288,7 @@ ascent_par! {
         atfunc_to_block(func, callee_blk),
         reg_to_block(caller_reg, caller_blk),
         reg_to_block(callee_reg, callee_blk),
+        param_regs(callee_reg),
         is_same_base_reg!(caller_reg, callee_reg);
 
     phi(target_reg, callee_reg, after_call_blk) <--
@@ -292,6 +297,7 @@ ascent_par! {
         block_with_return_of_at_function(blk_in_callee, callee_func),
         reg_to_block(caller_reg, caller_blk),
         reg_to_block(callee_reg, blk_in_callee),
+        ret_regs(callee_reg),
         is_same_base_reg!(target_reg, callee_reg);
 }
 

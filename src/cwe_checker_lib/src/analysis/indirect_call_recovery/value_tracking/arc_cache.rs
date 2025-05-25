@@ -2,6 +2,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use ascent::hashbrown::HashMap;
+use itertools::Itertools;
 
 pub struct ArcCache<T>
 where
@@ -29,5 +30,9 @@ where
                 new_arc
             }
         }
+    }
+
+    pub fn get_all(&self) -> Vec<T> {
+        self.cache.keys().map(|key| key.clone()).collect_vec()
     }
 }
