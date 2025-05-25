@@ -48,6 +48,7 @@ pub type VarsAtEndOfBlock = HashMap<Tid, Vec<Variable>>;
 pub struct SingleStaticAssigment {
     pub active_var_at_end_of_block: VarsAtEndOfBlock,
     calling_convention: CallingConvention,
+    stack_register_name: String,
 }
 
 fn add_ssa_index_to_name(name: &str, index: &i64) -> String {
@@ -291,6 +292,7 @@ fn fix_phi_functions(
     calling_convention: &CallingConvention,
     incoming_edge_for_each_block: HashMap<String, HashSet<SsaEdge>>,
     active_var_at_end_of_block: HashMap<String, HashMap<String, i64>>,
+    stack_register_name: &str,
 ) {
     let callee_saved_regs = calling_convention
         .callee_saved_register
@@ -326,7 +328,10 @@ fn fix_phi_functions(
                     let original_name = var.name.split(SPLIT_SYMBOL).take(1).collect_vec()[0];
                     let not_skip = match incoming_edge_name.edge_type {
                         EdgeType::InterReturn => ret_registers.contains(&original_name.to_owned()),
-                        EdgeType::InterCall => param_registers.contains(&original_name.to_owned()),
+                        EdgeType::InterCall => {
+                            param_registers.contains(&original_name.to_owned())
+                                || original_name.contains(stack_register_name)
+                        }
                         EdgeType::Intra => true,
                         EdgeType::IntraCallStub => {
                             callee_saved_regs.contains(&original_name.to_owned())
@@ -361,6 +366,7 @@ impl IrPass for SingleStaticAssigment {
         return SingleStaticAssigment {
             active_var_at_end_of_block: VarsAtEndOfBlock::new(),
             calling_convention: input.get_standard_calling_convention().unwrap().clone(),
+            stack_register_name: input.stack_pointer_register.name.clone(),
         };
     }
 
@@ -398,6 +404,7 @@ impl IrPass for SingleStaticAssigment {
             &self.calling_convention,
             incoming_edge_for_each_block,
             active_var_at_end_of_block,
+            &self.stack_register_name,
         );
         eprintln!("Done SSA: {:02?}", last_time.elapsed());
         //rename_temp_variables(program);
