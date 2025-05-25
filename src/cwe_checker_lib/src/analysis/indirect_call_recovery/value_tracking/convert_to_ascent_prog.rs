@@ -550,6 +550,24 @@ impl ValueTracking<'_> {
         }
     }
 
+    fn convert_calling_conv(&mut self) {
+        let Some(call_convention) = self.project.get_standard_calling_convention() else { return; };
+        for param in call_convention.get_all_parameter_register() {
+            for reg in self.var_cache.get_all() {
+                if reg.name.contains(&param.name) {
+                    self.ascent_prog.param_regs.push((Reg {var: self.var_cache.get(param)},));
+                }
+            }
+        }
+        for param in call_convention.get_all_return_register() {
+            for reg in self.var_cache.get_all() {
+                if reg.name.contains(&param.name) {
+                    self.ascent_prog.ret_regs.push((Reg {var: self.var_cache.get(param)},));
+                }
+            }
+        }
+    }
+
     pub fn convert(&mut self) {
         eprintln!("Starting to convert");
         self.convert_def_to_ascent();
