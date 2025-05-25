@@ -240,7 +240,7 @@ ascent_par! {
     aloc_val(loc, v) <--
         assign(loc, union, _),
         (vset_mloc_func!(v, union) | vset_ireg!(v, union) | vset_mloc!(v, union) | vset_deref_ireg!(v, union));
-    
+
     // Phi for no nstack
     aloc_val(Loc::Reg(target_reg.clone()), val) <--
         phi(target_reg, source_reg, target_blk),
@@ -248,15 +248,15 @@ ascent_par! {
         !stack_registers(target_reg);
 
     // Phi for stack vars
-    aloc_val(Loc::Reg(target_reg.clone()), val) <--
-        phi(target_reg, source_reg, target_blk),
-        aloc_val(Loc::Reg(source_reg.clone()), val),
-        stack_registers(target_reg),
-        reg_to_block(source_reg, source_blk),
-        block_to_func(source_blk, source_fn),
-        block_to_func(target_blk, target_fn),
-        if let Exp::RefMLoc(Mloc::Sblk(stack_block)) = val,
-        if *target_fn == *source_fn || (stack_block.0.min < 0 && stack_block.0.func_tid == **source_fn);
+    //aloc_val(Loc::Reg(target_reg.clone()), val) <--
+    //    phi(target_reg, source_reg, target_blk),
+    //    aloc_val(Loc::Reg(source_reg.clone()), val),
+    //    stack_registers(target_reg),
+    //    reg_to_block(source_reg, source_blk),
+    //    block_to_func(source_blk, source_fn),
+    //    block_to_func(target_blk, target_fn),
+    //    if let Exp::RefMLoc(Mloc::Sblk(stack_block)) = val,
+    //    if *target_fn == *source_fn || (stack_block.0.min < 0 && stack_block.0.func_tid == **source_fn);
 
     // Phi for non stack vars
     aloc_val(Loc::Reg(target_reg.clone()), val) <--
