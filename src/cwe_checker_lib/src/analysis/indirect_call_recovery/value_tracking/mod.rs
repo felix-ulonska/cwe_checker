@@ -177,8 +177,13 @@ ascent_par! {
     relation aloc_val(Loc, Exp);
 
     // To construct the new phi functions after adding an edge
-    // Active vars at end of block
     relation reg_to_block(Reg, Blk);
+
+    // To construct the new phi functions after adding an edge
+    relation live_at_start(Reg, Blk);
+    // To construct the new phi functions after adding an edge
+    relation live_at_end(Reg, Blk);
+
     // The target of an atfunction
     relation atfunc_to_block(Arc<Function>, Blk);
     // What regs are used for function call
@@ -195,7 +200,7 @@ ascent_par! {
 
     // Relation with all stack registers
     relation stack_registers(Reg);
-    
+
     // Relation with all stack registers
     relation param_regs(Reg);
     // Relation with all stack registers
@@ -203,6 +208,10 @@ ascent_par! {
 
     // Maps a block to a function
     relation block_to_func(Blk, Arc<Tid>);
+
+    // Maps a block to a function
+    // First is the callsite, second is the taret blk
+    relation ret_of_icall(Blk, Blk);
 
     // Assign is a helper relation: Models if an exp can be assigned to an mloc
     // assign_reg
@@ -244,7 +253,7 @@ ascent_par! {
     aloc_val(loc, v) <--
         assign(loc, union, _),
         (vset_mloc_func!(v, union) | vset_ireg!(v, union) | vset_mloc!(v, union) | vset_deref_ireg!(v, union));
-    
+
     // Phi for no nstack
     aloc_val(Loc::Reg(target_reg.clone()), val) <--
         phi(target_reg, source_reg, target_blk),
@@ -286,18 +295,18 @@ ascent_par! {
     phi(callee_reg, caller_reg, callee_blk) <--
         func_call_targets(caller_blk, func),
         atfunc_to_block(func, callee_blk),
-        reg_to_block(caller_reg, caller_blk),
-        reg_to_block(callee_reg, callee_blk),
+        live_at_end(caller_reg, caller_blk),
+        live_at_start(callee_reg, callee_blk),
         param_regs(callee_reg),
         is_same_base_reg!(caller_reg, callee_reg);
 
     phi(target_reg, callee_reg, after_call_blk) <--
-        phi(target_reg, caller_reg, after_call_blk),
         func_call_targets(caller_blk, callee_func),
         block_with_return_of_at_function(blk_in_callee, callee_func),
-        reg_to_block(caller_reg, caller_blk),
-        reg_to_block(callee_reg, blk_in_callee),
-        ret_regs(callee_reg),
+        live_at_end(callee_reg, blk_in_callee),
+        ret_of_icall(caller_blk, after_call_blk),
+        live_at_start(target_reg, after_call_blk),
+        ret_regs(target_reg),
         is_same_base_reg!(target_reg, callee_reg);
 }
 

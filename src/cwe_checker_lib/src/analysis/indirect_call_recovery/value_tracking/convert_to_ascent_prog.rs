@@ -157,7 +157,6 @@ impl ValueTracking<'_> {
 
     fn add_code_ptr_in_global_blocks(&mut self) {
         for code_ref in &self.project.code_references {
-            println!("Global ptr: {} -> {}", code_ref.from, code_ref.to);
             let Some(interval) = self.block_memory.global.get_interval(code_ref.from) else {
                 continue;
             };
@@ -385,6 +384,67 @@ impl ValueTracking<'_> {
         }
     }
 
+    // Add call xx ret yy
+    // Build a table for mapping XX -> YY
+    fn add_next_block_from_call(&mut self) {
+        for blk in self.program.blocks() {
+            for jmp in &blk.jmps {
+                if let Jmp::Call {
+                    target: _,
+                    return_: Some(return_),
+                }
+                | Jmp::CallInd {
+                    target: _,
+                    return_: Some(return_),
+                } = &jmp.term
+                {
+                    self.ascent_prog.ret_of_icall.push((
+                        Blk(self.blk_cache.get(&blk.tid)),
+                        Blk(self.blk_cache.get(return_)),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn add_live_at_begin_and_end(&mut self) {
+        for blk in self.program.blocks() {
+            let mut currrent_active_vars = HashMap::new();
+            println!("Live At Blk: {}", blk.tid);
+            println!("Begin:");
+            for def in blk.defs() {
+                if let Def::Assign {
+                    var,
+                    value: Expression::Phi(..),
+                } = &def.term
+                {
+                    println!("\t{}", var.name);
+                    self.ascent_prog.live_at_start.push((
+                        Reg {
+                            var: self.var_cache.get(&var),
+                        },
+                        Blk(self.blk_cache.get(&blk.tid)),
+                    ));
+                }
+            }
+            for def in blk.defs() {
+                if let Def::Load { var, .. } | Def::Assign { var, .. } = &def.term {
+                    currrent_active_vars.insert(var.name.split_once(SPLIT_SYMBOL).unwrap().0, var);
+                }
+            }
+            println!("End:");
+            for (_base_var, var) in currrent_active_vars.iter() {
+                self.ascent_prog.live_at_end.push((
+                    Reg {
+                        var: self.var_cache.get(&var),
+                    },
+                    Blk(self.blk_cache.get(&blk.tid)),
+                ));
+                println!("\t{}", var.name);
+            }
+        }
+    }
+
     fn add_vals_from_global_content_analysis(&mut self) {
         for (global_block, content_vec) in self.block_memory.global.iter_content() {
             for content in content_vec {
@@ -558,7 +618,7 @@ impl ValueTracking<'_> {
             for reg in self.var_cache.get_all() {
                 if reg.name.contains(&param.name) {
                     self.ascent_prog.param_regs.push((Reg {
-                        var: self.var_cache.get(param),
+                        var: self.var_cache.get(&reg),
                     },));
                 }
             }
@@ -567,7 +627,7 @@ impl ValueTracking<'_> {
             for reg in self.var_cache.get_all() {
                 if reg.name.contains(&param.name) {
                     self.ascent_prog.ret_regs.push((Reg {
-                        var: self.var_cache.get(param),
+                        var: self.var_cache.get(&reg),
                     },));
                 }
             }
@@ -599,6 +659,8 @@ impl ValueTracking<'_> {
         self.add_values_from_global_analysis();
         self.add_vals_from_global_content_analysis();
         self.convert_calling_conv();
+        self.add_live_at_begin_and_end();
+        self.add_next_block_from_call();
         self.statistic();
     }
 

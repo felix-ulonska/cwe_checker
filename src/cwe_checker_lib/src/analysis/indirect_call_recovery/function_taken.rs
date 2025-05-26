@@ -1,4 +1,7 @@
-use std::{collections::HashSet, fmt::Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use crate::{intermediate_representation::Project, prelude::Tid};
 
@@ -46,4 +49,13 @@ pub fn get_at_functions(project: &Project) -> HashSet<Function> {
     }
 
     adress_taken_function
+}
+
+pub fn get_at_functions_by_key(project: &Project) -> HashMap<u64, Function> {
+    let mut by_key = HashMap::new();
+    for at_function in get_at_functions(project) {
+        by_key.insert(at_function.first_instruction, at_function);
+    }
+
+    by_key
 }
