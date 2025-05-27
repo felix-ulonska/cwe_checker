@@ -156,18 +156,18 @@ impl ValueTracking<'_> {
     }
 
     fn add_code_ptr_in_global_blocks(&mut self) {
-        for code_ref in &self.project.code_references {
-            let Some(interval) = self.block_memory.global.get_interval(code_ref.from) else {
-                continue;
-            };
-            let Some(at_fn) = self.at_functions_by_addr.get(&(code_ref.to as u64)) else {
-                continue;
-            };
-            self.ascent_prog.aloc_val.push((
-                Loc::Mloc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval)))),
-                Exp::RefFunc(self.fn_cache.get(at_fn)),
-            ));
-        }
+        //for code_ref in &self.project.code_references {
+        //    let Some(interval) = self.block_memory.global.get_interval(code_ref.from) else {
+        //        continue;
+        //    };
+        //    let Some(at_fn) = self.at_functions_by_addr.get(&(code_ref.to as u64)) else {
+        //        continue;
+        //    };
+        //    self.ascent_prog.aloc_val.push((
+        //        Loc::Mloc(Mloc::Gblk(Gblk(self.interval_cache.get(&interval)))),
+        //        Exp::RefFunc(self.fn_cache.get(at_fn)),
+        //    ));
+        //}
     }
 
     fn interval_to_expr(&mut self, interval: &Interval) -> Exp {

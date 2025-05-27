@@ -27,7 +27,9 @@ public class MemoryBlk {
         byte[] data = new byte[(int) memBlock.getSize()];
         Address start = memBlock.getStart();
         this.base_address = start.getPhysicalAddress().getOffset();
-        memBlock.getBytes(start, data);
+        if (memBlock.isInitialized()) {
+            memBlock.getBytes(start, data);
+        }
         this.data = bytesToHex(data);
         this.is_executable = memBlock.isExecute();
         this.is_readable = memBlock.isRead();

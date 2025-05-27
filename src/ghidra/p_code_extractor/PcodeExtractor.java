@@ -231,9 +231,7 @@ public class PcodeExtractor extends GhidraScript {
         MemoryBlock[] memoryBlocks = memory.getBlocks();
         ArrayList<MemoryBlk> memBlks = new ArrayList<>();
         for (MemoryBlock memBlk: memoryBlocks) {
-            if (memBlk.isInitialized()) {
-                memBlks.add(new MemoryBlk(memBlk));
-            }
+            memBlks.add(new MemoryBlk(memBlk));
         }
         println("Got mem maps");
         return memBlks;

@@ -99,8 +99,10 @@ impl<'a> State<'a> {
 
     /// Evaluate the value of an expression in the current state.
     pub fn eval(&self, expression: &Expression) -> Data {
+        println!("Eval expr {}", expression);
         let result = self.eval_recursive(expression);
         let result = self.replace_if_global_pointer(result);
+        println!("Result {:?}", result);
 
         result
     }
@@ -119,6 +121,9 @@ impl<'a> State<'a> {
 
     pub fn is_global_mem(&self, constant: &ApInt) -> bool {
         for segment in &self.memory_segments {
+            if !segment.segment.read_flag {
+                continue;
+            }
             if segment.interval.bytesize() != constant.bytesize() {
                 continue;
             }
@@ -129,20 +134,22 @@ impl<'a> State<'a> {
         false
     }
 
-
     fn all_subexpression(&self, value: &Expression) -> Vec<Expression> {
         let mut all_exprs = vec![value.clone()];
 
         match value {
-            Expression::Var(_) | Expression::Unknown { .. } | Expression::Phi(_) => (),
+            Expression::Unknown { .. } | Expression::Phi(_) => (),
+            Expression::Var(var) => all_exprs.push(Expression::Var(var.clone())),
             Expression::Const(_constval) => (),
             Expression::BinOp { lhs, rhs, .. } => {
                 all_exprs.append(&mut self.all_subexpression(&*lhs));
                 all_exprs.append(&mut self.all_subexpression(&*rhs));
-            },
+            }
             Expression::UnOp { arg, .. }
             | Expression::Cast { arg, .. }
-            | Expression::Subpiece { arg, .. } => all_exprs.append(&mut self.all_subexpression(&*arg)),
+            | Expression::Subpiece { arg, .. } => {
+                all_exprs.append(&mut self.all_subexpression(&*arg))
+            }
         }
 
         all_exprs
@@ -152,11 +159,20 @@ impl<'a> State<'a> {
         let all_exprs = self.all_subexpression(value);
         let mut possible_global: Vec<ApInt> = vec![];
         for expr in all_exprs {
-            if let Ok(bitvec) = self.eval_simple(&expr).try_to_bitvec() {
+            println!("Simple Eval {}", expr);
+            println!("Simple Result: {:?}", self.eval_simple(&expr));
+            // Relative Value
+            if let Some(bitvec) = self
+                .eval_simple(&expr)
+                .get_if_unique_target()
+                .and_then(|val| val.1.try_to_bitvec().ok())
+            {
+                println!("Simple Result: {:?}", bitvec);
                 if self.is_global_mem(&bitvec) {
                     possible_global.push(bitvec);
                 }
             }
+            // Absolute Value
         }
 
         possible_global
@@ -166,7 +182,7 @@ impl<'a> State<'a> {
     fn eval_simple(&self, expression: &Expression) -> Data {
         use Expression::*;
         let output = match expression {
-            Var(variable) => Data::new_top(ByteSize::new(1)),
+            Var(variable) => self.get_register(variable), //Data::new_top(ByteSize::new(1)),
             Const(bitvector) => {
                 return self.replace_if_global_pointer(bitvector.clone().into());
             }
@@ -177,7 +193,7 @@ impl<'a> State<'a> {
                 }
                 let (left, right) = (self.eval_simple(lhs), self.eval_simple(rhs));
                 if left.is_top() || right.is_top() {
-                    return Data::new_top(ByteSize::new(1))
+                    return Data::new_top(ByteSize::new(1));
                 }
                 let output = left.bin_op(*op, &right);
 
@@ -197,12 +213,13 @@ impl<'a> State<'a> {
                 let result = self.eval_simple(arg).subpiece(*low_byte, *size);
                 result
             }
-            Phi(_) => Data::new_top(ByteSize::new(1))
+            Phi(_) => Data::new_top(ByteSize::new(1)),
         };
         output
     }
 
     fn get_pab(&self, value: &Expression) -> Option<Data> {
+        println!("Expr: {}", value);
         let forbidden_pab = [0x410000];
         let mut min_val: Option<ApInt> = None;
         for const_val in self.get_global_const_vals(value) {
@@ -217,13 +234,15 @@ impl<'a> State<'a> {
         }
 
         if let Some(min_val) = min_val {
+            println!("output: {:#?}", min_val);
             return Some(self.replace_if_global_pointer(min_val.into()));
         }
         None
     }
 
     fn extend_interval_by_pab(&self, expr: &Expression, value: &Data) -> Data {
-        if let Some(pab) = self.get_pab(expr) {
+        let output = if let Some(pab) = self.get_pab(expr) {
+            println!("Extend for {} with {:?},\n\t val: {:?}", expr, pab, value);
             if value.bytesize() == pab.bytesize() {
                 value.merge(&pab)
             } else {
@@ -231,7 +250,12 @@ impl<'a> State<'a> {
             }
         } else {
             value.clone()
-        }
+        };
+        println!(
+            "Extend for {} to output {:?}\n\t val {:?}",
+            expr, output, value
+        );
+        self.replace_if_global_pointer(output)
     }
 
     pub fn read(&self, address: &Bitvector, size: ByteSize) -> Option<Bitvector> {
@@ -283,10 +307,18 @@ impl<'a> State<'a> {
     fn replace_if_global_pointer(&self, mut value: Data) -> Data {
         if let Ok(constant) = value.try_to_offset() {
             for segment in &self.memory_segments {
-                if segment.interval.contains(&Bitvector::from_i64(constant)) {
+                if segment.segment.read_flag
+                    && segment.interval.contains(&Bitvector::from_i64(constant))
+                    && value.get_absolute_value().is_some()
+                {
                     value = Data::from_target(
                         self.get_global_mem_id(),
-                        value.try_to_interval().unwrap().into(),
+                        value
+                            .get_absolute_value()
+                            .unwrap()
+                            .try_to_interval()
+                            .unwrap()
+                            .into(),
                     );
                 }
             }
@@ -504,6 +536,7 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         match &def.term {
             Def::Store { .. } => Some(new_state),
             Def::Assign { var, value } => {
+                println!("Assign of {} has taint {}", var, self.taint.contains(var));
                 if self.taint.contains(var) {
                     new_state.handle_register_assign(var, value);
                 }

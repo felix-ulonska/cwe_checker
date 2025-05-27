@@ -13,8 +13,9 @@ pub fn simple_taint<'a>(program: &'a Term<Sub>) -> HashSet<&'a Variable> {
     for blk in program.blocks() {
         for def in blk.defs() {
             match &def.term {
-                crate::intermediate_representation::Def::Load { address, .. } => {
+                crate::intermediate_representation::Def::Load { address, var } => {
                     taint.extend(address.input_vars());
+                    taint.insert(var);
                 }
                 crate::intermediate_representation::Def::Store { address, .. } => {
                     taint.extend(address.input_vars());

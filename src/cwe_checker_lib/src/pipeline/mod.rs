@@ -41,16 +41,19 @@ pub fn disassemble_binary(
 
     // Generate the representation of the runtime memory image of the binary
     let mut runtime_memory_image = if let Some(bare_metal_config) = bare_metal_config_opt.as_ref() {
-        RuntimeMemoryImage::new_from_bare_metal(&binary, bare_metal_config)
-            .context("Error while generating runtime memory image.")?
+        let mut new_runtime_image =
+            RuntimeMemoryImage::new_from_bare_metal(&binary, bare_metal_config)
+                .context("Error while generating runtime memory image.")?;
+
+        if project.program.term.address_base_offset != 0 {
+            // We adjust the memory addresses once globally
+            // so that other analyses do not have to adjust their addresses.
+            new_runtime_image.add_global_memory_offset(project.program.term.address_base_offset);
+        }
+        new_runtime_image
     } else {
-        RuntimeMemoryImage::new(&binary).context("Error while generating runtime memory image.")?
+        project.runtime_memory_image.clone()
     };
-    if project.program.term.address_base_offset != 0 {
-        // We adjust the memory addresses once globally
-        // so that other analyses do not have to adjust their addresses.
-        runtime_memory_image.add_global_memory_offset(project.program.term.address_base_offset);
-    }
     project.runtime_memory_image = runtime_memory_image;
 
     Ok((binary, project))

@@ -12,7 +12,9 @@ use crate::{
     prelude::{Term, Tid},
 };
 
-use super::global_block_analysis::{analyze_global_blocks::GlobalMemContent, vsa_result::SmallVsaResult};
+use super::global_block_analysis::{
+    analyze_global_blocks::GlobalMemContent, vsa_result::SmallVsaResult,
+};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Interval {
@@ -22,7 +24,7 @@ pub struct Interval {
 
 impl Display for Interval {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}, {}]@GLOBAL", self.begin, self.end)
+        write!(f, "[{:x}, {:x}]@GLOBAL", self.begin, self.end)
     }
 }
 
@@ -32,12 +34,20 @@ impl Interval {
     }
 
     pub fn contains_i64(&self, other: i64) -> bool {
+        println!(
+            "{} <= {} && {}, {}, re {}",
+            self.begin,
+            other,
+            other,
+            self.end,
+            self.begin <= other && other <= self.end
+        );
         self.begin <= other && other <= self.end
     }
 
     pub fn try_from_data_domain(data: DataDomain<IntervalDomain>) -> Option<Self> {
         if let Some((abstract_location, interval)) = data.get_if_unique_target() {
-       match abstract_location.get_location() {
+            match abstract_location.get_location() {
                 AbstractLocation::GlobalAddress { address: _, .. } => {
                     let Ok(data) = interval.try_to_offset_interval() else {
                         return None;
@@ -159,7 +169,7 @@ impl GlobalMemorySeperation {
         GlobalMemorySeperation {
             intervals,
             map_def_to_interval,
-            global_mem_content
+            global_mem_content,
         }
     }
 
@@ -219,7 +229,9 @@ mod tests {
     use apint::ApInt;
 
     use crate::{
-        abstract_domain::{self, IntervalDomain}, intermediate_representation::Project, prelude::Tid
+        abstract_domain::{self, IntervalDomain},
+        intermediate_representation::Project,
+        prelude::Tid,
     };
 
     use super::GlobalMemorySeperation;
