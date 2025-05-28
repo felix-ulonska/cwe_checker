@@ -76,7 +76,6 @@ pub fn parse_pcode_project_to_ir_project(
     bare_metal_config_opt: &Option<BareMetalConfig>,
     debug_settings: &debug::Settings,
 ) -> Result<WithLogs<Project>, Error> {
-    println!("{}", pcode_project);
     let bare_metal_base_address_opt = bare_metal_config_opt
         .as_ref()
         .map(|config| config.parse_binary_base_address());
