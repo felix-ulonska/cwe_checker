@@ -52,29 +52,17 @@ impl GlobalMemContent {
                     potential_ptr,
                     project.runtime_memory_image.is_little_endian_byte_order(),
                 );
-                let ptry_as_num = read(
-                    curr_addr,
-                    ptr_byte_size.try_into().unwrap(),
-                    &memory_segements,
-                    project.runtime_memory_image.is_little_endian_byte_order(),
-                );
-                println!(
-                    "CHecking pointer {:x} @ {:x} with ptr size {}",
-                    ptr_as_num, curr_addr, ptr_byte_size
-                );
 
                 if !is_ptr(ptr_as_num, &memory_segements) {
                     curr_addr += ptr_byte_size as u64;
                     continue;
                 }
-                println!("Is Pointer");
 
                 // Check if global mem section
                 if let Some(curr_interval) = intervals
                     .iter()
                     .find(|interval| interval.contains_i64(curr_addr as i64))
                 {
-                    println!("Adding to {}: {}", curr_interval, ptr_as_num);
                     global_content
                         .entry(curr_interval.clone())
                         .or_insert_with(Vec::new)
