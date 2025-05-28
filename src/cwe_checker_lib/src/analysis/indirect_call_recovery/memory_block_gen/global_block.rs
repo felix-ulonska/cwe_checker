@@ -34,14 +34,6 @@ impl Interval {
     }
 
     pub fn contains_i64(&self, other: i64) -> bool {
-        println!(
-            "{} <= {} && {}, {}, re {}",
-            self.begin,
-            other,
-            other,
-            self.end,
-            self.begin <= other && other <= self.end
-        );
         self.begin <= other && other <= self.end
     }
 
