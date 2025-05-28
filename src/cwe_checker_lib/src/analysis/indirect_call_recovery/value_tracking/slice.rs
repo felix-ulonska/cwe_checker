@@ -204,7 +204,6 @@ fn remove_unused_instructions(
     ssa_program: &mut Program,
     special_blocks: &SpecialBlocks,
 ) -> HashMap<Variable, Variable> {
-    eprintln!("1");
 
     let mut local_rename_table = HashMap::new();
     let mut def_to_remove = HashSet::new();
@@ -278,14 +277,10 @@ fn remove_unused_instructions(
                 .collect_vec();
             ()
         });
-    eprintln!("2");
     remove_intermediate_steps(&mut local_rename_table);
-    eprintln!("3");
 
     let rename_table_clone = local_rename_table.clone();
     let rename_table_keys: HashSet<&Variable> = HashSet::from_iter(rename_table_clone.keys());
-
-    eprintln!("4");
 
     // This is quadratic runtime!
     // Replace all vars until no variable is left from the rename_table is needed

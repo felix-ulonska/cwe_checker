@@ -99,10 +99,8 @@ impl<'a> State<'a> {
 
     /// Evaluate the value of an expression in the current state.
     pub fn eval(&self, expression: &Expression) -> Data {
-        println!("Eval expr {}", expression);
         let result = self.eval_recursive(expression);
         let result = self.replace_if_global_pointer(result);
-        println!("Result {:?}", result);
 
         result
     }
@@ -159,15 +157,12 @@ impl<'a> State<'a> {
         let all_exprs = self.all_subexpression(value);
         let mut possible_global: Vec<ApInt> = vec![];
         for expr in all_exprs {
-            println!("Simple Eval {}", expr);
-            println!("Simple Result: {:?}", self.eval_simple(&expr));
             // Relative Value
             if let Some(bitvec) = self
                 .eval_simple(&expr)
                 .get_if_unique_target()
                 .and_then(|val| val.1.try_to_bitvec().ok())
             {
-                println!("Simple Result: {:?}", bitvec);
                 if self.is_global_mem(&bitvec) {
                     possible_global.push(bitvec);
                 }
@@ -219,7 +214,6 @@ impl<'a> State<'a> {
     }
 
     fn get_pab(&self, value: &Expression) -> Option<Data> {
-        println!("Expr: {}", value);
         let forbidden_pab = [0x410000];
         let mut min_val: Option<ApInt> = None;
         for const_val in self.get_global_const_vals(value) {
@@ -234,7 +228,6 @@ impl<'a> State<'a> {
         }
 
         if let Some(min_val) = min_val {
-            println!("output: {:#?}", min_val);
             return Some(self.replace_if_global_pointer(min_val.into()));
         }
         None
@@ -242,7 +235,6 @@ impl<'a> State<'a> {
 
     fn extend_interval_by_pab(&self, expr: &Expression, value: &Data) -> Data {
         let output = if let Some(pab) = self.get_pab(expr) {
-            println!("Extend for {} with {:?},\n\t val: {:?}", expr, pab, value);
             if value.bytesize() == pab.bytesize() {
                 value.merge(&pab)
             } else {
@@ -251,10 +243,6 @@ impl<'a> State<'a> {
         } else {
             value.clone()
         };
-        println!(
-            "Extend for {} to output {:?}\n\t val {:?}",
-            expr, output, value
-        );
         self.replace_if_global_pointer(output)
     }
 
@@ -414,7 +402,6 @@ pub fn fill_vsa_result_maps<'b>(
                 };
                 let mut state = node_state.clone();
                 for def in &blk.term.defs {
-                    //println!("Def: {}", def);
                     match &def.term {
                         Def::Assign { var: _var, value } => {
                             let evaled = state.eval(value);
@@ -536,7 +523,6 @@ impl<'a> Context<'a> for AnalysisContext<'a> {
         match &def.term {
             Def::Store { .. } => Some(new_state),
             Def::Assign { var, value } => {
-                println!("Assign of {} has taint {}", var, self.taint.contains(var));
                 if self.taint.contains(var) {
                     new_state.handle_register_assign(var, value);
                 }

@@ -410,15 +410,12 @@ impl ValueTracking<'_> {
     fn add_live_at_begin_and_end(&mut self) {
         for blk in self.program.blocks() {
             let mut currrent_active_vars = HashMap::new();
-            println!("Live At Blk: {}", blk.tid);
-            println!("Begin:");
             for def in blk.defs() {
                 if let Def::Assign {
                     var,
                     value: Expression::Phi(..),
                 } = &def.term
                 {
-                    println!("\t{}", var.name);
                     self.ascent_prog.live_at_start.push((
                         Reg {
                             var: self.var_cache.get(&var),
@@ -432,7 +429,6 @@ impl ValueTracking<'_> {
                     currrent_active_vars.insert(var.name.split_once(SPLIT_SYMBOL).unwrap().0, var);
                 }
             }
-            println!("End:");
             for (_base_var, var) in currrent_active_vars.iter() {
                 self.ascent_prog.live_at_end.push((
                     Reg {
@@ -440,7 +436,6 @@ impl ValueTracking<'_> {
                     },
                     Blk(self.blk_cache.get(&blk.tid)),
                 ));
-                println!("\t{}", var.name);
             }
         }
     }
