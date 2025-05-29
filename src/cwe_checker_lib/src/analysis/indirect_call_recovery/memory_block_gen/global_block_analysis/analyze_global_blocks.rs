@@ -2,8 +2,7 @@ use ascent::hashbrown::HashMap;
 
 use crate::{
     analysis::indirect_call_recovery::{
-        function_taken::{get_at_functions, get_at_functions_by_key},
-        memory_block_gen::global_block::Interval,
+        function_taken::get_at_functions_by_key, memory_block_gen::global_block::Interval,
     },
     intermediate_representation::{BinOpType, Project},
     prelude::{Bitvector, BitvectorExtended},

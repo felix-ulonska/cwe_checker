@@ -41,6 +41,10 @@ pub fn build_heap_blocks(
     calling_convention: &CallingConvention,
 ) -> HeapAnalysis {
     let mut register_with_heap = HashMap::<Variable, HeapBlock>::new();
+    println!(
+        "Using for heap the function: {:?}",
+        config.allocation_symbols
+    );
     for block in program.blocks() {
         for jmp in block.jmps() {
             let Jmp::Call { target, return_ } = &jmp.term else {

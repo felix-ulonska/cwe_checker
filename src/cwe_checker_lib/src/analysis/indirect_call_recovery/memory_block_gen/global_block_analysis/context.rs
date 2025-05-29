@@ -377,6 +377,24 @@ impl<'a> State<'a> {
 
         output
     }
+
+    fn is_interval_global(&self, val: &Data) -> bool {
+        if let Some((_target, interval)) = val.get_if_unique_target() {
+            if let Ok((begin, end)) = interval.try_to_offset_interval() {
+                for segment in &self.memory_segments {
+                    if !segment.segment.read_flag {
+                        continue;
+                    }
+                    if segment.interval.contains(&ApInt::from(begin))
+                        && segment.interval.contains(&ApInt::from(end))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
 }
 
 fn is_interval_global(val: &Data) -> bool {
@@ -401,23 +419,34 @@ pub fn fill_vsa_result_maps<'b>(
                     _ => continue,
                 };
                 let mut state = node_state.clone();
+                //println!("blk: {} in {}", blk.tid, _sub.name);
                 for def in &blk.term.defs {
                     match &def.term {
                         Def::Assign { var: _var, value } => {
                             let evaled = state.eval(value);
                             let evaled = state.extend_interval_by_pab(value, &evaled);
-                            if is_interval_global(&evaled) {
-                                values_at_defs.insert(def.tid.clone(), evaled);
+                            if state.is_interval_global(&evaled) {
+                                //println!(
+                                //    "\t{}:\n\t\t {:?}",
+                                //    def,
+                                //    evaled.clone().get_if_unique_target().unwrap().1
+                                //);
+                                values_at_defs.insert(def.tid.clone(), evaled.clone());
                             }
                         }
                         Def::Load { var, address } => {
                             let evaled = state.eval(address);
                             let evaled = state.extend_interval_by_pab(address, &evaled);
-                            if is_interval_global(&evaled) {
-                                addresses_at_defs.insert(def.tid.clone(), evaled);
+                            if state.is_interval_global(&evaled) {
+                                //println!(
+                                //    "\t{}:\n\t\t {:?}",
+                                //    def,
+                                //    evaled.clone().get_if_unique_target().unwrap().1
+                                //);
+                                addresses_at_defs.insert(def.tid.clone(), evaled.clone());
                             }
                             if let Some(loaded_val) = state.process_load(var, address) {
-                                if is_interval_global(&loaded_val) {
+                                if state.is_interval_global(&loaded_val) {
                                     values_at_defs.insert(def.tid.clone(), loaded_val);
                                 }
                             }
@@ -425,12 +454,17 @@ pub fn fill_vsa_result_maps<'b>(
                         Def::Store { address, value } => {
                             let evaled = state.eval(value);
                             let evaled = state.extend_interval_by_pab(value, &evaled);
-                            if is_interval_global(&evaled) {
-                                values_at_defs.insert(def.tid.clone(), evaled);
+                            if state.is_interval_global(&evaled) {
+                                //println!(
+                                //    "\t{}:\n\t\t {:?}",
+                                //    def,
+                                //    evaled.clone().get_if_unique_target().unwrap().1
+                                //);
+                                values_at_defs.insert(def.tid.clone(), evaled.clone());
                             }
                             let evaled = state.eval(address);
                             let evaled = state.extend_interval_by_pab(address, &evaled);
-                            if is_interval_global(&evaled) {
+                            if state.is_interval_global(&evaled) {
                                 addresses_at_defs.insert(def.tid.clone(), evaled);
                             }
                         }
