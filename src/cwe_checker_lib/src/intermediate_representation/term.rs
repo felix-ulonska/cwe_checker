@@ -77,6 +77,10 @@ impl TidAddress {
     pub fn is_unknown(&self) -> bool {
         self.0.is_none()
     }
+
+    pub fn get_addr(&self) -> Option<u64> {
+        self.0
+    }
 }
 
 impl Tid {
@@ -149,12 +153,12 @@ impl Tid {
     pub fn new_instr<T: Into<TidAddress> + Display>(address: T, index: u64) -> Self {
         Tid::new_instr_with_suffix::<_, &str>(address, index, None)
     }
-    
+
     pub fn new_phi(block_tid: &Tid, var_id: &str) -> Self {
         Self {
             id: format!("{}_{}_{}", Self::PHI_ID_PREFIX, block_tid.id, var_id),
             // Todo investigate if other possible?
-            address: block_tid.address.clone()
+            address: block_tid.address.clone(),
         }
     }
 

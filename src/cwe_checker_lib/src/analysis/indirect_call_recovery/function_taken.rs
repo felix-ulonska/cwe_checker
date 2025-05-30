@@ -40,7 +40,11 @@ pub fn get_at_functions(project: &Project) -> HashSet<Function> {
 
         adress_taken_function.insert(Function {
             tid: function.tid.clone(),
-            first_instruction: function.code_range().0,
+            first_instruction: function
+                .tid
+                .address()
+                .get_addr()
+                .unwrap_or(function.code_range().0),
             first_block_tid: first_block.tid.clone(),
             name: function.name.clone(),
             // TODO: add actually check that this is an AT Function?
