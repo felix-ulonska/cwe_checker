@@ -123,7 +123,7 @@ impl Display for Exp {
 }
 
 impl Exp {
-    fn to_iter(&self) -> Vec<Exp> {
+    pub fn to_iter(&self) -> Vec<Exp> {
         if let Exp::Union(exp1, exp2) = self {
             [exp1.to_iter(), exp2.to_iter()].concat()
         } else {

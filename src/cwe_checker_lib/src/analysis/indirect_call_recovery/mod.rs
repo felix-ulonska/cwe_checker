@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub mod memory_block_gen;
+use ascent::hashbrown::HashSet;
 use function_taken::get_at_functions;
 use itertools::Itertools;
 use json_export::export_json;
@@ -20,7 +21,7 @@ use memory_block_gen::build_memory_blocks;
 use petgraph::algo::connected_components;
 use value_tracking::{
     convert_to_ascent_prog::ValueTracking, output::IndirectCalls, slice::slice_program,
-    AscentProgram,
+    AscentProgram, Exp,
 };
 
 use super::{
@@ -83,6 +84,41 @@ fn statistics_program(program: &Program) {
     println!("Complexity: {}", cyclomatic_complexity(&cfg));
 }
 
+fn amount_at_funcs(ascent_prog: &AscentProgram) {
+    let mut funcs = HashSet::new();
+    for (_, exp, _) in &ascent_prog.assign_reg {
+        for exp in exp.to_iter() {
+            if let Exp::RefFunc(func) = exp {
+                funcs.insert(func);
+            }
+        }
+    }
+    for (_, exp, _) in &ascent_prog.assign_mloc {
+        for exp in exp.to_iter() {
+            if let Exp::RefFunc(func) = exp {
+                funcs.insert(func);
+            }
+        }
+    }
+    for (_, exp, _) in &ascent_prog.assing_deref_reg {
+        for exp in exp.to_iter() {
+            if let Exp::RefFunc(func) = exp {
+                funcs.insert(func);
+            }
+        }
+    }
+
+    for (_, exp) in &ascent_prog.aloc_val {
+        for exp in exp.to_iter() {
+            if let Exp::RefFunc(func) = exp {
+                funcs.insert(func);
+            }
+        }
+    }
+
+    println!("Amount AT Funcs: {}", funcs.len());
+}
+
 // Helper method to drop all structs information that is only constructed to build the ascent_prog
 fn build_ascent_prog(
     project: &Project,
@@ -134,6 +170,7 @@ fn build_ascent_prog(
     // Run inside here, to get debug logs. Run outside to drop the helper structs which were used
     // to built the ascent_prog
     value_tracking.convert();
+    amount_at_funcs(&value_tracking.ascent_prog);
     if debug_settings.should_debug(debug::Stage::ICallRec(true)) {
         value_tracking.run_value_tracking_with_debug();
     }
