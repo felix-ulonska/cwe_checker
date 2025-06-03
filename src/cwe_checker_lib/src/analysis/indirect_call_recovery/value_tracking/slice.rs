@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, env};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+};
 
 use ascent::rayon::{
     iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator},
@@ -131,7 +134,6 @@ fn remove_intermediate_steps(input: &mut HashMap<Variable, Variable>) {
 
 struct SpecialBlocks {
     returned_to_blocks: HashSet<Tid>,
-    return_blocks: HashSet<Tid>,
     called_blocks: HashSet<Tid>,
     calling_convention: CallingConvention,
 }
@@ -164,7 +166,6 @@ fn build_blocks_without_changes(
     calling_convention: &CallingConvention,
 ) -> SpecialBlocks {
     // Blocks where phi functions are not shorted
-    let mut return_blocks = HashSet::new();
     let mut returned_to_blocks = HashSet::new();
 
     // Fill block_with_full_phi for blocks in which no optimization are done
@@ -174,9 +175,6 @@ fn build_blocks_without_changes(
                 if let Some(return_) = return_ {
                     returned_to_blocks.insert(return_.clone());
                 }
-            }
-            if let Jmp::Return { .. } = &jmp.term {
-                return_blocks.insert(blk.tid.clone());
             }
         }
     }
@@ -193,7 +191,6 @@ fn build_blocks_without_changes(
     SpecialBlocks {
         called_blocks,
         returned_to_blocks,
-        return_blocks,
         calling_convention: calling_convention.clone(),
     }
 }
@@ -204,7 +201,6 @@ fn remove_unused_instructions(
     ssa_program: &mut Program,
     special_blocks: &SpecialBlocks,
 ) -> HashMap<Variable, Variable> {
-
     let mut local_rename_table = HashMap::new();
     let mut def_to_remove = HashSet::new();
     // rename First to Second Element

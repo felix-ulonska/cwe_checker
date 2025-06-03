@@ -40,7 +40,7 @@ pub fn disassemble_binary(
     );
 
     // Generate the representation of the runtime memory image of the binary
-    let mut runtime_memory_image = if let Some(bare_metal_config) = bare_metal_config_opt.as_ref() {
+    let runtime_memory_image = if let Some(bare_metal_config) = bare_metal_config_opt.as_ref() {
         let mut new_runtime_image =
             RuntimeMemoryImage::new_from_bare_metal(&binary, bare_metal_config)
                 .context("Error while generating runtime memory image.")?;

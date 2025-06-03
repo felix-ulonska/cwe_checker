@@ -318,6 +318,8 @@ impl Expression {
 
     /// Simplify arithmetic operations where intermediate results can be
     /// computed because some operands are constants.
+    /// Made unused because of the inderict call recovery since it requires non constants in memory
+    /// accesses.
     fn substitute_arithmetics_with_constants(&mut self) {
         use BinOpType::*;
         use Expression::*;

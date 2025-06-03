@@ -198,7 +198,7 @@ impl<'a> State<'a> {
             Cast { op, size, arg } => self.eval_simple(arg).cast(*op, *size),
             Unknown {
                 description: _,
-                size,
+                size: _,
             } => Data::new_top(ByteSize::new(1)),
             Subpiece {
                 low_byte,
@@ -395,10 +395,6 @@ impl<'a> State<'a> {
         }
         false
     }
-}
-
-fn is_interval_global(val: &Data) -> bool {
-    val.get_if_unique_target().is_some()
 }
 
 /// Fill the various result maps of `self` that are needed for the [`VsaResult`](crate::analysis::vsa_results::VsaResult) trait implementation.

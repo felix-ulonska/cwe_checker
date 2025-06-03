@@ -7,10 +7,7 @@ use itertools::Itertools;
 use petgraph::visit::EdgeRef;
 
 use crate::{
-    analysis::{
-        function_signature::stubs::return_value_stubs::param_plus_unknown_offset,
-        graph::{get_program_cfg, Edge, Node},
-    },
+    analysis::graph::{get_program_cfg, Edge, Node},
     intermediate_representation::{CallingConvention, Def, Expression, Project, Variable},
     prelude::{Term, Tid},
     utils::debug::IrForm,

@@ -34,7 +34,7 @@ pub fn export_json(program: &Program) {
 
     let mut functions = vec![];
 
-    for (sub_tid, sub) in &program.subs {
+    for (_tid, sub) in &program.subs {
         functions.push(Function {
             name: sub.name.clone(),
             address: sub.code_range().0,
