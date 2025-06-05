@@ -246,6 +246,8 @@ ascent_par! {
     }
 
     // Special: Load case
+    // This can only happen, if a value from the global content analysis needs to injected into a
+    // global state.
     aloc_val(loc, val) <--
         assign(loc, ?Exp::DerefMloc(src_mloc), _),
         aloc_val(Loc::Mloc(src_mloc.clone()), val);
