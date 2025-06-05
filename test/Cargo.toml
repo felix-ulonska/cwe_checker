@@ -3,6 +3,10 @@ name = "acceptance_tests_ghidra"
 version = "0.1.0"
 authors = ["Fraunhofer FKIE <contact@cwe-checker.io>"]
 edition = "2021"
+rust-version = "1.82"
 
 [dependencies]
 colored = "2.0"
+
+[features]
+docker = []

@@ -4,15 +4,15 @@
 
 set -xeuo pipefail
 
-DOCKER="sudo -E docker"
+DOCKER="docker"
 NAME=lkm_samples
 
 $DOCKER build --progress plain -t ${NAME} .
 
-sudo rm -rf build/
+rm -rf build/
 
 # Create a dummy container, copy the modules, and delete it.
 ID=$($DOCKER create ${NAME} /does/not/exist)
 $DOCKER cp ${ID}:/build .
 $DOCKER rm ${ID}
-sudo chown $(id -u):$(id -g) -R ./build
+chown $(id -u):$(id -g) -R ./build

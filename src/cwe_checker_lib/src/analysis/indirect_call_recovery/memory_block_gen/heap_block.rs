@@ -33,8 +33,7 @@ impl HeapAnalysis {
     }
 }
 
-/// We changed the algorithm for global memory. We use the PI and then build a set where no
-/// overlapping address ranges.
+/// Heap blocks are detected by allocation site. 
 pub fn build_heap_blocks(
     program: &Program,
     config: &Config,

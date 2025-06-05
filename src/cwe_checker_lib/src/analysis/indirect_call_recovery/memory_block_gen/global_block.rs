@@ -186,8 +186,6 @@ impl GlobalMemorySeperation {
     }
 }
 
-/// We changed the algorithm for global memory. We use the PI and then build a set where no
-/// overlapping address ranges.
 pub fn build_global_memory_blocks(
     program: &Program,
     project: &Project,

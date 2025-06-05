@@ -155,6 +155,9 @@ impl ValueTracking<'_> {
         }
     }
 
+    // Yes, this should be comment.
+    // This can be enabled to feed in the results of the Ghidra constant propogation for global
+    // analysis into this value tracking.
     fn add_code_ptr_in_global_blocks(&mut self) {
         //for code_ref in &self.project.code_references {
         //    let Some(interval) = self.block_memory.global.get_interval(code_ref.from) else {
@@ -322,6 +325,8 @@ impl ValueTracking<'_> {
                                     ));
                                 }
 
+                                // Yes, this should be a comment. This can  be enabled to further
+                                // restrict stack movement.
                                 // SKIP if rsp_X = rsp_Y + empty
                                 // If the register has a stack block assgined to it, prevent
                                 // propogation via RSP value tracking. RSP_{X+1} = RSP_X - 8. Values
@@ -543,11 +548,6 @@ impl ValueTracking<'_> {
     }
 
     fn add_heap_aloc_val(&mut self) {
-        // inject heap values:
-        //      Orignal: target_reg <- &heap
-        // Represent as:
-        //      Add temp_var <- &Mloc(heap)
-        //      Add phi(target_reg, temp_var)
         for (heap_target_var, heap_blk) in &self.block_memory.heap.register_with_heap {
             let var = self.replace_var_from_rename_table_and_get_cache(heap_target_var.clone());
             self.ascent_prog.aloc_val.push((
